@@ -15,7 +15,10 @@
     "test:ui": "node scripts/ui-smoke.mjs",
     "test:console": "node scripts/console-smoke.mjs",
     "test:appearance": "node scripts/appearance-smoke.mjs",
-    "test:node-settings": "node scripts/node-settings-smoke.mjs"
+    "test:node-settings": "node scripts/node-settings-smoke.mjs",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -64,6 +67,7 @@
     "playwright": "1.64.1",
     "tailwindcss": "4.3.4",
     "typescript": "5.9.3",
-    "vite": "8.3.6"
+    "vite": "8.3.6",
+    "vitepress": "^1.6.4"
   }
 }

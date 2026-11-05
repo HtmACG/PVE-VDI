@@ -1,0 +1,185 @@
+/*
+ * PVE VDI 文档品牌主题
+ * 呼应桌面端默认外观：Windows 蓝 #0078d4、系统字体、0px 直角设计语言
+ * VitePress 内部组件使用 scoped 属性选择器，这里统一用 !important 覆盖圆角与描边
+ */
+
+:root {
+  /* 品牌色：Windows 蓝（浅色模式） */
+  --vp-c-brand-1: #005a9e;
+  --vp-c-brand-2: #106ebe;
+  --vp-c-brand-3: #0078d4;
+  --vp-c-brand-soft: rgba(0, 120, 212, 0.14);
+
+  /* 字体与桌面端 system 预设一致 */
+  --vp-font-family-base: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei UI',
+    'PingFang SC', sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono Variable', 'Cascadia Code', Consolas,
+    'Microsoft YaHei UI', 'PingFang SC', monospace;
+
+  /* 收敛圆角变量 */
+  --vp-radius: 2px;
+  --vp-code-block-radius: 2px;
+}
+
+.dark {
+  /* 深色模式下提亮，保证背景上的对比度 */
+  --vp-c-brand-1: #6cb8f6;
+  --vp-c-brand-2: #4da3e8;
+  --vp-c-brand-3: #2f8de0;
+  --vp-c-brand-soft: rgba(77, 163, 232, 0.16);
+}
+
+/* 容器、按钮、卡片、菜单统一直角 */
+.VPButton,
+.VPFeature,
+.VPMenu,
+.custom-block,
+.DocSearch-Button,
+.DocSearch-Modal,
+.DocSearch-Form,
+.DocSearch-Hit,
+.DocSearch-Hit a,
+.VPDocOutlineDropdown,
+.vp-code-group,
+.vp-doc div[class*='language-'],
+.vp-block,
+.vp-doc .custom-block div[class*='language-'],
+.vp-doc [class*='language-'] > button.copy {
+  border-radius: 2px !important;
+}
+
+/* 代码组标题栏：顶部直角，底部贴合代码块 */
+.vp-code-group .tabs {
+  border-radius: 2px 2px 0 0 !important;
+}
+
+/* 搜索结果摘要内被内部强制圆角的代码块 */
+.VPLocalSearch .excerpt div[class*='language-'] {
+  border-radius: 2px !important;
+}
+
+/* 首页特性卡片：克制的描边而非厚重阴影 */
+.VPFeature {
+  border: 1px solid var(--vp-c-divider) !important;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-2) !important;
+}
+
+/* 首页特性图标统一品牌色 */
+.VPFeature .icon {
+  color: var(--vp-c-brand-1);
+}
+
+/* 表格表头字重克制，数据友好 */
+.vp-doc table th {
+  font-weight: 600;
+}
+
+/* 正文行高疏朗，长文更易读 */
+.vp-doc {
+  line-height: 1.75;
+}
+
+/* ===== 应用截图 ===== */
+figure.shot {
+  margin: 1.75rem 0;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--vp-c-bg-soft);
+}
+
+figure.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: zoom-in;
+}
+
+figure.shot figcaption {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  color: var(--vp-c-text-2);
+  border-top: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg);
+}
+
+/* ===== 应用图标展示 ===== */
+.app-icon {
+  display: inline-block;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 2px;
+}
+
+.app-icon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 1.5rem 0;
+}
+
+.app-icon-grid .cell {
+  width: 168px;
+  padding: 16px;
+  text-align: center;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 2px;
+}
+
+.app-icon-grid .cell img {
+  width: 96px;
+  height: 96px;
+  margin-bottom: 10px;
+}
+
+.app-icon-grid .cell .meta {
+  font-size: 0.8rem;
+  color: var(--vp-c-text-2);
+  font-family: var(--vp-font-family-mono);
+}
+
+/* ===== 灯箱 ===== */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 4vmin;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+}
+
+.lightbox.show {
+  display: flex;
+}
+
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+body.lightbox-lock {
+  overflow: hidden;
+}
+
+/* 首页附加内容区与特性区对齐 */
+.home-extra {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 24px 24px 56px;
+}
+
+.home-extra h2 {
+  border-top: 1px solid var(--vp-c-divider);
+  padding-top: 2rem;
+  margin-top: 2rem;
+}
