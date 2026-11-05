@@ -184,23 +184,6 @@ a {
   box-shadow: inset 0 1px 0 var(--border);
 }
 
-.grid-surface {
-  background-image:
-    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
-  background-size: 36px 36px;
-}
-
-.diagonal-surface {
-  background-image: repeating-linear-gradient(
-    -45deg,
-    transparent,
-    transparent 5px,
-    var(--grid-line) 5px,
-    var(--grid-line) 6px
-  );
-}
-
 .text-balance {
   text-wrap: balance;
 }

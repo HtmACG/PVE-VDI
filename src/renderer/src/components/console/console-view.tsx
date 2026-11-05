@@ -429,20 +429,16 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
     <div
       ref={contentRef}
       data-console-root="true"
-      className="flex h-screen w-screen flex-col overflow-hidden bg-[#050608] text-foreground"
+      className="flex h-screen w-screen flex-col overflow-hidden border border-border bg-[#050608] text-foreground"
     >
       <header className="drag-region flex h-10 shrink-0 items-stretch border-b border-border bg-card">
         <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center border border-border bg-background">
-            {consoleModeHint === 'xterm' ? (
-              <TerminalSquare className="h-3.5 w-3.5 text-brand" />
-            ) : (
-              <Monitor className="h-3.5 w-3.5 text-brand" />
-            )}
-          </div>
-          <span className="shrink-0 text-[11px] font-medium text-foreground">PVE VDI</span>
-          <span className="h-3 w-px shrink-0 bg-border" />
-          <span className="truncate text-[11px] text-muted-foreground">
+          {consoleModeHint === 'xterm' ? (
+            <TerminalSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span className="truncate text-[11px] font-medium text-foreground">
             {session?.title ?? request.name ?? '控制台'}
           </span>
           <span className="hidden truncate font-mono text-[9px] text-muted-foreground/70 lg:block">

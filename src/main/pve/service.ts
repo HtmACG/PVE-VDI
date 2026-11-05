@@ -21,8 +21,22 @@ import type {
   LiveNodeMetrics,
   MutationResult,
   NodeMetricPoint,
+  NodeCertificateInfo,
+  NodeDirectoryStorage,
+  NodeDiskInfo,
+  NodeDnsSettings,
+  NodeLogEntry,
+  NodeLvmGroup,
+  NodeLvmThinPool,
+  NodeNetworkActionResult,
+  NodeNetworkInput,
+  NodeNetworkInterface,
   NodeOption,
+  NodeRepositorySummary,
+  NodeSettingsData,
   NodeSummary,
+  NodeTimeSettings,
+  NodeZfsPool,
   PveVersionInfo,
   SessionProfile,
   StorageSummary,
@@ -405,6 +419,207 @@ function buildVmForm(input: CreateVmInput): { form: Record<string, string | numb
   return { form, iso }
 }
 
+function optionalText(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined
+  return text(value)
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function optionalBoolean(value: unknown): boolean | undefined {
+  if (value === undefined || value === null) return undefined
+  return boolean(value)
+}
+
+function mapNodeNetworkInterface(raw: Raw): NodeNetworkInterface {
+  return {
+    iface: text(raw.iface),
+    type: text(raw.type, 'unknown'),
+    active: optionalBoolean(raw.active),
+    exists: optionalBoolean(raw.exists),
+    autostart: optionalBoolean(raw.autostart),
+    comments: optionalText(raw.comments),
+    address: optionalText(raw.address),
+    netmask: optionalText(raw.netmask),
+    cidr: optionalText(raw.cidr),
+    gateway: optionalText(raw.gateway),
+    address6: optionalText(raw.address6),
+    netmask6: optionalNumber(raw.netmask6),
+    cidr6: optionalText(raw.cidr6),
+    gateway6: optionalText(raw.gateway6),
+    mtu: optionalNumber(raw.mtu),
+    bridge_ports: optionalText(raw.bridge_ports),
+    bridge_stp: optionalText(raw.bridge_stp),
+    bridge_vlan_aware: optionalBoolean(raw.bridge_vlan_aware),
+    bridge_vids: optionalText(raw.bridge_vids),
+    slaves: optionalText(raw.slaves),
+    bond_mode: optionalText(raw.bond_mode),
+    bond_xmit_hash_policy: optionalText(raw.bond_xmit_hash_policy),
+    'vlan-id': optionalNumber(raw['vlan-id']),
+    'vlan-raw-device': optionalText(raw['vlan-raw-device']),
+    families: array(raw.families).map((entry) => text(entry)),
+    priority: optionalNumber(raw.priority)
+  }
+}
+
+function mapNodeCertificate(raw: Raw): NodeCertificateInfo {
+  return {
+    filename: text(raw.filename, '证书'),
+    subject: optionalText(raw.subject),
+    issuer: optionalText(raw.issuer),
+    fingerprint: optionalText(raw.fingerprint),
+    notbefore: optionalNumber(raw.notbefore),
+    notafter: optionalNumber(raw.notafter),
+    publicKeyType: optionalText(raw['public-key-type']),
+    publicKeyBits: optionalNumber(raw['public-key-bits']),
+    san: array(raw.san).map((entry) => text(entry))
+  }
+}
+
+function mapNodeRepositories(raw: Raw): NodeRepositorySummary {
+  const sources: NodeRepositorySummary['sources'] = array(raw.files).map((entry) => {
+    const file = object(entry)
+    return {
+      path: text(file.path),
+      fileType: optionalText(file['file-type']),
+      repositories: array(file.repositories).map((repoEntry) => {
+        const repo = object(repoEntry)
+        return {
+          types: array(repo.Types).map((item) => text(item)),
+          uris: array(repo.URIs).map((item) => text(item)),
+          suites: array(repo.Suites).map((item) => text(item)),
+          components: array(repo.Components).map((item) => text(item)),
+          enabled: boolean(repo.Enabled),
+          comment: optionalText(repo.Comment)
+        }
+      })
+    }
+  })
+  return {
+    errors: array(raw.errors).map((entry) => text(entry)),
+    standardRepos: array(raw['standard-repos']).map((entry) => {
+      const repo = object(entry)
+      return { name: text(repo.name), handle: text(repo.handle), description: optionalText(repo.description) }
+    }),
+    sources
+  }
+}
+
+function mapLvmGroups(raw: unknown): NodeLvmGroup[] {
+  const root = object(raw)
+  const groups = array(root.children).length > 0 ? array(root.children) : root.name ? [root] : []
+  return groups.map((entry) => {
+    const group = object(entry)
+    return {
+      name: text(group.name),
+      size: number(group.size),
+      free: number(group.free)
+    }
+  })
+}
+
+function mapLvmThinPools(raw: unknown): NodeLvmThinPool[] {
+  return array(raw).map((entry) => {
+    const pool = object(entry)
+    return {
+      lv: text(pool.lv),
+      vg: text(pool.vg),
+      lvSize: number(pool.lv_size),
+      used: number(pool.used),
+      metadataSize: optionalNumber(pool.metadata_size),
+      metadataUsed: optionalNumber(pool.metadata_used),
+      lvState: optionalText(pool.lv_state)
+    }
+  })
+}
+
+function mapDirectoryStorages(raw: unknown): NodeDirectoryStorage[] {
+  return array(raw).map((entry) => {
+    const directory = object(entry)
+    return {
+      path: text(directory.path),
+      type: optionalText(directory.type),
+      storage: optionalText(directory.storage),
+      total: optionalNumber(directory.total),
+      used: optionalNumber(directory.used),
+      avail: optionalNumber(directory.avail)
+    }
+  })
+}
+
+function mapZfsPools(raw: unknown): NodeZfsPool[] {
+  return array(raw).map((entry) => {
+    const pool = object(entry)
+    return {
+      name: text(pool.name),
+      size: optionalNumber(pool.size),
+      free: optionalNumber(pool.free),
+      health: optionalText(pool.health),
+      alloc: optionalNumber(pool.alloc)
+    }
+  })
+}
+
+function mapNodeDisks(raw: unknown[]): NodeDiskInfo[] {
+  return array(raw).map((entry) => {
+    const disk = object(entry)
+    return {
+      devpath: text(disk.devpath),
+      model: optionalText(disk.model),
+      serial: optionalText(disk.serial),
+      size: number(disk.size),
+      type: optionalText(disk.type),
+      health: optionalText(disk.health),
+      used: optionalText(disk.used),
+      wearout: typeof disk.wearout === 'number' || typeof disk.wearout === 'string' ? disk.wearout : undefined,
+      vendor: optionalText(disk.vendor),
+      rpm: typeof disk.rpm === 'number' || typeof disk.rpm === 'string' ? disk.rpm : undefined
+    }
+  })
+}
+
+function validateNetworkInterfaceName(value: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(value)) {
+    throw new PveError('VALIDATION', '网络接口名称格式无效。')
+  }
+  return value
+}
+
+function buildNetworkForm(input: NodeNetworkInput): Record<string, string> {
+  const form: Record<string, string> = {
+    iface: validateNetworkInterfaceName(input.iface.trim()),
+    type: input.type
+  }
+  if (input.comments !== undefined) form.comments = input.comments
+  if (input.autostart !== undefined) form.autostart = input.autostart ? '1' : '0'
+  if (input.mtu !== undefined) form.mtu = String(input.mtu)
+  if (input.cidr?.trim()) form.cidr = input.cidr.trim()
+  if (input.gateway?.trim()) form.gateway = input.gateway.trim()
+  if (input.cidr6?.trim()) form.cidr6 = input.cidr6.trim()
+  if (input.gateway6?.trim()) form.gateway6 = input.gateway6.trim()
+
+  if (input.type === 'bridge') {
+    if (input.bridgePorts?.trim()) form.bridge_ports = input.bridgePorts.trim()
+    if (input.bridgeStp !== undefined) form.bridge_stp = input.bridgeStp ? 'on' : 'off'
+    if (input.bridgeVlanAware !== undefined) form.bridge_vlan_aware = input.bridgeVlanAware ? '1' : '0'
+    if (input.bridgeVids?.trim()) form.bridge_vids = input.bridgeVids.trim()
+  }
+  if (input.type === 'vlan') {
+    if (input.vlanId !== undefined) form['vlan-id'] = String(input.vlanId)
+    if (input.vlanRawDevice?.trim()) form['vlan-raw-device'] = input.vlanRawDevice.trim()
+  }
+  if (input.type === 'bond') {
+    if (input.slaves?.trim()) form.slaves = input.slaves.trim()
+    if (input.bondMode?.trim()) form.bond_mode = input.bondMode.trim()
+    if (input.bondXmitHashPolicy?.trim()) form.bond_xmit_hash_policy = input.bondXmitHashPolicy.trim()
+  }
+  return form
+}
+
 export class PveManager {
   private client: PveClient | null = null
   private profile: SessionProfile | null = null
@@ -633,6 +848,185 @@ export class PveManager {
       })
       .filter((entry) => entry.node)
     return { fetchedAt: Date.now(), nodes }
+  }
+
+  async getNodeSettings(nodeInput: string): Promise<NodeSettingsData> {
+    const node = validateNode(nodeInput)
+    const client = this.requireClient()
+    const base = `/nodes/${encodeURIComponent(node)}`
+    const settled = await Promise.allSettled([
+      client.request<unknown[]>(`${base}/network`),
+      client.request<unknown>(`${base}/dns`),
+      client.request<unknown>(`${base}/time`),
+      client.request<unknown>(`${base}/config`),
+      client.request<unknown[]>(`${base}/certificates/info`),
+      client.request<unknown>(`${base}/apt/repositories`),
+      client.request<unknown>(`${base}/firewall/options`),
+      client.request<unknown[]>(`${base}/disks/list`),
+      client.request<unknown>(`${base}/disks/lvm`),
+      client.request<unknown[]>(`${base}/disks/lvmthin`),
+      client.request<unknown[]>(`${base}/disks/directory`),
+      client.request<unknown[]>(`${base}/disks/zfs`)
+    ])
+    const warnings: string[] = []
+    const take = <T>(index: number, label: string, fallback: T): T => {
+      const result = settled[index]
+      if (result.status === 'fulfilled') return result.value as T
+      warnings.push(`${label}读取失败`)
+      return fallback
+    }
+
+    const networkRaw = take<unknown[]>(0, '网络', [])
+    const dnsRaw = take<unknown>(1, 'DNS', null)
+    const timeRaw = take<unknown>(2, '时间', null)
+    const configRaw = take<unknown>(3, '节点配置', null)
+    const certificatesRaw = take<unknown[]>(4, '证书', [])
+    const repositoriesRaw = take<unknown>(5, '存储库', null)
+    const firewallRaw = take<unknown>(6, '防火墙', null)
+    const disksRaw = take<unknown[]>(7, '磁盘', [])
+    const lvmRaw = take<unknown>(8, 'LVM', null)
+    const lvmthinRaw = take<unknown[]>(9, 'LVM-Thin', [])
+    const directoryRaw = take<unknown[]>(10, '目录存储', [])
+    const zfsRaw = take<unknown[]>(11, 'ZFS', [])
+
+    const dnsSource = dnsRaw && typeof dnsRaw === 'object' ? object(dnsRaw) : {}
+    const timeSource = timeRaw && typeof timeRaw === 'object' ? object(timeRaw) : {}
+    const configSource = configRaw && typeof configRaw === 'object' ? object(configRaw) : {}
+    const firewallSource = firewallRaw && typeof firewallRaw === 'object' ? object(firewallRaw) : {}
+
+    const time: NodeTimeSettings | null = Object.keys(timeSource).length
+      ? {
+          timezone: timeSource.timezone === null || timeSource.timezone === undefined ? null : text(timeSource.timezone),
+          localtime: number(timeSource.localtime),
+          time: number(timeSource.time)
+        }
+      : null
+
+    return {
+      node,
+      network: array(networkRaw).map(object).map(mapNodeNetworkInterface),
+      dns: Object.keys(dnsSource).length
+        ? {
+            search: optionalText(dnsSource.search),
+            dns1: optionalText(dnsSource.dns1),
+            dns2: optionalText(dnsSource.dns2),
+            dns3: optionalText(dnsSource.dns3)
+          }
+        : null,
+      time,
+      config: Object.keys(configSource).length
+        ? {
+            description: optionalText(configSource.description),
+            startall: optionalBoolean(configSource.startall)
+          }
+        : null,
+      certificates: array(certificatesRaw).map(object).map(mapNodeCertificate),
+      repositories:
+        repositoriesRaw && typeof repositoriesRaw === 'object' ? mapNodeRepositories(object(repositoriesRaw)) : null,
+      firewallOptions: Object.keys(firewallSource).length ? { ...firewallSource } : null,
+      disks: mapNodeDisks(array(disksRaw)),
+      lvm: mapLvmGroups(lvmRaw),
+      lvmthin: mapLvmThinPools(lvmthinRaw),
+      directories: mapDirectoryStorages(directoryRaw),
+      zfs: mapZfsPools(zfsRaw),
+      warnings
+    }
+  }
+
+  async saveNodeNetwork(input: NodeNetworkInput): Promise<NodeNetworkActionResult> {
+    const node = validateNode(input.node)
+    const client = this.requireClient()
+    const form = buildNetworkForm(input)
+    const base = `/nodes/${encodeURIComponent(node)}/network`
+    if (input.existing) {
+      await client.request(`${base}/${encodeURIComponent(form.iface)}`, {
+        method: 'PUT',
+        form,
+        timeoutMs: 20_000
+      })
+    } else {
+      await client.request(base, { method: 'POST', form, timeoutMs: 20_000 })
+    }
+    return { message: '网络配置已写入待应用队列。' }
+  }
+
+  async deleteNodeNetwork(nodeInput: string, ifaceInput: string): Promise<void> {
+    const node = validateNode(nodeInput)
+    const iface = validateNetworkInterfaceName(ifaceInput)
+    const client = this.requireClient()
+    await client.request(`/nodes/${encodeURIComponent(node)}/network/${encodeURIComponent(iface)}`, {
+      method: 'DELETE',
+      timeoutMs: 20_000
+    })
+  }
+
+  async applyNodeNetwork(nodeInput: string): Promise<NodeNetworkActionResult> {
+    const node = validateNode(nodeInput)
+    const client = this.requireClient()
+    const upid = await client.request<string | null>(`/nodes/${encodeURIComponent(node)}/network`, {
+      method: 'PUT',
+      timeoutMs: 30_000
+    })
+    return { message: '网络配置已提交到 PVE 应用任务。', upid: upid ?? undefined }
+  }
+
+  async revertNodeNetwork(nodeInput: string): Promise<void> {
+    const node = validateNode(nodeInput)
+    const client = this.requireClient()
+    await client.request(`/nodes/${encodeURIComponent(node)}/network`, {
+      method: 'DELETE',
+      timeoutMs: 20_000
+    })
+  }
+
+  async updateNodeDns(nodeInput: string, settings: NodeDnsSettings): Promise<void> {
+    const node = validateNode(nodeInput)
+    const client = this.requireClient()
+    await client.request(`/nodes/${encodeURIComponent(node)}/dns`, {
+      method: 'PUT',
+      form: {
+        search: settings.search?.trim() ?? '',
+        dns1: settings.dns1?.trim() ?? '',
+        dns2: settings.dns2?.trim() ?? '',
+        dns3: settings.dns3?.trim() ?? ''
+      },
+      timeoutMs: 20_000
+    })
+  }
+
+  async updateNodeTime(nodeInput: string, timezone: string): Promise<void> {
+    const node = validateNode(nodeInput)
+    if (!timezone.trim()) throw new PveError('VALIDATION', '时区不能为空。')
+    const client = this.requireClient()
+    await client.request(`/nodes/${encodeURIComponent(node)}/time`, {
+      method: 'PUT',
+      form: { timezone: timezone.trim() },
+      timeoutMs: 20_000
+    })
+  }
+
+  async updateNodeOptions(nodeInput: string, description: string): Promise<void> {
+    const node = validateNode(nodeInput)
+    const client = this.requireClient()
+    await client.request(`/nodes/${encodeURIComponent(node)}/config`, {
+      method: 'PUT',
+      form: { description },
+      timeoutMs: 20_000
+    })
+  }
+
+  async getNodeLogs(nodeInput: string, kind: 'syslog' | 'firewall'): Promise<NodeLogEntry[]> {
+    const node = validateNode(nodeInput)
+    const client = this.requireClient()
+    const endpoint =
+      kind === 'syslog'
+        ? `/nodes/${encodeURIComponent(node)}/syslog?limit=200`
+        : `/nodes/${encodeURIComponent(node)}/firewall/log?limit=200`
+    const raw = await client.request<unknown[]>(endpoint, { timeoutMs: 20_000 })
+    return array(raw).map((entry) => {
+      const line = object(entry)
+      return { n: number(line.n), t: text(line.t) }
+    })
   }
 
   private async enrichVmOsForDashboard(vms: VmSummary[]): Promise<void> {

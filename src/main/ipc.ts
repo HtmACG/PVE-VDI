@@ -7,6 +7,8 @@ import type {
   ConsoleOpenRequest,
   CreateVmInput,
   LoginInput,
+  NodeDnsSettings,
+  NodeNetworkInput,
   PreferencesPatch,
   VmAction,
   VmRef
@@ -123,6 +125,63 @@ export function registerIpc(options: {
 
   ipcMain.handle(IPC.liveMetrics, async () => {
     return wrap(async () => manager.getLiveMetrics())
+  })
+
+  ipcMain.handle(IPC.nodeSettings, async (_event, rawNode: unknown) => {
+    return wrap(async () => manager.getNodeSettings(typeof rawNode === 'string' ? rawNode : ''))
+  })
+
+  ipcMain.handle(IPC.nodeNetworkSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveNodeNetwork(asObject<NodeNetworkInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.nodeNetworkDelete, async (_event, rawNode: unknown, rawIface: unknown) => {
+    return wrap(async () => {
+      if (typeof rawNode !== 'string' || typeof rawIface !== 'string') {
+        throw new Error('网络接口参数无效。')
+      }
+      await manager.deleteNodeNetwork(rawNode, rawIface)
+    })
+  })
+
+  ipcMain.handle(IPC.nodeNetworkApply, async (_event, rawNode: unknown) => {
+    return wrap(async () => manager.applyNodeNetwork(typeof rawNode === 'string' ? rawNode : ''))
+  })
+
+  ipcMain.handle(IPC.nodeNetworkRevert, async (_event, rawNode: unknown) => {
+    return wrap(async () => {
+      await manager.revertNodeNetwork(typeof rawNode === 'string' ? rawNode : '')
+    })
+  })
+
+  ipcMain.handle(IPC.nodeDnsUpdate, async (_event, rawNode: unknown, rawSettings: unknown) => {
+    return wrap(async () => {
+      if (typeof rawNode !== 'string') throw new Error('节点参数无效。')
+      await manager.updateNodeDns(rawNode, asObject<NodeDnsSettings>(rawSettings))
+    })
+  })
+
+  ipcMain.handle(IPC.nodeTimeUpdate, async (_event, rawNode: unknown, rawTimezone: unknown) => {
+    return wrap(async () => {
+      if (typeof rawNode !== 'string' || typeof rawTimezone !== 'string') throw new Error('时间参数无效。')
+      await manager.updateNodeTime(rawNode, rawTimezone)
+    })
+  })
+
+  ipcMain.handle(IPC.nodeOptionsUpdate, async (_event, rawNode: unknown, rawDescription: unknown) => {
+    return wrap(async () => {
+      if (typeof rawNode !== 'string' || typeof rawDescription !== 'string') throw new Error('节点配置参数无效。')
+      await manager.updateNodeOptions(rawNode, rawDescription)
+    })
+  })
+
+  ipcMain.handle(IPC.nodeLogs, async (_event, rawNode: unknown, rawKind: unknown) => {
+    return wrap(async () => {
+      if (typeof rawNode !== 'string' || (rawKind !== 'syslog' && rawKind !== 'firewall')) {
+        throw new Error('日志参数无效。')
+      }
+      return manager.getNodeLogs(rawNode, rawKind)
+    })
   })
 
   ipcMain.handle(IPC.vmDetail, async (_event, rawRef: unknown) => {

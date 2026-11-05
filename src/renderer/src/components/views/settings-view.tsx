@@ -217,8 +217,8 @@ export function SettingsView({
 
                 <div className="mt-3 border border-border bg-panel/30 p-3" style={{ fontFamily: fontPreview }}>
                   <div className="text-[10px] text-muted-foreground">字体预览</div>
-                  <div className="mt-1 text-[14px] font-medium text-foreground">管理虚拟化集群 · PVE VDI</div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">节点资源 / 虚拟机状态 / 存储容量</div>
+                  <div className="mt-1 text-[14px] font-medium text-foreground">节点资源 72.4% · 虚拟机 28 台</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">存储 1.8 TB / 10.0 TB · 最近同步 2 秒前</div>
                 </div>
               </div>
 
@@ -242,7 +242,7 @@ export function SettingsView({
                       disabled={saving}
                       onClick={() => void update({ accentColor: color.value })}
                       className={cn(
-                        'h-8 w-8 border-2 transition-transform hover:scale-105',
+                        'h-8 w-8 border-2 transition-colors',
                         settings.accentColor === color.value ? 'border-foreground' : 'border-transparent'
                       )}
                       style={{ backgroundColor: color.value }}

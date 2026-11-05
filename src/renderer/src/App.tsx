@@ -24,6 +24,7 @@ import { Sidebar, type ViewKey } from '@renderer/components/layout/sidebar'
 import { OverviewView } from '@renderer/components/views/overview-view'
 import { VmsView } from '@renderer/components/views/vms-view'
 import { NodesView } from '@renderer/components/views/nodes-view'
+import { NodeSettingsView } from '@renderer/components/views/node-settings-view'
 import { ClusterView } from '@renderer/components/views/cluster-view'
 import { TasksView } from '@renderer/components/views/tasks-view'
 import { SettingsView } from '@renderer/components/views/settings-view'
@@ -90,7 +91,7 @@ function BootFailure({
         <BrandLockup compact />
         <WindowButtons />
       </div>
-      <div className="grid-surface flex flex-1 items-center justify-center p-8">
+      <div className="flex flex-1 items-center justify-center p-8">
         <div className="w-[420px] border border-destructive/35 bg-card p-5">
           <div className="flex items-center gap-2 text-[12px] font-medium text-destructive">
             <AlertTriangle className="h-4 w-4" />
@@ -133,6 +134,7 @@ function ConnectedApp({
   const [confirmAction, setConfirmAction] = useState<{ target: ActionTarget; action: VmAction } | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
   const [taskLog, setTaskLog] = useState<TaskSummary | null>(null)
+  const [nodeSettingsNode, setNodeSettingsNode] = useState<string | null>(null)
   const [disconnectOpen, setDisconnectOpen] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const mainRef = useRef<HTMLDivElement>(null)
@@ -159,6 +161,7 @@ function ConnectedApp({
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 })
+    setNodeSettingsNode(null)
   }, [view])
 
   useEffect(() => {
@@ -342,6 +345,15 @@ function ConnectedApp({
           />
         )
       case 'nodes':
+        if (nodeSettingsNode) {
+          return (
+            <NodeSettingsView
+              node={nodeSettingsNode}
+              clusterName={dashboard.cluster.name}
+              onBack={() => setNodeSettingsNode(null)}
+            />
+          )
+        }
         return (
           <NodesView
             dashboard={dashboard}
@@ -351,6 +363,7 @@ function ConnectedApp({
             onRefresh={() => void refresh()}
             onNavigate={setView}
             onOpenShell={openNodeShell}
+            onOpenSettings={setNodeSettingsNode}
           />
         )
       case 'cluster':
@@ -624,7 +637,12 @@ export default function App(): React.JSX.Element {
   if (!session || !bootstrap) {
     return (
       <TooltipProvider delayDuration={250}>
-        <LoginView settings={settings} initialError={loginError ?? undefined} onAuthenticated={handleAuthenticated} />
+        <LoginView
+          settings={settings}
+          appVersion={bootstrap?.appVersion}
+          initialError={loginError ?? undefined}
+          onAuthenticated={handleAuthenticated}
+        />
         <Toaster theme={settings.theme} />
       </TooltipProvider>
     )

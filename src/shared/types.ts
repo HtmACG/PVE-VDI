@@ -147,6 +147,177 @@ export interface NodeSummary {
   metrics: NodeMetricPoint[]
 }
 
+export type NodeNetworkType = 'bridge' | 'vlan' | 'eth' | 'bond'
+
+export interface NodeNetworkInterface {
+  iface: string
+  type: string
+  active?: boolean
+  exists?: boolean
+  autostart?: boolean
+  comments?: string
+  address?: string
+  netmask?: string
+  cidr?: string
+  gateway?: string
+  address6?: string
+  netmask6?: number
+  cidr6?: string
+  gateway6?: string
+  mtu?: number
+  bridge_ports?: string
+  bridge_stp?: string
+  bridge_vlan_aware?: boolean
+  bridge_vids?: string
+  slaves?: string
+  bond_mode?: string
+  bond_xmit_hash_policy?: string
+  'vlan-id'?: number
+  'vlan-raw-device'?: string
+  families?: string[]
+  priority?: number
+}
+
+export interface NodeNetworkInput {
+  node: string
+  iface: string
+  type: NodeNetworkType
+  existing?: boolean
+  comments?: string
+  autostart?: boolean
+  mtu?: number
+  cidr?: string
+  gateway?: string
+  cidr6?: string
+  gateway6?: string
+  bridgePorts?: string
+  bridgeStp?: boolean
+  bridgeVlanAware?: boolean
+  bridgeVids?: string
+  slaves?: string
+  bondMode?: string
+  bondXmitHashPolicy?: string
+  vlanId?: number
+  vlanRawDevice?: string
+}
+
+export interface NodeDnsSettings {
+  search?: string
+  dns1?: string
+  dns2?: string
+  dns3?: string
+}
+
+export interface NodeTimeSettings {
+  timezone?: string | null
+  localtime: number
+  time: number
+}
+
+export interface NodeCertificateInfo {
+  filename: string
+  subject?: string
+  issuer?: string
+  fingerprint?: string
+  notbefore?: number
+  notafter?: number
+  publicKeyType?: string
+  publicKeyBits?: number
+  san: string[]
+}
+
+export interface NodeRepositorySource {
+  path: string
+  fileType?: string
+  repositories: Array<{
+    types: string[]
+    uris: string[]
+    suites: string[]
+    components: string[]
+    enabled: boolean
+    comment?: string
+  }>
+}
+
+export interface NodeRepositorySummary {
+  errors: string[]
+  standardRepos: Array<{ name: string; handle: string; description?: string }>
+  sources: NodeRepositorySource[]
+}
+
+export interface NodeDiskInfo {
+  devpath: string
+  model?: string
+  serial?: string
+  size: number
+  type?: string
+  health?: string
+  used?: string
+  wearout?: number | string
+  vendor?: string
+  rpm?: number | string
+}
+
+export interface NodeLvmGroup {
+  name: string
+  size: number
+  free: number
+}
+
+export interface NodeLvmThinPool {
+  lv: string
+  vg: string
+  lvSize: number
+  used: number
+  metadataSize?: number
+  metadataUsed?: number
+  lvState?: string
+}
+
+export interface NodeDirectoryStorage {
+  path: string
+  type?: string
+  storage?: string
+  total?: number
+  used?: number
+  avail?: number
+}
+
+export interface NodeZfsPool {
+  name: string
+  size?: number
+  free?: number
+  health?: string
+  alloc?: number
+}
+
+export interface NodeSettingsData {
+  node: string
+  network: NodeNetworkInterface[]
+  dns: NodeDnsSettings | null
+  time: NodeTimeSettings | null
+  config: Record<string, unknown> | null
+  certificates: NodeCertificateInfo[]
+  repositories: NodeRepositorySummary | null
+  firewallOptions: Record<string, unknown> | null
+  disks: NodeDiskInfo[]
+  lvm: NodeLvmGroup[]
+  lvmthin: NodeLvmThinPool[]
+  directories: NodeDirectoryStorage[]
+  zfs: NodeZfsPool[]
+  warnings: string[]
+}
+
+export interface NodeLogEntry {
+  n: number
+  t: string
+}
+
+export interface NodeNetworkActionResult {
+  message: string
+  upid?: string
+}
+
 export interface StorageSummary {
   id: string
   storage: string
@@ -463,6 +634,15 @@ export interface DesktopApi {
   forgetCredentials: () => Promise<ApiResult<AppSettings>>
   dashboard: () => Promise<ApiResult<DashboardData>>
   liveMetrics: () => Promise<ApiResult<LiveMetricsData>>
+  nodeSettings: (node: string) => Promise<ApiResult<NodeSettingsData>>
+  nodeNetworkSave: (input: NodeNetworkInput) => Promise<ApiResult<NodeNetworkActionResult>>
+  nodeNetworkDelete: (node: string, iface: string) => Promise<ApiResult<void>>
+  nodeNetworkApply: (node: string) => Promise<ApiResult<NodeNetworkActionResult>>
+  nodeNetworkRevert: (node: string) => Promise<ApiResult<void>>
+  nodeDnsUpdate: (node: string, settings: NodeDnsSettings) => Promise<ApiResult<void>>
+  nodeTimeUpdate: (node: string, timezone: string) => Promise<ApiResult<void>>
+  nodeOptionsUpdate: (node: string, description: string) => Promise<ApiResult<void>>
+  nodeLogs: (node: string, kind: 'syslog' | 'firewall') => Promise<ApiResult<NodeLogEntry[]>>
   vmDetail: (ref: VmRef) => Promise<ApiResult<VmDetail>>
   vmAction: (ref: VmRef & { action: VmAction }) => Promise<ApiResult<ActionResult>>
   createOptions: (node: string) => Promise<ApiResult<CreateOptions>>

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { AlertTriangle, ArrowRight, Eye, EyeOff, ShieldAlert, ShieldCheck } from 'lucide-react'
 import type { ApiError, AppSettings, LoginResult } from '@shared/types'
-import { BrandLockup, BrandMark } from '@renderer/components/brand'
+import { BrandLockup } from '@renderer/components/brand'
 import { WindowButtons } from '@renderer/components/layout/window-buttons'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
@@ -12,11 +12,12 @@ import loginIllustration from '@renderer/assets/login-illustration.webp'
 
 interface LoginViewProps {
   settings: AppSettings
+  appVersion?: string
   initialError?: ApiError
   onAuthenticated: (result: LoginResult) => void
 }
 
-export function LoginView({ settings, initialError, onAuthenticated }: LoginViewProps): React.JSX.Element {
+export function LoginView({ settings, appVersion, initialError, onAuthenticated }: LoginViewProps): React.JSX.Element {
   const [serverUrl, setServerUrl] = useState(settings.serverUrl)
   const [username, setUsername] = useState(settings.username)
   const [password, setPassword] = useState('')
@@ -75,10 +76,10 @@ export function LoginView({ settings, initialError, onAuthenticated }: LoginView
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
-        <section className="grid-surface relative hidden min-w-0 overflow-hidden border-r border-border bg-card lg:flex">
+        <section className="relative hidden min-w-0 overflow-hidden border-r border-border bg-card lg:flex">
           <div className="absolute left-0 top-0 h-full w-[3px] bg-brand" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[60%] overflow-hidden xl:block">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_62%_45%,rgba(115,158,255,0.18),transparent_66%)]" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[62%] overflow-hidden xl:block">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_62%_45%,rgba(115,158,255,0.13),transparent_66%)]" />
             <img
               src={loginIllustration}
               alt=""
@@ -89,34 +90,19 @@ export function LoginView({ settings, initialError, onAuthenticated }: LoginView
             <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-card via-card/70 to-transparent" />
           </div>
           <div className="relative z-10 flex w-full flex-col p-10 pl-14 xl:p-14 xl:pl-16">
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <BrandMark className="h-4 w-4" />
-              <span className="font-medium text-foreground">PVE VDI</span>
-              <span>Proxmox VE 控制台</span>
-            </div>
-
-            <div className="my-auto max-w-[560px] py-12 xl:max-w-[440px]">
-              <h1 className="text-[38px] font-semibold leading-[1.18] tracking-[-0.035em] text-foreground">
-                管理虚拟化集群
+            <div className="mt-auto max-w-[360px]">
+              <div className="text-[10px] text-muted-foreground">Proxmox VE</div>
+              <p className="mt-2 text-[20px] leading-7 tracking-[-0.02em] text-foreground">
+                节点、虚拟机
                 <br />
-                从一个控制台开始。
-              </h1>
-              <p className="mt-4 max-w-[470px] text-[13px] leading-6 text-muted-foreground">
-                查看节点资源和集群健康状态，管理虚拟机与容器的运行，并通过内置 noVNC 或 xterm.js
-                连接控制台。所有 PVE 请求都由本地主进程处理。
+                与独立控制台。
               </p>
-
-              <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-4 text-[11px] text-muted-foreground">
-                <span>集群与节点</span>
-                <span>虚拟机管理</span>
-                <span>noVNC / xterm.js</span>
-                <span>任务日志</span>
-              </div>
+              <p className="mt-3 max-w-[300px] text-[12px] leading-5 text-muted-foreground">
+                连接集群后查看资源、管理虚拟机，并为每台虚拟机或节点打开独立控制台窗口。
+              </p>
             </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-[10px] text-muted-foreground">
-              <span>PVE VDI 1.3.0</span>
-              <span>TLS · API2 · Windows DPAPI</span>
+            <div className="mt-8 flex items-center justify-between border-t border-border pt-4 text-[10px] text-muted-foreground">
+              <span>PVE VDI {appVersion ?? '1.4.0'}</span>
             </div>
           </div>
         </section>

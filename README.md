@@ -17,6 +17,15 @@
 - 存储池容量、类型、共享属性与可用空间
 - 最近任务与任务日志
 
+### 节点设置
+
+- 从节点卡片进入独立设置页，左侧按“系统 / 更新 / 防火墙 / 磁盘”分组，结构与 PVE 节点设置一致
+- **网络**：读取物理网卡、网桥、VLAN、Bond；创建、编辑、删除接口；写入待应用配置后可应用或还原，应用前有中断提示
+- DNS 搜索域与三组上游服务器编辑
+- 节点时区、描述编辑；证书、APT 存储库、防火墙参数与日志、系统日志查看
+- 证书只展示主体、签发者、有效期、指纹和 SAN，不返回私钥或 PEM；存储库与防火墙规则只读
+- LVM、LVM-Thin、目录存储与 ZFS 容量查看
+
 ### 虚拟机
 
 - 搜索、按运行状态 / 节点 / 标签过滤，展示工作负载的实时状态
@@ -95,8 +104,8 @@ src/
 
 Windows 安装包与便携版位于 `release/`：
 
-- `PVE-VDI-1.3.0-x64.exe`：NSIS 安装包
-- `PVE-VDI-Portable-1.3.0-x64.exe`：便携版
+- `PVE-VDI-1.4.0-x64.exe`：NSIS 安装包
+- `PVE-VDI-Portable-1.4.0-x64.exe`：便携版
 
 两个产物均未使用商业代码签名证书，Windows SmartScreen 可能提示“未知发布者”。
 
@@ -154,6 +163,17 @@ $env:PVE_CONSOLE_VM_NAME = 'your-test-vm'
 pnpm test:console
 ```
 
+### 节点设置测试
+
+只读验证节点设置页：读取网络列表、打开各设置分组、打开添加接口对话框并取消，不写入网络配置。需要先 `pnpm build`。
+
+```powershell
+$env:PVE_SERVER_URL = 'https://pve.example.com:8006'
+$env:PVE_USERNAME = 'your-username'
+$env:PVE_PASSWORD = 'your-password'
+pnpm test:node-settings
+```
+
 ### 外观测试
 
 验证字体预设、自定义字体、强调色预设与自定义 `#RRGGBB` 能即时写入 CSS 变量并持久化。测试结束会恢复原有外观设置。需要先 `pnpm build`。
@@ -195,7 +215,8 @@ pnpm test:appearance
 - noVNC 在独立窗口中连接运行中的 QEMU 虚拟机并完成 RFB 渲染
 - xterm.js 在独立窗口中打开节点 Shell，输入并执行 `echo PVE_VDI_XTERM_OK`
 - 界面字体预设、自定义字体、强调色预设与自定义颜色即时生效并持久化
-- UI 冒烟测试、独立控制台测试和外观测试均无 Renderer 控制台错误
+- 节点设置页读取网络、DNS、时区、证书、存储库、防火墙与磁盘；打开全部分组及网络编辑对话框无 Renderer 控制台错误
+- UI 冒烟测试、独立控制台测试、节点设置测试和外观测试均无 Renderer 控制台错误
 - 1.1.0 时期已完成通过界面创建、启动、停止并删除临时 QEMU 虚拟机的完整流程
 
 ### 1.2.0 打包验证
@@ -210,6 +231,12 @@ pnpm test:appearance
 - NSIS 安装包安装、启动，并完成独立 noVNC / xterm.js 验证，随后静默卸载
 - 便携版启动验证
 - 打包内独立控制台窗口验证
+
+### 1.4.0 打包验证
+
+- `pnpm build` 与 `pnpm typecheck` 通过
+- `win-unpacked` 中节点设置页和独立 noVNC / xterm.js 控制台窗口验证通过
+- NSIS 安装包与便携版已生成，安装包未使用商业代码签名
 
 ## License
 

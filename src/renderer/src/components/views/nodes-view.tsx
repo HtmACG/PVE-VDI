@@ -1,4 +1,4 @@
-import { ArrowUpRight, Boxes, Cpu, HardDrive, MemoryStick, Plus, RefreshCw, Server, Terminal } from 'lucide-react'
+import { ArrowUpRight, Boxes, Cpu, HardDrive, MemoryStick, Plus, RefreshCw, Server, Settings2, Terminal } from 'lucide-react'
 import type { DashboardData, NodeSummary } from '@shared/types'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
@@ -19,6 +19,7 @@ interface NodesViewProps {
   onRefresh: () => void
   onNavigate: (view: ViewKey) => void
   onOpenShell: (node: string) => void
+  onOpenSettings: (node: string) => void
 }
 
 function ResourceMetric({
@@ -49,6 +50,7 @@ function NodeCard({
   dashboard,
   onNavigate,
   onOpenShell,
+  onOpenSettings,
   liveAt,
   liveError
 }: {
@@ -56,6 +58,7 @@ function NodeCard({
   dashboard: DashboardData
   onNavigate: (view: ViewKey) => void
   onOpenShell: (node: string) => void
+  onOpenSettings: (node: string) => void
   liveAt?: number
   liveError?: string | null
 }): React.JSX.Element {
@@ -96,6 +99,10 @@ function NodeCard({
           <Button variant="outline" size="sm" onClick={() => onNavigate('vms')}>
             虚拟机
             <ArrowUpRight className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => onOpenSettings(node.node)}>
+            <Settings2 className="h-3.5 w-3.5" />
+            设置
           </Button>
           <Button variant="outline" size="sm" onClick={() => onOpenShell(node.node)} disabled={node.status !== 'online'}>
             <Terminal className="h-3.5 w-3.5" />
@@ -217,7 +224,8 @@ export function NodesView({
   onCreateVm,
   onRefresh,
   onNavigate,
-  onOpenShell
+  onOpenShell,
+  onOpenSettings
 }: NodesViewProps): React.JSX.Element {
   const online = dashboard.nodes.filter((node) => node.status === 'online').length
   const totalThreads = dashboard.nodes.reduce((sum, node) => sum + node.maxcpu, 0)
@@ -306,6 +314,7 @@ export function NodesView({
               dashboard={dashboard}
               onNavigate={onNavigate}
               onOpenShell={onOpenShell}
+              onOpenSettings={onOpenSettings}
               liveAt={liveAt}
               liveError={liveError}
             />
