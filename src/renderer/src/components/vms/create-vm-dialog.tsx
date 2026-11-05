@@ -115,7 +115,7 @@ function FormSection({
         </div>
         <div className="min-w-0">
           <h3 className="text-[12px] font-medium text-foreground">{title}</h3>
-          {description && <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{description}</p>}
+          {description && <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{description}</p>}
         </div>
       </div>
       {children}
@@ -137,8 +137,8 @@ function ToggleRow({
   return (
     <div className="flex items-center justify-between gap-4 border border-border/80 bg-panel/40 px-2.5 py-2">
       <div>
-        <div className="text-[11px] text-foreground">{title}</div>
-        <div className="mt-0.5 text-[9px] text-muted-foreground">{description}</div>
+        <div className="text-[12px] text-foreground">{title}</div>
+        <div className="mt-0.5 text-[10px] text-muted-foreground">{description}</div>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={title} />
     </div>
@@ -433,8 +433,8 @@ export function CreateVmDialog({
                 {mode === item.value && <span className="absolute inset-x-0 top-0 h-[2px] bg-brand" />}
                 <Icon className={cn('h-4 w-4', mode === item.value ? 'text-brand' : '')} />
                 <span>
-                  <span className="block text-[11px] font-medium">{item.label}</span>
-                  <span className="block text-[9px] text-muted-foreground">{item.description}</span>
+                  <span className="block text-[12px] font-medium">{item.label}</span>
+                  <span className="block text-[10px] text-muted-foreground">{item.description}</span>
                 </span>
                 {mode === item.value && <Check className="ml-auto h-3.5 w-3.5 text-brand" />}
               </button>
@@ -446,7 +446,7 @@ export function CreateVmDialog({
           {optionsLoading && !options && (
             <div className="mx-5 mt-4 flex items-center gap-2 border border-border bg-panel/40 px-3 py-2.5">
               <Loader2 className="h-3.5 w-3.5 spin text-brand" />
-              <span className="text-[10px] text-muted-foreground">正在从 PVE 读取节点、存储与网络选项…</span>
+              <span className="text-[11px] text-muted-foreground">正在从 PVE 读取节点、存储与网络选项…</span>
             </div>
           )}
 
@@ -454,8 +454,8 @@ export function CreateVmDialog({
             <div className="m-5 flex items-start gap-2 border border-destructive/35 bg-destructive/[0.06] p-3">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
               <div>
-                <div className="text-[11px] text-destructive">无法加载创建选项</div>
-                <div className="mt-1 text-[10px] text-destructive/80">{optionsError}</div>
+                <div className="text-[12px] text-destructive">无法加载创建选项</div>
+                <div className="mt-1 text-[11px] text-destructive/80">{optionsError}</div>
               </div>
             </div>
           )}
@@ -464,8 +464,8 @@ export function CreateVmDialog({
             <div className="mx-5 mt-4 flex items-start gap-2 border border-destructive/35 bg-destructive/[0.06] p-3">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
               <div className="min-w-0">
-                <div className="text-[11px] text-destructive">{submitError}</div>
-                {submitDetail && <div className="mt-1 break-words font-mono text-[9px] text-destructive/70">{submitDetail}</div>}
+                <div className="text-[12px] text-destructive">{submitError}</div>
+                {submitDetail && <div className="mt-1 break-words font-mono text-[10px] text-destructive/70">{submitDetail}</div>}
               </div>
             </div>
           )}
@@ -615,13 +615,13 @@ export function CreateVmDialog({
                     <Label className="opacity-0">容量</Label>
                     <div className="flex h-8 items-center gap-2 border border-border bg-panel/40 px-2.5">
                       <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="font-mono text-[11px] text-foreground">{form.diskSize} GiB</span>
-                      <span className="ml-auto font-mono text-[9px] text-muted-foreground">VirtIO SCSI</span>
+                      <span className="font-mono text-[12px] text-foreground">{form.diskSize} GiB</span>
+                      <span className="ml-auto font-mono text-[10px] text-muted-foreground">VirtIO SCSI</span>
                     </div>
                   </div>
                 </div>
                 {noDisk && (
-                  <div className="mt-2 text-[10px] text-destructive">没有可用作虚拟机磁盘的存储，请先在 PVE 中启用 images 存储。</div>
+                  <div className="mt-2 text-[11px] text-destructive">没有可用作虚拟机磁盘的存储，请先在 PVE 中启用 images 存储。</div>
                 )}
               </FormSection>
 
@@ -691,7 +691,7 @@ export function CreateVmDialog({
                 {form.iso !== NONE && (
                   <div className="mt-3 flex items-start gap-2 border border-info/25 bg-info/[0.05] p-2.5">
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" />
-                    <p className="text-[10px] leading-4 text-muted-foreground">
+                    <p className="text-[11px] leading-4 text-muted-foreground">
                       已挂载 ISO，启动顺序将设为{' '}
                       <span className="font-mono text-foreground">IDE2 → SCSI0 → NET0</span>，
                       以便进入安装程序。安装完成后请在 PVE 中调整为磁盘优先。
@@ -727,7 +727,7 @@ export function CreateVmDialog({
                   />
                 </div>
                 {noBridge && (
-                  <div className="mt-2 text-[10px] text-destructive">节点上没有活动网桥，无法创建带网络的虚拟机。</div>
+                  <div className="mt-2 text-[11px] text-destructive">节点上没有活动网桥，无法创建带网络的虚拟机。</div>
                 )}
               </FormSection>
             </>
@@ -781,7 +781,7 @@ export function CreateVmDialog({
                     </Select>
                   </Field>
                   <Field label="模板操作系统" hint="OSTYPE">
-                    <div className="flex h-8 items-center gap-2 border border-border bg-panel/40 px-2.5 text-[11px] text-muted-foreground">
+                    <div className="flex h-8 items-center gap-2 border border-border bg-panel/40 px-2.5 text-[12px] text-muted-foreground">
                       {selectedTemplate?.ostype
                         ? GUEST_TYPES.find((item) => item.value === selectedTemplate.ostype)?.label ?? selectedTemplate.ostype
                         : '—'}
@@ -789,7 +789,7 @@ export function CreateVmDialog({
                   </Field>
                 </div>
                 {noTemplates && (
-                  <div className="mt-2 text-[10px] text-muted-foreground">此节点暂无可用模板。请先在 PVE 中将虚拟机转换为模板。</div>
+                  <div className="mt-2 text-[11px] text-muted-foreground">此节点暂无可用模板。请先在 PVE 中将虚拟机转换为模板。</div>
                 )}
               </FormSection>
 
@@ -851,8 +851,8 @@ export function CreateVmDialog({
                   <div className="space-y-1">
                     <Label className="opacity-0">类型</Label>
                     <div className="flex h-8 items-center gap-2 border border-border bg-panel/40 px-2.5">
-                      <span className="text-[11px] text-foreground">{clone.full ? '完整克隆' : '链接克隆'}</span>
-                      <span className="ml-auto font-mono text-[9px] text-muted-foreground">
+                      <span className="text-[12px] text-foreground">{clone.full ? '完整克隆' : '链接克隆'}</span>
+                      <span className="ml-auto font-mono text-[10px] text-muted-foreground">
                         {clone.full ? '独立磁盘' : '依赖模板'}
                       </span>
                     </div>
@@ -884,14 +884,14 @@ export function CreateVmDialog({
             <div className="mr-auto flex min-w-0 flex-1 items-center gap-3">
               <Loader2 className="h-4 w-4 shrink-0 spin text-brand" />
               <div className="min-w-0 flex-1">
-                <div className="text-[11px] text-foreground">正在执行 PVE 任务，请勿关闭窗口</div>
+                <div className="text-[12px] text-foreground">正在执行 PVE 任务，请勿关闭窗口</div>
                 <div className="mt-1 h-px w-full overflow-hidden bg-border">
                   <div className="animate-pulse-line h-full w-1/3 bg-brand" />
                 </div>
               </div>
             </div>
           ) : (
-            <div className="mr-auto hidden items-center gap-3 text-[9px] text-muted-foreground sm:flex">
+            <div className="mr-auto hidden items-center gap-3 text-[10px] text-muted-foreground sm:flex">
               <span className="font-mono">
                 {mode === 'create' ? createSummary : selectedTemplate ? `TEMPLATE ${selectedTemplate.vmid}` : 'TEMPLATE —'}
               </span>

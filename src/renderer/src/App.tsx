@@ -48,6 +48,7 @@ import {
 import { TooltipProvider } from '@renderer/components/ui/tooltip'
 import { Toaster } from '@renderer/components/ui/sonner'
 import { errorDetail, unwrap } from '@renderer/lib/api'
+import { EmptyIllustration } from '@renderer/components/common'
 import { applyAppearance } from '@renderer/lib/appearance'
 import { useDashboard } from '@renderer/hooks/use-dashboard'
 import { useLiveMetrics } from '@renderer/hooks/use-live-metrics'
@@ -93,11 +94,12 @@ function BootFailure({
       </div>
       <div className="flex flex-1 items-center justify-center p-8">
         <div className="w-[420px] border border-destructive/35 bg-card p-5">
+          <EmptyIllustration className="mb-3 h-10 w-10" />
           <div className="flex items-center gap-2 text-[12px] font-medium text-destructive">
             <AlertTriangle className="h-4 w-4" />
             无法初始化桌面控制台
           </div>
-          <p className="mt-2 break-words text-[10px] leading-5 text-muted-foreground">{message}</p>
+          <p className="mt-2 break-words text-[11px] leading-5 text-muted-foreground">{message}</p>
           <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
             <RefreshCw className="h-3 w-3" />
             重试
@@ -350,6 +352,7 @@ function ConnectedApp({
             <NodeSettingsView
               node={nodeSettingsNode}
               clusterName={dashboard.cluster.name}
+              networkView={settings.networkView}
               onBack={() => setNodeSettingsNode(null)}
             />
           )
@@ -437,7 +440,7 @@ function ConnectedApp({
             {error && data && (
               <div className="mb-4 flex items-center gap-3 border border-warning/30 bg-warning/[0.05] px-3 py-2">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
-                <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
                   最近一次同步失败：{error}
                 </span>
                 <Button variant="ghost" size="sm" onClick={() => void refresh()}>
@@ -456,7 +459,7 @@ function ConnectedApp({
                     <AlertTriangle className="h-5 w-5" />
                   </div>
                   <div className="text-[13px] font-medium text-foreground">无法读取集群状态</div>
-                  <p className="mt-1 max-w-md text-[11px] leading-5 text-muted-foreground">{error}</p>
+                  <p className="mt-1 max-w-md text-[12px] leading-5 text-muted-foreground">{error}</p>
                   <Button variant="outline" size="sm" className="mt-4" onClick={() => void refresh()}>
                     <RefreshCw className="h-3 w-3" />
                     重试
@@ -516,11 +519,11 @@ function ConnectedApp({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="border-y border-border bg-panel/30 px-5 py-2.5">
-            <div className="flex items-center gap-2 font-mono text-[9px] text-muted-foreground">
+            <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
               <span className={`h-1.5 w-1.5 ${confirmAction?.action === 'stop' || confirmAction?.action === 'reset' ? 'bg-destructive' : 'bg-warning'}`} />
               {confirmAction?.target.node} / {confirmAction?.target.type.toUpperCase()} {confirmAction?.target.vmid}
             </div>
-            <div className="mt-1 text-[11px] font-medium text-foreground">{confirmAction?.target.name}</div>
+            <div className="mt-1 text-[12px] font-medium text-foreground">{confirmAction?.target.name}</div>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={actionBusy}>取消</AlertDialogCancel>

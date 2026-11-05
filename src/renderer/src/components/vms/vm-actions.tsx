@@ -117,7 +117,7 @@ export function VmRowActions({
     return (
       <div className="flex items-center justify-end gap-2">
         {showStatus && <VmStatusBadge status={target.status || 'stopped'} template />}
-        <span className="font-mono text-[9px] text-muted-foreground">READ ONLY</span>
+        <span className="font-mono text-[10px] text-muted-foreground">READ ONLY</span>
       </div>
     )
   }
@@ -238,7 +238,7 @@ export function VmDetailActionBar({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      <span className={cn('ml-1 text-[10px] text-muted-foreground', busy && 'text-brand')}>
+      <span className={cn('ml-1 text-[11px] text-muted-foreground', busy && 'text-brand')}>
         {busy ? '正在下发指令…' : '通过 PVE API 控制'}
       </span>
     </div>

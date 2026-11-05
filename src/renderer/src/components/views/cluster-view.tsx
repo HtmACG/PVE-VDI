@@ -22,12 +22,12 @@ function SummaryCard({
 }): React.JSX.Element {
   return (
     <div className="border border-border bg-card p-4">
-      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="flex items-center justify-between text-[12px] text-muted-foreground">
         {label}
         <span className="text-muted-foreground/60">{icon}</span>
       </div>
       <div className="mt-3 font-mono text-[24px] text-foreground">{value}</div>
-      <div className="mt-2 text-[11px] text-muted-foreground">{detail}</div>
+      <div className="mt-2 text-[12px] text-muted-foreground">{detail}</div>
     </div>
   )
 }
@@ -93,7 +93,7 @@ export function ClusterView({
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3.5">
               <div>
                 <h2 className="text-[14px] font-medium text-foreground">集群成员</h2>
-                <div className="mt-1 text-[11px] text-muted-foreground">{cluster.name} · {nodes.length} 个节点</div>
+                <div className="mt-1 text-[12px] text-muted-foreground">{cluster.name} · {nodes.length} 个节点</div>
               </div>
               <QuorumBadge quorate={cluster.quorate} />
             </div>
@@ -106,18 +106,18 @@ export function ClusterView({
                       <span className="font-mono text-[12px] text-foreground">{node.node}</span>
                       <NodeStatusBadge status={node.status} />
                     </div>
-                    <span className="text-[11px] text-muted-foreground">运行时间 {formatUptimeShort(node.uptime)}</span>
+                    <span className="text-[12px] text-muted-foreground">运行时间 {formatUptimeShort(node.uptime)}</span>
                   </div>
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div>
-                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                         <span>CPU</span>
                         <span className="font-mono text-foreground">{formatPercent(node.cpu, 1)}</span>
                       </div>
                       <Progress value={node.cpu * 100} className="mt-1.5 h-1" indicatorClassName="bg-brand" />
                     </div>
                     <div>
-                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                         <span>内存</span>
                         <span className="font-mono text-foreground">
                           {formatPercent(node.maxmem > 0 ? node.mem / node.maxmem : 0, 1)}
@@ -130,7 +130,7 @@ export function ClusterView({
                       />
                     </div>
                     <div>
-                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                         <span>根磁盘</span>
                         <span className="font-mono text-foreground">
                           {formatPercent(node.maxdisk > 0 ? node.disk / node.maxdisk : 0, 1)}
@@ -152,9 +152,9 @@ export function ClusterView({
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div>
                 <h2 className="text-[14px] font-medium text-foreground">最近任务</h2>
-                <div className="mt-1 text-[11px] text-muted-foreground">集群最近的操作记录</div>
+                <div className="mt-1 text-[12px] text-muted-foreground">集群最近的操作记录</div>
               </div>
-              <span className="text-[10px] text-muted-foreground">{dashboard.tasks.length} 条</span>
+              <span className="text-[11px] text-muted-foreground">{dashboard.tasks.length} 条</span>
             </div>
             <div className="divide-y divide-border">
               {dashboard.tasks.slice(0, 5).map((task) => (
@@ -169,9 +169,9 @@ export function ClusterView({
                       <span className="truncate text-[12px] text-foreground">
                         {TASK_TYPE_LABELS[task.type] ?? task.type}
                       </span>
-                      {task.id && <span className="font-mono text-[10px] text-muted-foreground">#{task.id}</span>}
+                      {task.id && <span className="font-mono text-[11px] text-muted-foreground">#{task.id}</span>}
                     </div>
-                    <div className="mt-0.5 text-[10px] text-muted-foreground">
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
                       {task.node} · {formatDateTime(task.startTime * 1000)}
                     </div>
                   </div>
@@ -180,7 +180,7 @@ export function ClusterView({
                 </button>
               ))}
               {dashboard.tasks.length === 0 && (
-                <div className="px-4 py-5 text-[11px] text-muted-foreground">没有任务记录。</div>
+                <div className="px-4 py-5 text-[12px] text-muted-foreground">没有任务记录。</div>
               )}
             </div>
           </Card>
@@ -191,7 +191,7 @@ export function ClusterView({
             <div className="border-b border-border px-4 py-3.5">
               <h2 className="text-[14px] font-medium text-foreground">集群信息</h2>
             </div>
-            <dl className="px-4 text-[11px]">
+            <dl className="px-4 text-[12px]">
               {[
                 ['集群名称', cluster.name],
                 ['节点数量', String(nodes.length)],
@@ -214,7 +214,7 @@ export function ClusterView({
                 <HardDrive className="h-4 w-4 text-muted-foreground" />
                 <h2 className="text-[14px] font-medium text-foreground">存储</h2>
               </div>
-              <span className="text-[10px] text-muted-foreground">{storages.length} 个</span>
+              <span className="text-[11px] text-muted-foreground">{storages.length} 个</span>
             </div>
             {storages.length === 0 ? (
               <EmptyState icon={<Database className="h-5 w-5" />} title="没有存储资源" />
@@ -224,9 +224,9 @@ export function ClusterView({
                   <div key={storage.id} className="px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                       <span className="truncate text-[12px] text-foreground">{storage.storage}</span>
-                      <span className="font-mono text-[10px] text-muted-foreground">{storage.type}</span>
+                      <span className="font-mono text-[11px] text-muted-foreground">{storage.type}</span>
                     </div>
-                    <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
+                    <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
                       <span>{formatBytes(storage.used)} / {formatBytes(storage.total)}</span>
                       <span>{formatPercent(storage.usedFraction, 1)}</span>
                     </div>

@@ -36,11 +36,11 @@ function ResourceMetric({
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="text-[12px] text-muted-foreground">{label}</span>
         <span className="font-mono text-[18px] text-foreground">{formatPercent(ratio, 1)}</span>
       </div>
       <Progress value={Math.min(100, ratio * 100)} className="mt-2 h-1" indicatorClassName={color} />
-      <div className="mt-1.5 text-[10px] text-muted-foreground">{detail}</div>
+      <div className="mt-1.5 text-[11px] text-muted-foreground">{detail}</div>
     </div>
   )
 }
@@ -77,21 +77,21 @@ function NodeCard({
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-[17px] font-semibold tracking-tight text-foreground">{node.node}</h2>
             <NodeStatusBadge status={node.status} />
-            <span className={cn('text-[10px]', liveError ? 'text-warning' : 'text-muted-foreground')}>
+            <span className={cn('text-[11px]', liveError ? 'text-warning' : 'text-muted-foreground')}>
               {liveError ? '实时数据中断' : liveAt ? `实时 · ${formatDateTime(liveAt, { second: '2-digit' })}` : '实时'}
             </span>
           </div>
-          <div className="mt-1 text-[11px] text-muted-foreground">
+          <div className="mt-1 text-[12px] text-muted-foreground">
             {node.cpuModel ?? 'Proxmox 节点'} · PVE {splitLicense(node.pveVersion ?? '')}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="mr-2 text-right">
-            <div className="text-[10px] text-muted-foreground">运行时间</div>
+            <div className="text-[11px] text-muted-foreground">运行时间</div>
             <div className="mt-0.5 text-[12px] text-foreground">{formatUptimeShort(node.uptime)}</div>
           </div>
           <div className="mr-2 text-right">
-            <div className="text-[10px] text-muted-foreground">虚拟机</div>
+            <div className="text-[11px] text-muted-foreground">虚拟机</div>
             <div className="mt-0.5 text-[12px] text-foreground">
               {running} / {nodeVms.length}
             </div>
@@ -137,9 +137,9 @@ function NodeCard({
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
               <div className="text-[12px] font-medium text-foreground">CPU 使用率</div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">最近 1 小时</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">最近 1 小时</div>
             </div>
-            <div className="text-[11px] text-muted-foreground">
+            <div className="text-[12px] text-muted-foreground">
               负载 {node.loadavg.length ? node.loadavg.map((value) => value.toFixed(2)).join(' / ') : '—'}
             </div>
           </div>
@@ -154,7 +154,7 @@ function NodeCard({
 
         <div className="p-4 xl:col-span-4">
           <div className="text-[12px] font-medium text-foreground">服务器信息</div>
-          <dl className="mt-2 divide-y divide-border/70 text-[11px]">
+          <dl className="mt-2 divide-y divide-border/70 text-[12px]">
             {[
               ['CPU 型号', node.cpuModel ?? '—'],
               ['CPU 拓扑', `${node.sockets ?? '—'} 路 / ${node.cores ?? '—'} 核 / ${node.maxcpu} 线程`],
@@ -164,7 +164,7 @@ function NodeCard({
             ].map(([label, value]) => (
               <div key={label} className="flex items-start justify-between gap-4 py-2">
                 <dt className="shrink-0 text-muted-foreground">{label}</dt>
-                <dd className={cn('min-w-0 text-right text-foreground', label === 'SSL 指纹' && 'break-all font-mono text-[9px]')}>
+                <dd className={cn('min-w-0 text-right text-foreground', label === 'SSL 指纹' && 'break-all font-mono text-[10px]')}>
                   {value}
                 </dd>
               </div>
@@ -179,19 +179,19 @@ function NodeCard({
             <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />
             存储
           </div>
-          <span className="text-[10px] text-muted-foreground">{storages.length} 个存储池</span>
+          <span className="text-[11px] text-muted-foreground">{storages.length} 个存储池</span>
         </div>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {storages.length === 0 ? (
-            <div className="text-[11px] text-muted-foreground">没有存储资源。</div>
+            <div className="text-[12px] text-muted-foreground">没有存储资源。</div>
           ) : (
             storages.map((storage) => (
               <div key={storage.id} className="border border-border bg-panel/30 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-[12px] text-foreground">{storage.storage}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground">{storage.type}</span>
+                  <span className="font-mono text-[11px] text-muted-foreground">{storage.type}</span>
                 </div>
-                <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
+                <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
                   <span>
                     {formatBytes(storage.used)} / {formatBytes(storage.total)}
                   </span>
@@ -260,44 +260,44 @@ export function NodesView({
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <div className="border border-border bg-card p-4">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between text-[12px] text-muted-foreground">
             在线节点
             <Server className="h-4 w-4 text-muted-foreground/70" />
           </div>
           <div className="mt-3 flex items-baseline gap-1.5">
             <span className="font-mono text-[25px] text-foreground">{online}</span>
-            <span className="font-mono text-[11px] text-muted-foreground">/ {dashboard.nodes.length}</span>
+            <span className="font-mono text-[12px] text-muted-foreground">/ {dashboard.nodes.length}</span>
           </div>
-          <div className="mt-2 text-[11px] text-muted-foreground">{dashboard.cluster.quorate ? 'Quorum 正常' : 'Quorum 异常'}</div>
+          <div className="mt-2 text-[12px] text-muted-foreground">{dashboard.cluster.quorate ? 'Quorum 正常' : 'Quorum 异常'}</div>
         </div>
         <div className="border border-border bg-card p-4">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between text-[12px] text-muted-foreground">
             CPU 使用
             <Cpu className="h-4 w-4 text-muted-foreground/70" />
           </div>
           <div className="mt-3 font-mono text-[25px] text-foreground">{formatPercent(cpuUsage, 1)}</div>
-          <div className="mt-2 text-[11px] text-muted-foreground">{totalThreads} 个线程 · 集群平均</div>
+          <div className="mt-2 text-[12px] text-muted-foreground">{totalThreads} 个线程 · 集群平均</div>
         </div>
         <div className="border border-border bg-card p-4">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between text-[12px] text-muted-foreground">
             内存使用
             <MemoryStick className="h-4 w-4 text-muted-foreground/70" />
           </div>
           <div className="mt-3 font-mono text-[25px] text-foreground">{formatPercent(memoryUsage, 1)}</div>
-          <div className="mt-2 text-[11px] text-muted-foreground">
+          <div className="mt-2 text-[12px] text-muted-foreground">
             {formatBytes(usedMemory)} / {formatBytes(totalMemory)}
           </div>
         </div>
         <div className="border border-border bg-card p-4">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between text-[12px] text-muted-foreground">
             虚拟机
             <Boxes className="h-4 w-4 text-muted-foreground/70" />
           </div>
           <div className="mt-3 flex items-baseline gap-1.5">
             <span className="font-mono text-[25px] text-foreground">{runningVms}</span>
-            <span className="font-mono text-[11px] text-muted-foreground">/ {totalVms} 运行中</span>
+            <span className="font-mono text-[12px] text-muted-foreground">/ {totalVms} 运行中</span>
           </div>
-          <div className="mt-2 text-[11px] text-muted-foreground">{totalVms - runningVms} 台已停止</div>
+          <div className="mt-2 text-[12px] text-muted-foreground">{totalVms - runningVms} 台已停止</div>
         </div>
       </div>
 
@@ -326,12 +326,12 @@ export function NodesView({
         <Card>
           <div className="border-b border-border px-4 py-3.5">
             <h2 className="text-[14px] font-medium text-foreground">节点对比</h2>
-            <div className="mt-1 text-[11px] text-muted-foreground">节点资源使用情况</div>
+            <div className="mt-1 text-[12px] text-muted-foreground">节点资源使用情况</div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px]">
               <thead>
-                <tr className="border-b border-border text-left text-[10px] text-muted-foreground">
+                <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
                   <th className="px-4 py-2.5 font-medium">节点</th>
                   <th className="px-3 py-2.5 font-medium">状态</th>
                   <th className="px-3 py-2.5 font-medium">CPU</th>
@@ -343,18 +343,18 @@ export function NodesView({
               <tbody>
                 {dashboard.nodes.map((node) => (
                   <tr key={node.node} className="border-b border-border/60 last:border-b-0">
-                    <td className="px-4 py-2.5 font-mono text-[11px] text-foreground">{node.node}</td>
+                    <td className="px-4 py-2.5 font-mono text-[12px] text-foreground">{node.node}</td>
                     <td className="px-3 py-2.5">
                       <NodeStatusBadge status={node.status} />
                     </td>
-                    <td className="px-3 py-2.5 text-[11px] text-foreground">{formatPercent(node.cpu, 1)}</td>
-                    <td className="px-3 py-2.5 text-[11px] text-foreground">
+                    <td className="px-3 py-2.5 text-[12px] text-foreground">{formatPercent(node.cpu, 1)}</td>
+                    <td className="px-3 py-2.5 text-[12px] text-foreground">
                       {formatPercent(node.maxmem > 0 ? node.mem / node.maxmem : 0, 1)}
                     </td>
-                    <td className="px-3 py-2.5 text-[11px] text-muted-foreground">
+                    <td className="px-3 py-2.5 text-[12px] text-muted-foreground">
                       {formatBytes(node.disk)} / {formatBytes(node.maxdisk)}
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-[10px] text-muted-foreground">
+                    <td className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
                       {splitLicense(node.pveVersion ?? '')}
                     </td>
                   </tr>

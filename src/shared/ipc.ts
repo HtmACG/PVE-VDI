@@ -17,6 +17,8 @@ export const IPC = {
   nodeTimeUpdate: 'pve:node-time-update',
   nodeOptionsUpdate: 'pve:node-options-update',
   nodeLogs: 'pve:node-logs',
+  checkUpdates: 'app:check-updates',
+  openExternal: 'app:open-external',
   vmDetail: 'pve:vm-detail',
   vmAction: 'pve:vm-action',
   createOptions: 'pve:create-options',

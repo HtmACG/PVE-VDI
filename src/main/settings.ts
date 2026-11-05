@@ -7,7 +7,7 @@ import {
   MAX_REFRESH_INTERVAL,
   MIN_REFRESH_INTERVAL
 } from '@shared/ipc'
-import type { AppSettings, PreferencesPatch, SessionProfile, Theme, UiFont } from '@shared/types'
+import type { AppSettings, NetworkView, PreferencesPatch, SessionProfile, Theme, UiFont } from '@shared/types'
 import {
   DEFAULT_ACCENT_COLOR,
   DEFAULT_CUSTOM_FONT,
@@ -28,6 +28,8 @@ interface StoredSettings {
   uiFont: UiFont
   customFont: string
   accentColor: string
+  networkView: NetworkView
+  appearanceVersion: 2
   encryptedPassword?: string
 }
 
@@ -40,7 +42,9 @@ const DEFAULTS: StoredSettings = {
   refreshInterval: 8,
   uiFont: DEFAULT_UI_FONT,
   customFont: DEFAULT_CUSTOM_FONT,
-  accentColor: DEFAULT_ACCENT_COLOR
+  accentColor: DEFAULT_ACCENT_COLOR,
+  networkView: 'cards',
+  appearanceVersion: 2
 }
 
 function validTheme(value: unknown): value is Theme {
@@ -74,6 +78,12 @@ export class SettingsStore {
       } catch {
         serverUrl = DEFAULTS.serverUrl
       }
+      const appearanceVersion = raw.appearanceVersion === 2 ? 2 : 1
+      const rawAccent = normalizeAccentColor(raw.accentColor)
+      const migratedAccent =
+        appearanceVersion === 1 && (!rawAccent || rawAccent === '#f26b1d') ? DEFAULT_ACCENT_COLOR : rawAccent
+      const migratedFont =
+        appearanceVersion === 1 && raw.uiFont === 'inter' ? DEFAULT_UI_FONT : isUiFont(raw.uiFont) ? raw.uiFont : DEFAULTS.uiFont
       return {
         serverUrl,
         username: typeof raw.username === 'string' && raw.username ? raw.username : DEFAULTS.username,
@@ -81,9 +91,11 @@ export class SettingsStore {
         rememberPassword: raw.rememberPassword === true,
         theme: validTheme(raw.theme) ? raw.theme : DEFAULTS.theme,
         refreshInterval: clampRefresh(raw.refreshInterval),
-        uiFont: isUiFont(raw.uiFont) ? raw.uiFont : DEFAULTS.uiFont,
+        uiFont: migratedFont,
         customFont: normalizeCustomFont(raw.customFont),
-        accentColor: normalizeAccentColor(raw.accentColor) ?? DEFAULTS.accentColor,
+        accentColor: migratedAccent ?? DEFAULTS.accentColor,
+        networkView: raw.networkView === 'list' ? 'list' : 'cards',
+        appearanceVersion: 2,
         encryptedPassword:
           typeof raw.encryptedPassword === 'string' && raw.encryptedPassword
             ? raw.encryptedPassword
@@ -117,7 +129,8 @@ export class SettingsStore {
       refreshInterval: this.data.refreshInterval,
       uiFont: this.data.uiFont,
       customFont: this.data.customFont,
-      accentColor: this.data.accentColor
+      accentColor: this.data.accentColor,
+      networkView: this.data.networkView
     }
   }
 
@@ -175,6 +188,12 @@ export class SettingsStore {
       const accent = normalizeAccentColor(patch.accentColor)
       if (!accent) throw new Error('强调色必须是 #RRGGBB 格式。')
       this.data.accentColor = accent
+    }
+    if (patch.networkView !== undefined) {
+      if (patch.networkView !== 'cards' && patch.networkView !== 'list') {
+        throw new Error('网络接口展示方式无效。')
+      }
+      this.data.networkView = patch.networkView
     }
     this.persist()
     return this.get()

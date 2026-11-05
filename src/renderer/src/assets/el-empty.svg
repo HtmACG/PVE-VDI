@@ -1,0 +1,29 @@
+<svg viewBox="0 0 79 86" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="el-empty-grad-1" x1="38.8503086%" y1="0%" x2="61.1496914%" y2="100%">
+      <stop offset="0%" stop-color="#fcfcfd"/>
+      <stop offset="100%" stop-color="#eeeff3"/>
+    </linearGradient>
+    <linearGradient id="el-empty-grad-2" x1="0%" y1="9.5%" x2="100%" y2="90.5%">
+      <stop offset="0%" stop-color="#fcfcfd"/>
+      <stop offset="100%" stop-color="#e9ebef"/>
+    </linearGradient>
+    <rect id="el-empty-path-3" x="0" y="0" width="17" height="36"/>
+  </defs>
+  <g stroke="none" fill="none" fill-rule="evenodd">
+    <path d="M39.5 86C61.315 86 79 83.911 79 81.333 79 78.756 57.315 78 35.5 78 13.685 78 0 78.756 0 81.333 0 83.911 17.685 86 39.5 86Z" fill="#f7f8fc"/>
+    <polygon points="13 58 53 58 42 45 2 45" fill="#e5e7e9" transform="translate(27.5 51.5) scale(1 -1) translate(-27.5 -51.5)"/>
+    <g transform="translate(34.5 31.5) scale(-1 1) rotate(-25) translate(-34.5 -31.5) translate(7 10)">
+      <polygon points="0 3 18 3 23 7 5 7" fill="#e5e7e9" transform="translate(11.5 5) scale(1 -1) translate(-11.5 -5)"/>
+      <polygon points="0 7 38 7 38 43 0 43" fill="#edeef2"/>
+      <rect x="38" y="7" width="17" height="36" fill="url(#el-empty-grad-1)" transform="translate(46.5 25) scale(-1 1) translate(-46.5 -25)"/>
+      <polygon points="24 7 41 7 55 0 38 0" fill="#f8f9fb" transform="translate(39.5 3.5) scale(-1 1) translate(-39.5 -3.5)"/>
+    </g>
+    <rect x="13" y="45" width="40" height="36" fill="url(#el-empty-grad-2)"/>
+    <g transform="translate(53 45)">
+      <use href="#el-empty-path-3" fill="#e0e3e9" transform="translate(8.5 18) scale(-1 1) translate(-8.5 -18)"/>
+      <polygon points="7 0 24 0 20 18 7 16.5" fill="#d5d7de" transform="translate(12 9) scale(-1 1) translate(-12 -9)"/>
+    </g>
+    <polygon points="62 45 79 45 70 58 53 58" fill="#f8f9fb" transform="translate(66 51.5) scale(-1 1) translate(-66 -51.5)"/>
+  </g>
+</svg>

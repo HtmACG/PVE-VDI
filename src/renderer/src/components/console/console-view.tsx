@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import type { ConsoleOpenRequest, ConsoleSessionInfo } from '@shared/types'
 import { Button } from '@renderer/components/ui/button'
+import { EmptyIllustration } from '@renderer/components/common'
 import { WindowButtons } from '@renderer/components/layout/window-buttons'
 import { Textarea } from '@renderer/components/ui/input'
 import { errorDetail, unwrap } from '@renderer/lib/api'
@@ -54,7 +55,7 @@ function phaseBadge(phase: ConsolePhase): React.JSX.Element {
         : phase === 'disconnected'
           ? 'text-muted-foreground'
           : 'text-brand'
-  return <span className={cn('text-[11px] font-medium', color)}>{phaseLabel(phase)}</span>
+  return <span className={cn('text-[12px] font-medium', color)}>{phaseLabel(phase)}</span>
 }
 
 function utf8Length(value: string): number {
@@ -438,10 +439,10 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
           ) : (
             <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
-          <span className="truncate text-[11px] font-medium text-foreground">
+          <span className="truncate text-[12px] font-medium text-foreground">
             {session?.title ?? request.name ?? '控制台'}
           </span>
-          <span className="hidden truncate font-mono text-[9px] text-muted-foreground/70 lg:block">
+          <span className="hidden truncate font-mono text-[10px] text-muted-foreground/70 lg:block">
             {session?.subtitle ?? `${request.node} · ${request.type?.toUpperCase() ?? 'NODE'} ${request.vmid ?? ''}`}
           </span>
         </div>
@@ -515,7 +516,7 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
                   <div className="text-[12px] text-foreground">
                     {phase === 'opening' ? '正在分配控制台会话' : '正在建立 PVE 控制通道'}
                   </div>
-                  <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">
                     {consoleModeHint === 'novnc' ? 'noVNC / RFB 003.008' : 'xterm.js / termproxy'}
                   </div>
                 </div>
@@ -526,11 +527,12 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
           {phase === 'error' || phase === 'disconnected' ? (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#050608]/95">
               <div className="w-[380px] max-w-[calc(100%-32px)] border border-destructive/35 bg-card p-4">
+                <EmptyIllustration className="mb-3 h-10 w-10" />
                 <div className="flex items-center gap-2 text-[12px] font-medium text-destructive">
                   <Unplug className="h-3.5 w-3.5" />
                   控制台连接中断
                 </div>
-                <p className="mt-2 break-words text-[10px] leading-5 text-muted-foreground">
+                <p className="mt-2 break-words text-[11px] leading-5 text-muted-foreground">
                   {error || '控制台连接已断开。'}
                 </p>
                 <div className="mt-4 flex gap-2">
@@ -550,7 +552,7 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
           {clipboardOpen && isNoVnc && (
             <div className="absolute bottom-4 right-4 z-20 w-[330px] border border-border-strong bg-card shadow-[0_18px_60px_rgba(0,0,0,0.5)]">
               <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                <div className="flex items-center gap-2 text-[10px] font-medium text-foreground">
+                <div className="flex items-center gap-2 text-[11px] font-medium text-foreground">
                   <Clipboard className="h-3 w-3 text-brand" />
                   发送剪贴板到虚拟机
                 </div>
@@ -568,12 +570,12 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
                   value={clipboardText}
                   onChange={(event) => setClipboardText(event.target.value)}
                   placeholder="在此粘贴或输入要发送到客户机的文本…"
-                  className="h-28 resize-none font-mono text-[10px]"
+                  className="h-28 resize-none font-mono text-[11px]"
                   autoFocus
                 />
                 {remoteClipboard && (
-                  <div className="max-h-16 overflow-auto border border-border bg-background p-2 font-mono text-[10px] leading-4 text-muted-foreground">
-                    <div className="mb-1 text-[9px] text-muted-foreground">来自客户机</div>
+                  <div className="max-h-16 overflow-auto border border-border bg-background p-2 font-mono text-[11px] leading-4 text-muted-foreground">
+                    <div className="mb-1 text-[10px] text-muted-foreground">来自客户机</div>
                     {remoteClipboard}
                   </div>
                 )}
@@ -590,7 +592,7 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between border-t border-border bg-card px-3 py-2 text-[10px] text-muted-foreground">
+        <div className="flex shrink-0 items-center justify-between border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-2">
             <span>本地回环桥 / {session?.mode === 'novnc' ? 'RFB' : 'termproxy'}</span>
           </span>

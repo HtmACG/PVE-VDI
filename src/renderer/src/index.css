@@ -30,74 +30,74 @@
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-fg);
   --color-ring: var(--ring);
-  --font-sans: 'Inter Variable', 'Inter', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
+  --font-sans: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'Cascadia Code', Consolas, monospace;
   --radius-none: 0px;
 }
 
 :root {
   color-scheme: dark;
-  --bg: #08090b;
-  --fg: #f4f4f5;
-  --card: #0c0d10;
-  --panel: #101116;
-  --panel-hover: #14161b;
-  --popover: #0f1014;
-  --muted: #16181d;
-  --muted-fg: #9698a2;
-  --border: #23252b;
-  --border-strong: #33363e;
-  --input: #2a2d34;
-  --primary: #f4f4f5;
-  --primary-fg: #09090b;
-  --secondary: #1a1c21;
-  --secondary-fg: #e4e4e7;
-  --accent: #1b1d23;
+  --bg: #1f1f1f;
+  --fg: #f3f3f3;
+  --card: #252526;
+  --panel: #2b2b2d;
+  --panel-hover: #323234;
+  --popover: #2b2b2d;
+  --muted: #333336;
+  --muted-fg: #b8b8b8;
+  --border: #3f3f46;
+  --border-strong: #52525b;
+  --input: #4a4a50;
+  --primary: #f3f3f3;
+  --primary-fg: #1f1f1f;
+  --secondary: #333336;
+  --secondary-fg: #e8e8e8;
+  --accent: #3a3a3d;
   --accent-fg: #fafafa;
-  --destructive: #ef4444;
+  --destructive: #f14c4c;
   --destructive-fg: #fff7f7;
-  --success: #35d07f;
-  --warning: #f4a62a;
-  --info: #51a2ff;
-  --brand: #f26b1d;
-  --brand-fg: #0b0b0b;
-  --ring: #f26b1d;
-  --ui-font: 'Inter Variable', 'Inter', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
+  --success: #4ec9b0;
+  --warning: #d7ba7d;
+  --info: #4cc2ff;
+  --brand: #4cc2ff;
+  --brand-fg: #101010;
+  --ring: #4cc2ff;
+  --ui-font: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
   --grid-line: rgba(255, 255, 255, 0.045);
-  --chart-grid: #22242a;
-  --overlay: rgba(2, 3, 5, 0.78);
+  --chart-grid: #3a3a3d;
+  --overlay: rgba(12, 12, 12, 0.78);
 }
 
 html.light {
   color-scheme: light;
-  --bg: #f3f3f1;
-  --fg: #18181b;
-  --card: #fbfbfa;
-  --panel: #ffffff;
-  --panel-hover: #f5f5f3;
+  --bg: #f3f3f3;
+  --fg: #1f1f1f;
+  --card: #ffffff;
+  --panel: #fafafa;
+  --panel-hover: #f2f2f2;
   --popover: #ffffff;
-  --muted: #efefed;
-  --muted-fg: #62626a;
-  --border: #dededb;
-  --border-strong: #c9c9c4;
-  --input: #d2d2cd;
-  --primary: #18181b;
+  --muted: #f0f0f0;
+  --muted-fg: #5f5f5f;
+  --border: #d1d1d1;
+  --border-strong: #b8b8b8;
+  --input: #c8c8c8;
+  --primary: #1f1f1f;
   --primary-fg: #fafafa;
-  --secondary: #ececea;
-  --secondary-fg: #27272a;
-  --accent: #f0f0ee;
-  --accent-fg: #111113;
-  --destructive: #dc2626;
+  --secondary: #ececec;
+  --secondary-fg: #272727;
+  --accent: #f2f2f2;
+  --accent-fg: #1f1f1f;
+  --destructive: #c42b1c;
   --destructive-fg: #ffffff;
-  --success: #15803d;
-  --warning: #b45309;
-  --info: #2563eb;
-  --brand: #d8570a;
-  --brand-fg: #fffaf5;
-  --ring: #d8570a;
-  --ui-font: 'Inter Variable', 'Inter', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
+  --success: #107c10;
+  --warning: #9d5d00;
+  --info: #0067c0;
+  --brand: #0078d4;
+  --brand-fg: #ffffff;
+  --ring: #0078d4;
+  --ui-font: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
   --grid-line: rgba(20, 20, 20, 0.055);
-  --chart-grid: #e3e3df;
+  --chart-grid: #dedede;
   --overlay: rgba(24, 24, 27, 0.38);
 }
 
@@ -137,10 +137,9 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--ui-font, var(--font-sans));
-  font-size: 13px;
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
 
 ::selection {

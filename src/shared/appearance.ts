@@ -1,7 +1,7 @@
 import type { UiFont } from '@shared/types'
 
-export const DEFAULT_ACCENT_COLOR = '#f26b1d'
-export const DEFAULT_UI_FONT: UiFont = 'inter'
+export const DEFAULT_ACCENT_COLOR = '#0078d4'
+export const DEFAULT_UI_FONT: UiFont = 'system'
 export const DEFAULT_CUSTOM_FONT = ''
 
 export interface UiFontOption {
@@ -41,12 +41,12 @@ export const UI_FONT_OPTIONS: UiFontOption[] = [
 ]
 
 export const ACCENT_COLORS = [
-  { name: '工业橙', value: '#f26b1d' },
+  { name: 'Windows 蓝', value: '#0078d4' },
   { name: '信号蓝', value: '#3b82f6' },
   { name: '青绿', value: '#0d9488' },
   { name: '紫罗兰', value: '#8b5cf6' },
   { name: '玫红', value: '#e11d48' },
-  { name: '琥珀', value: '#d97706' }
+  { name: '工业橙', value: '#f26b1d' }
 ] as const
 
 export function isUiFont(value: unknown): value is UiFont {

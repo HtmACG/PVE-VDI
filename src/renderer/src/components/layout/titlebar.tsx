@@ -23,21 +23,21 @@ export function Titlebar({ session, dashboard, refreshing, onRefresh }: Titlebar
   const clusterName = dashboard?.cluster.name || session.clusterName
 
   return (
-    <header className="drag-region relative flex h-10 shrink-0 items-stretch border-b border-border bg-[var(--bg)] pl-3.5">
+    <header className="drag-region relative flex h-10 shrink-0 items-stretch border-b border-border bg-card pl-3.5">
       <div className="flex items-center gap-3">
         <BrandLockup compact />
         <span className="h-3.5 w-px bg-border" />
-        <span className="font-mono text-[10px] text-muted-foreground">
+        <span className="font-mono text-[11px] text-muted-foreground">
           {session.serverUrl.replace(/^https?:\/\//, '')}
         </span>
-        <span className="hidden text-[10px] text-muted-foreground lg:block">{clusterName}</span>
+        <span className="hidden text-[11px] text-muted-foreground lg:block">{clusterName}</span>
       </div>
 
       <div className="ml-auto flex items-stretch">
         <button
           type="button"
           onClick={onRefresh}
-          className="no-drag flex min-w-[116px] items-center justify-end gap-2 border-l border-border/60 px-3 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="no-drag flex min-w-[116px] items-center justify-end gap-2 border-l border-border/60 px-3 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           title="刷新状态"
         >
           <span>

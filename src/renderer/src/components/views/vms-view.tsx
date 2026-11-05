@@ -138,16 +138,16 @@ export function VmsView({
           ]
         ].map(([label, value, detail]) => (
           <div key={label} className="border-b border-border px-4 py-3 last:border-b-0 sm:border-b-0">
-            <div className="text-[11px] text-muted-foreground">{label}</div>
+            <div className="text-[12px] text-muted-foreground">{label}</div>
             <div className="mt-1.5 font-mono text-[19px] text-foreground">{value}</div>
-            <div className="mt-1 text-[10px] text-muted-foreground">{detail}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">{detail}</div>
           </div>
         ))}
       </div>
 
       <div className="border border-border bg-card">
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <SlidersHorizontal className="h-3.5 w-3.5" />
             筛选
           </div>
@@ -160,14 +160,14 @@ export function VmsView({
                   type="button"
                   onClick={() => setStatus(filter.value)}
                   className={cn(
-                    'flex h-7 items-center gap-1.5 border-r border-border px-2.5 text-[11px] transition-colors last:border-r-0',
+                    'flex h-7 items-center gap-1.5 border-r border-border px-2.5 text-[12px] transition-colors last:border-r-0',
                     status === filter.value
                       ? 'bg-foreground text-background'
                       : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                   )}
                 >
                   {filter.label}
-                  <span className={cn('font-mono text-[10px]', status === filter.value ? 'text-background/70' : 'text-muted-foreground/70')}>
+                  <span className={cn('font-mono text-[11px]', status === filter.value ? 'text-background/70' : 'text-muted-foreground/70')}>
                     {count}
                   </span>
                 </button>
@@ -180,7 +180,7 @@ export function VmsView({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索名称、VMID、标签…"
-              className="h-8 pl-8 pr-7 text-[11px]"
+              className="h-8 pl-8 pr-7 text-[12px]"
             />
             {query && (
               <button
@@ -194,7 +194,7 @@ export function VmsView({
             )}
           </div>
           <Select value={node} onValueChange={setNode}>
-            <SelectTrigger className="h-8 w-[120px] text-[11px]">
+            <SelectTrigger className="h-8 w-[120px] text-[12px]">
               <SelectValue placeholder="节点" />
             </SelectTrigger>
             <SelectContent>
@@ -207,7 +207,7 @@ export function VmsView({
             </SelectContent>
           </Select>
           <Select value={tag} onValueChange={setTag}>
-            <SelectTrigger className="h-8 w-[120px] text-[11px]">
+            <SelectTrigger className="h-8 w-[120px] text-[12px]">
               <SelectValue placeholder="标签" />
             </SelectTrigger>
             <SelectContent>
@@ -230,7 +230,7 @@ export function VmsView({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left">
             <thead>
-              <tr className="border-b border-border bg-panel/30 text-[10px] text-muted-foreground">
+              <tr className="border-b border-border bg-panel/30 text-[11px] text-muted-foreground">
                 <th className="px-4 py-2.5 font-medium">虚拟机</th>
                 <th className="px-3 py-2.5 font-medium">状态</th>
                 <th className="px-3 py-2.5 font-medium">节点</th>
@@ -266,16 +266,16 @@ export function VmsView({
                             <span className="truncate text-[12px] font-medium text-foreground">{vm.name}</span>
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-[10px] text-muted-foreground">
+                            <span className="font-mono text-[11px] text-muted-foreground">
                               {vm.type.toUpperCase()} {vm.vmid}
                             </span>
                             {vm.tags.slice(0, 2).map((item) => (
-                              <span key={item} className="text-[10px] text-muted-foreground">
+                              <span key={item} className="text-[11px] text-muted-foreground">
                                 {item}
                               </span>
                             ))}
                             {vm.tags.length > 2 && (
-                              <span className="text-[10px] text-muted-foreground">+{vm.tags.length - 2}</span>
+                              <span className="text-[11px] text-muted-foreground">+{vm.tags.length - 2}</span>
                             )}
                           </div>
                         </div>
@@ -284,15 +284,15 @@ export function VmsView({
                     <td className="px-3 py-3">
                       <VmStatusBadge status={vm.status} template={template} />
                     </td>
-                    <td className="px-3 py-3 font-mono text-[11px] text-muted-foreground">{vm.node}</td>
+                    <td className="px-3 py-3 font-mono text-[12px] text-muted-foreground">{vm.node}</td>
                     <td className="px-3 py-3">
-                      <div className="font-mono text-[11px] text-foreground">{formatPercent(vm.cpu, 1)}</div>
-                      <div className="mt-0.5 text-[10px] text-muted-foreground">{vm.cpus} vCPU</div>
+                      <div className="font-mono text-[12px] text-foreground">{formatPercent(vm.cpu, 1)}</div>
+                      <div className="mt-0.5 text-[11px] text-muted-foreground">{vm.cpus} vCPU</div>
                     </td>
                     <td className="px-3 py-3">
-                      <div className="flex items-baseline justify-between gap-3 font-mono text-[10px]">
+                      <div className="flex items-baseline justify-between gap-3 font-mono text-[11px]">
                         <span className="text-foreground">{formatBytes(vm.mem)}</span>
-                        <span className="text-[10px] text-muted-foreground">{formatBytes(vm.maxmem)}</span>
+                        <span className="text-[11px] text-muted-foreground">{formatBytes(vm.maxmem)}</span>
                       </div>
                       <Progress
                         value={vm.maxmem > 0 ? (vm.mem / vm.maxmem) * 100 : 0}
@@ -300,8 +300,8 @@ export function VmsView({
                         indicatorClassName={vm.status === 'running' ? 'bg-foreground' : 'bg-border-strong'}
                       />
                     </td>
-                    <td className="px-3 py-3 font-mono text-[10px] text-foreground">{formatBytes(vm.maxdisk)}</td>
-                    <td className="px-3 py-3 text-[11px] text-muted-foreground">
+                    <td className="px-3 py-3 font-mono text-[11px] text-foreground">{formatBytes(vm.maxdisk)}</td>
+                    <td className="px-3 py-3 text-[12px] text-muted-foreground">
                       {formatUptimeShort(vm.uptime)}
                     </td>
                     <td className="px-4 py-3">
@@ -339,7 +339,7 @@ export function VmsView({
           />
         )}
 
-        <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-[10px] text-muted-foreground">
+        <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-[11px] text-muted-foreground">
           <span>
             显示 {filtered.length} / {dashboard.vms.length} 台虚拟机
           </span>

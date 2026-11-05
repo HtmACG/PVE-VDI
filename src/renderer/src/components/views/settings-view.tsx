@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
+  CheckCircle2,
+  Download,
+  EthernetPort,
+  ExternalLink,
+  Globe2,
+  History,
+  Mail,
   Moon,
   RefreshCw,
   Server,
@@ -8,11 +15,21 @@ import {
   Trash2,
   Unplug,
   KeyRound,
+  LayoutGrid,
   LockKeyhole,
+  Network,
   Palette,
   Type
 } from 'lucide-react'
-import type { AppSettings, DashboardData, PreferencesPatch, SessionProfile, Theme, UiFont } from '@shared/types'
+import type {
+  AppSettings,
+  DashboardData,
+  PreferencesPatch,
+  SessionProfile,
+  Theme,
+  UiFont,
+  UpdateCheckResult
+} from '@shared/types'
 import {
   ACCENT_COLORS,
   DEFAULT_ACCENT_COLOR,
@@ -37,6 +54,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@renderer/components/ui/alert-dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@renderer/components/ui/dialog'
+import { APP_AUTHOR } from '@shared/app-info'
+import { APP_CHANGELOG } from '@shared/changelog'
+import { errorDetail, unwrap } from '@renderer/lib/api'
 import { formatDateTime, splitLicense } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
 
@@ -70,6 +91,10 @@ export function SettingsView({
   const [customFontError, setCustomFontError] = useState<string | null>(null)
   const [accentDraft, setAccentDraft] = useState(settings.accentColor)
   const [accentError, setAccentError] = useState<string | null>(null)
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null)
+  const [checkingUpdates, setCheckingUpdates] = useState(false)
+  const [updateError, setUpdateError] = useState<string | null>(null)
+  const [changelogOpen, setChangelogOpen] = useState(false)
 
   useEffect(() => {
     setCustomFontDraft(settings.customFont)
@@ -116,24 +141,41 @@ export function SettingsView({
   )
   const validAccent = normalizeAccentColor(accentDraft) ?? settings.accentColor ?? DEFAULT_ACCENT_COLOR
 
+  const checkUpdates = async (): Promise<void> => {
+    setCheckingUpdates(true)
+    setUpdateError(null)
+    try {
+      const result = await unwrap(window.pvevdi.checkUpdates())
+      setUpdateInfo(result)
+    } catch (err) {
+      setUpdateError(errorDetail(err))
+    } finally {
+      setCheckingUpdates(false)
+    }
+  }
+
+  const openExternal = (url: string): void => {
+    void window.pvevdi.openExternal(url)
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader
         eyebrow={`${session.clusterName} 集群`}
         title="设置"
-        description="连接偏好、界面主题、字体、强调色和本地凭据管理。"
+        description="连接偏好、可视化设置、字体、强调色和本地凭据管理。"
       />
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
         <div className="space-y-3 xl:col-span-7">
           <Card>
             <PanelHeader
-              title="界面"
-              description="外观与刷新"
+              title="可视化设置"
+              description="主题、字体、强调色与网络接口展示"
             />
             <div className="space-y-5 p-4">
               <div>
-                <div className="mb-2 text-[11px] font-medium text-muted-foreground">主题</div>
+                <div className="mb-2 text-[12px] font-medium text-muted-foreground">主题</div>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { value: 'dark' as const, label: '深色', description: '高对比 / 深色界面', icon: Moon },
@@ -156,8 +198,8 @@ export function SettingsView({
                           <Icon className="h-4 w-4" />
                         </div>
                         <div>
-                          <div className="text-[11px] font-medium text-foreground">{option.label}</div>
-                          <div className="mt-0.5 text-[10px] text-muted-foreground">{option.description}</div>
+                          <div className="text-[12px] font-medium text-foreground">{option.label}</div>
+                          <div className="mt-0.5 text-[11px] text-muted-foreground">{option.description}</div>
                         </div>
                       </button>
                     )
@@ -170,8 +212,8 @@ export function SettingsView({
                   <div className="flex items-center gap-2">
                     <Type className="h-3.5 w-3.5 text-muted-foreground" />
                     <div>
-                      <div className="text-[11px] text-foreground">界面字体</div>
-                      <div className="mt-0.5 text-[10px] text-muted-foreground">控制页面主字体；数据仍使用等宽字体。</div>
+                      <div className="text-[12px] text-foreground">界面字体</div>
+                      <div className="mt-0.5 text-[11px] text-muted-foreground">控制页面主字体；数据仍使用等宽字体。</div>
                     </div>
                   </div>
                   <Select
@@ -179,7 +221,7 @@ export function SettingsView({
                     disabled={saving}
                     onValueChange={(value) => void update({ uiFont: value as UiFont })}
                   >
-                    <SelectTrigger className="h-8 w-[180px] text-[11px]" aria-label="界面字体">
+                    <SelectTrigger className="h-8 w-[180px] text-[12px]" aria-label="界面字体">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent align="end">
@@ -205,7 +247,7 @@ export function SettingsView({
                       }}
                       placeholder={'"HarmonyOS Sans SC", "Microsoft YaHei", sans-serif'}
                       aria-label="自定义字体族"
-                      className="h-8 min-w-[220px] flex-1 font-mono text-[11px]"
+                      className="h-8 min-w-[220px] flex-1 font-mono text-[12px]"
                       disabled={saving}
                     />
                     <Button variant="outline" size="sm" disabled={saving} onClick={() => void applyCustomFont()}>
@@ -213,12 +255,12 @@ export function SettingsView({
                     </Button>
                   </div>
                 )}
-                {customFontError && <div className="mt-1.5 text-[10px] text-destructive">{customFontError}</div>}
+                {customFontError && <div className="mt-1.5 text-[11px] text-destructive">{customFontError}</div>}
 
                 <div className="mt-3 border border-border bg-panel/30 p-3" style={{ fontFamily: fontPreview }}>
-                  <div className="text-[10px] text-muted-foreground">字体预览</div>
+                  <div className="text-[11px] text-muted-foreground">字体预览</div>
                   <div className="mt-1 text-[14px] font-medium text-foreground">节点资源 72.4% · 虚拟机 28 台</div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">存储 1.8 TB / 10.0 TB · 最近同步 2 秒前</div>
+                  <div className="mt-0.5 text-[12px] text-muted-foreground">存储 1.8 TB / 10.0 TB · 最近同步 2 秒前</div>
                 </div>
               </div>
 
@@ -227,11 +269,11 @@ export function SettingsView({
                   <div className="flex items-center gap-2">
                     <Palette className="h-3.5 w-3.5 text-muted-foreground" />
                     <div>
-                      <div className="text-[11px] text-foreground">强调色</div>
-                      <div className="mt-0.5 text-[10px] text-muted-foreground">用于导航、图表、资源条与交互高亮。</div>
+                      <div className="text-[12px] text-foreground">强调色</div>
+                      <div className="mt-0.5 text-[11px] text-muted-foreground">用于导航、图表、资源条与交互高亮。</div>
                     </div>
                   </div>
-                  <span className="font-mono text-[10px] text-muted-foreground">{settings.accentColor}</span>
+                  <span className="font-mono text-[11px] text-muted-foreground">{settings.accentColor}</span>
                 </div>
 
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -274,7 +316,7 @@ export function SettingsView({
                     }}
                     aria-label="强调色十六进制值"
                     placeholder="#f26b1d"
-                    className="h-8 w-[130px] font-mono text-[11px]"
+                    className="h-8 w-[130px] font-mono text-[12px]"
                     disabled={saving}
                   />
                   <Button
@@ -285,25 +327,66 @@ export function SettingsView({
                   >
                     应用颜色
                   </Button>
-                  {accentError && <span className="text-[10px] text-destructive">{accentError}</span>}
+                  {accentError && <span className="text-[11px] text-destructive">{accentError}</span>}
                 </div>
-                <div className="mt-2 text-[10px] leading-5 text-muted-foreground">
+                <div className="mt-2 text-[11px] leading-5 text-muted-foreground">
                   浅色与深色主题共用同一强调色。若自定义颜色对比度不足，可尝试选择预设色。
+                </div>
+              </div>
+
+              <div className="border-t border-border pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Network className="h-3.5 w-3.5 text-muted-foreground" />
+                    <div>
+                      <div className="text-[12px] text-foreground">网络接口展示</div>
+                      <div className="mt-0.5 text-[11px] text-muted-foreground">控制节点设置中的网卡概览方式。</div>
+                    </div>
+                  </div>
+                  <Select
+                    value={settings.networkView}
+                    disabled={saving}
+                    onValueChange={(value) => void update({ networkView: value as 'cards' | 'list' })}
+                  >
+                    <SelectTrigger className="h-8 w-[150px] text-[12px]" aria-label="网络接口展示方式">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                      <SelectItem value="cards">卡片</SelectItem>
+                      <SelectItem value="list">列表</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="mt-3 grid grid-cols-[1fr_1fr_1fr] gap-2 border border-border bg-panel/25 p-3">
+                  {[
+                    { label: 'WAN', tone: 'text-brand', highlighted: true, active: true },
+                    { label: 'LAN', tone: 'text-info', highlighted: true, active: false },
+                    { label: 'ETH', tone: 'text-muted-foreground', highlighted: false, active: false }
+                  ].map((item) => (
+                    <div key={item.label} className="flex flex-col items-center gap-1.5">
+                      <EthernetPort className={cn('h-7 w-10', item.tone)} strokeWidth={1.35} />
+                      <span className="font-mono text-[10px] text-muted-foreground">{item.label}</span>
+                    </div>
+                  ))}
+                  <div className="col-span-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <LayoutGrid className="h-3 w-3" />
+                    卡片视图用于快速识别接口；表格仍保留完整参数。
+                  </div>
                 </div>
               </div>
 
               <div className="border-t border-border pt-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
-                    <div className="text-[11px] text-foreground">状态刷新间隔</div>
-                    <div className="mt-0.5 text-[10px] text-muted-foreground">登录状态、节点遥测和任务会按此频率同步。</div>
+                    <div className="text-[12px] text-foreground">状态刷新间隔</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">登录状态、节点遥测和任务会按此频率同步。</div>
                 </div>
                   <Select
                     value={String(settings.refreshInterval)}
                     disabled={saving}
                     onValueChange={(value) => void update({ refreshInterval: Number(value) })}
                   >
-                    <SelectTrigger className="h-8 w-[150px] font-mono text-[10px]">
+                    <SelectTrigger className="h-8 w-[150px] font-mono text-[11px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent align="end">
@@ -315,17 +398,17 @@ export function SettingsView({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="mt-3 text-[10px] text-muted-foreground">资源占用数据每 2 秒独立刷新。</div>
+                <div className="mt-3 text-[11px] text-muted-foreground">资源占用数据每 2 秒独立刷新。</div>
               </div>
 
               <div className="flex items-center justify-between border-t border-border pt-4">
                 <div className="flex items-center gap-2">
                   <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[12px] text-muted-foreground">
                     最近同步 {formatDateTime(dashboard.fetchedAt)} · {dashboard.latencyMs}ms
                   </span>
                 </div>
-                <span className="text-[10px] text-success">自动刷新</span>
+                <span className="text-[11px] text-success">自动刷新</span>
               </div>
             </div>
           </Card>
@@ -335,7 +418,7 @@ export function SettingsView({
               title="凭据与安全"
               description="本地凭据管理"
               actions={
-                <span className={settings.credentialStorageAvailable ? 'text-[11px] text-success' : 'text-[11px] text-warning'}>
+                <span className={settings.credentialStorageAvailable ? 'text-[12px] text-success' : 'text-[12px] text-warning'}>
                   {settings.credentialStorageAvailable ? 'DPAPI 可用' : '加密存储不可用'}
                 </span>
               }
@@ -346,10 +429,10 @@ export function SettingsView({
                   <KeyRound className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[11px] text-foreground">
+                  <div className="text-[12px] text-foreground">
                     {settings.hasSavedPassword ? '已保存加密凭据' : '未保存凭据'}
                   </div>
-                  <div className="mt-0.5 text-[9px] text-muted-foreground">
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">
                     {settings.hasSavedPassword
                       ? '下次启动时使用 Windows DPAPI 解密的密码自动连接。'
                       : '每次启动需要手动输入密码。不会保存明文密码。'}
@@ -369,7 +452,7 @@ export function SettingsView({
 
               <div className="flex items-start gap-2 border border-warning/20 bg-warning/[0.04] p-3">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-                <p className="text-[9px] leading-4 text-muted-foreground">
+                <p className="text-[10px] leading-4 text-muted-foreground">
                   {settings.allowSelfSigned
                     ? '当前允许 PVE 自签名证书，应用不会验证 TLS 证书链。请确保连接到可信的局域网服务器。'
                     : '当前启用严格 TLS 校验，PVE 证书必须被 Windows 信任。'}
@@ -377,7 +460,7 @@ export function SettingsView({
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-                <div className="text-[9px] text-muted-foreground">
+                <div className="text-[10px] text-muted-foreground">
                   凭据仅存储在这台设备的应用数据目录中；API 票据不会写入磁盘。
                 </div>
                 <Button variant="destructive" size="sm" onClick={onDisconnect}>
@@ -391,7 +474,7 @@ export function SettingsView({
 
         <div className="space-y-3 xl:col-span-5">
           <Card>
-            <PanelHeader title="当前连接" description="当前会话" actions={<span className="text-[11px] text-success">已连接</span>} />
+            <PanelHeader title="当前连接" description="当前会话" actions={<span className="text-[12px] text-success">已连接</span>} />
             <div className="px-4">
               <DataRow label="PVE 地址" mono>{session.serverUrl.replace(/^https?:\/\//, '')}</DataRow>
               <DataRow label="账户" mono>{session.username}</DataRow>
@@ -401,11 +484,11 @@ export function SettingsView({
               <DataRow label="连接建立" mono>{formatDateTime(session.connectedAt)}</DataRow>
             </div>
             <div className="border-t border-border p-4">
-              <div className="flex items-center gap-2 text-[9px] text-muted-foreground">
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <LockKeyhole className="h-3 w-3 text-success" />
                 TLS {settings.allowSelfSigned ? '允许自签名证书' : '严格校验证书'}
               </div>
-              <div className="mt-1 break-all font-mono text-[9px] text-muted-foreground/80">
+              <div className="mt-1 break-all font-mono text-[10px] text-muted-foreground/80">
                 {dashboard.nodes[0]?.sslFingerprint ?? '证书指纹不可用'}
               </div>
             </div>
@@ -425,10 +508,97 @@ export function SettingsView({
             <div className="border-t border-border p-4">
               <div className="flex items-start gap-2">
                 <Server className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <p className="text-[10px] leading-5 text-muted-foreground">
+                <p className="text-[11px] leading-5 text-muted-foreground">
                   桌面端直接通过 Electron 主进程访问 PVE API。渲染进程禁用 Node.js，仅通过受限 IPC 通道请求数据。
                 </p>
               </div>
+            </div>
+          </Card>
+
+          <Card>
+            <PanelHeader
+              title="开发者与更新"
+              description="北慕林奈 · GitHub 仓库"
+              actions={
+                <Button variant="outline" size="sm" onClick={() => void checkUpdates()} loading={checkingUpdates}>
+                  <RefreshCw className="h-3 w-3" />
+                  检查更新
+                </Button>
+              }
+            />
+            <div className="space-y-3 p-4">
+              <div className="border border-border p-3">
+                <div className="text-[12px] font-medium text-foreground">{APP_AUTHOR.name}</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => openExternal(`mailto:${APP_AUTHOR.email}`)}>
+                    <Mail className="h-3 w-3" />
+                    {APP_AUTHOR.email}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => openExternal(APP_AUTHOR.website)}>
+                    <Globe2 className="h-3 w-3" />
+                    {APP_AUTHOR.websiteLabel}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => openExternal(APP_AUTHOR.github)}>
+                    <ExternalLink className="h-3 w-3" />
+                    GitHub
+                  </Button>
+                </div>
+              </div>
+
+              <div className="border border-border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-[12px] text-foreground">
+                    当前版本 <span className="font-mono text-[11px] text-muted-foreground">v{appVersion}</span>
+                  </div>
+                  {updateInfo ? (
+                    updateInfo.hasUpdate ? (
+                      <span className="text-[11px] text-brand">发现 v{updateInfo.latestVersion}</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-success">
+                        <CheckCircle2 className="h-3 w-3" />
+                        已是最新版本
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">尚未检查</span>
+                  )}
+                </div>
+                {updateError && <div className="mt-2 text-[11px] leading-4 text-destructive">{updateError}</div>}
+                {updateInfo?.hasUpdate && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openExternal(updateInfo.releaseUrl)}>
+                      <Download className="h-3 w-3" />
+                      打开下载页
+                    </Button>
+                    {updateInfo.publishedAt && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {formatDateTime(new Date(updateInfo.publishedAt).getTime())}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {updateInfo && !updateInfo.hasUpdate && (
+                  <div className="mt-1 text-[10px] leading-4 text-muted-foreground">
+                    GitHub 最新版本 v{updateInfo.latestVersion}
+                    {updateInfo.source === 'tag' ? '（tag）' : ''}
+                  </div>
+                )}
+                {updateInfo?.notes && (
+                  <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap border border-border bg-background p-2 text-[10px] leading-4 text-muted-foreground">
+                    {updateInfo.notes}
+                  </pre>
+                )}
+                {!updateInfo && !updateError && (
+                  <div className="mt-1 text-[10px] leading-4 text-muted-foreground">
+                    通过 GitHub 仓库读取 Release / Tag 并比较版本。
+                  </div>
+                )}
+              </div>
+
+              <Button variant="ghost" size="sm" className="px-2" onClick={() => setChangelogOpen(true)}>
+                <History className="h-3 w-3" />
+                更新日志
+              </Button>
             </div>
           </Card>
         </div>
@@ -463,6 +633,33 @@ export function SettingsView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={changelogOpen} onOpenChange={setChangelogOpen}>
+        <DialogContent className="max-h-[82vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>更新日志</DialogTitle>
+            <DialogDescription>PVE VDI 的版本变更记录。</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            {APP_CHANGELOG.map((entry) => (
+              <section key={entry.version}>
+                <div className="flex items-baseline justify-between gap-3 border-b border-border pb-1.5">
+                  <span className="font-mono text-[12px] text-foreground">v{entry.version}</span>
+                  <span className="text-[11px] text-muted-foreground">{entry.date}</span>
+                </div>
+                <ul className="mt-2 space-y-1.5">
+                  {entry.items.map((item) => (
+                    <li key={item} className="flex gap-2 text-[11px] leading-5 text-muted-foreground">
+                      <span className="mt-[7px] h-1 w-1 shrink-0 bg-muted-foreground/60" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

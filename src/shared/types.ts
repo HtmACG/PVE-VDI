@@ -5,6 +5,7 @@
 
 export type Theme = 'dark' | 'light'
 export type UiFont = 'inter' | 'system' | 'mono' | 'custom'
+export type NetworkView = 'cards' | 'list'
 
 export type VmType = 'qemu' | 'lxc'
 
@@ -64,6 +65,18 @@ export interface AppSettings {
   uiFont: UiFont
   customFont: string
   accentColor: string
+  networkView: NetworkView
+}
+
+export interface UpdateCheckResult {
+  currentVersion: string
+  latestVersion: string
+  hasUpdate: boolean
+  releaseUrl: string
+  publishedAt?: string
+  notes?: string
+  source: 'release' | 'tag' | 'none'
+  checkedAt: number
 }
 
 export interface SessionProfile {
@@ -590,6 +603,7 @@ export interface PreferencesPatch {
   uiFont?: UiFont
   customFont?: string
   accentColor?: string
+  networkView?: NetworkView
 }
 
 export interface WindowState {
@@ -643,6 +657,8 @@ export interface DesktopApi {
   nodeTimeUpdate: (node: string, timezone: string) => Promise<ApiResult<void>>
   nodeOptionsUpdate: (node: string, description: string) => Promise<ApiResult<void>>
   nodeLogs: (node: string, kind: 'syslog' | 'firewall') => Promise<ApiResult<NodeLogEntry[]>>
+  checkUpdates: () => Promise<ApiResult<UpdateCheckResult>>
+  openExternal: (url: string) => Promise<ApiResult<void>>
   vmDetail: (ref: VmRef) => Promise<ApiResult<VmDetail>>
   vmAction: (ref: VmRef & { action: VmAction }) => Promise<ApiResult<ActionResult>>
   createOptions: (node: string) => Promise<ApiResult<CreateOptions>>

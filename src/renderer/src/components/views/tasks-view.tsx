@@ -92,7 +92,7 @@ export function TasksView({
           ['失败', counts.error]
         ].map(([label, value]) => (
           <div key={String(label)} className="border-b border-border px-4 py-3 last:border-b-0 sm:border-b-0">
-            <div className="text-[11px] text-muted-foreground">{label}</div>
+            <div className="text-[12px] text-muted-foreground">{label}</div>
             <div className="mt-1.5 font-mono text-[19px] text-foreground">{value}</div>
           </div>
         ))}
@@ -107,14 +107,14 @@ export function TasksView({
                 type="button"
                 onClick={() => setFilter(item.value)}
                 className={cn(
-                  'flex h-8 items-center gap-1.5 border-r border-border px-2.5 text-[11px] transition-colors last:border-r-0',
+                  'flex h-8 items-center gap-1.5 border-r border-border px-2.5 text-[12px] transition-colors last:border-r-0',
                   filter === item.value
                     ? 'bg-foreground text-background'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 )}
               >
                 {item.label}
-                <span className="font-mono text-[10px] opacity-65">{counts[item.value]}</span>
+                <span className="font-mono text-[11px] opacity-65">{counts[item.value]}</span>
               </button>
             ))}
           </div>
@@ -124,7 +124,7 @@ export function TasksView({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索类型、VMID、用户、UPID…"
-              className="h-8 pl-8 pr-8 text-[11px]"
+              className="h-8 pl-8 pr-8 text-[12px]"
             />
             {query && (
               <button
@@ -138,7 +138,7 @@ export function TasksView({
             )}
           </div>
           <Select value={node} onValueChange={setNode}>
-            <SelectTrigger className="h-8 w-[120px] text-[11px]">
+            <SelectTrigger className="h-8 w-[120px] text-[12px]">
               <SelectValue placeholder="节点" />
             </SelectTrigger>
             <SelectContent>
@@ -169,7 +169,7 @@ export function TasksView({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[960px] text-left">
             <thead>
-              <tr className="border-b border-border bg-panel/30 text-[10px] text-muted-foreground">
+              <tr className="border-b border-border bg-panel/30 text-[11px] text-muted-foreground">
                 <th className="px-4 py-2.5 font-medium">状态</th>
                 <th className="px-3 py-2.5 font-medium">任务</th>
                 <th className="px-3 py-2.5 font-medium">对象</th>
@@ -192,23 +192,23 @@ export function TasksView({
                   </td>
                   <td className="px-3 py-3">
                     <div className="text-[12px] text-foreground">{TASK_TYPE_LABELS[task.type] ?? task.type}</div>
-                    <div className="mt-1 max-w-[300px] truncate font-mono text-[9px] text-muted-foreground">
+                    <div className="mt-1 max-w-[300px] truncate font-mono text-[10px] text-muted-foreground">
                       {truncateUpid(task.upid)}
                     </div>
                   </td>
                   <td className="px-3 py-3">
                     {task.id ? (
-                      <span className="font-mono text-[10px] text-foreground">{task.id}</span>
+                      <span className="font-mono text-[11px] text-foreground">{task.id}</span>
                     ) : (
-                      <span className="font-mono text-[10px] text-muted-foreground">—</span>
+                      <span className="font-mono text-[11px] text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-3 font-mono text-[10px] text-muted-foreground">{task.node}</td>
-                  <td className="px-3 py-3 font-mono text-[10px] text-muted-foreground">{task.user || '—'}</td>
-                  <td className="px-3 py-3 font-mono text-[10px] text-muted-foreground">
+                  <td className="px-3 py-3 font-mono text-[11px] text-muted-foreground">{task.node}</td>
+                  <td className="px-3 py-3 font-mono text-[11px] text-muted-foreground">{task.user || '—'}</td>
+                  <td className="px-3 py-3 font-mono text-[11px] text-muted-foreground">
                     {formatFullDateTime(task.startTime * 1000)}
                   </td>
-                  <td className="px-3 py-3 font-mono text-[10px] text-muted-foreground">{formatDuration(task.duration)}</td>
+                  <td className="px-3 py-3 font-mono text-[11px] text-muted-foreground">{formatDuration(task.duration)}</td>
                   <td className="px-4 py-2.5 text-right">
                     <span className="inline-flex h-6 w-6 items-center justify-center border border-transparent text-muted-foreground transition-colors group-hover:border-border group-hover:bg-background group-hover:text-foreground">
                       <ExternalLink className="h-3 w-3" />
@@ -228,7 +228,7 @@ export function TasksView({
           />
         )}
 
-        <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-[10px] text-muted-foreground">
+        <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-2">
             <Terminal className="h-3 w-3" />
             显示 {filtered.length} / {dashboard.tasks.length} 条任务

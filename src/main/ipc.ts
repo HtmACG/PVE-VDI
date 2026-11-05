@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { IPC } from '@shared/ipc'
 import type {
   ApiResult,
@@ -17,6 +17,7 @@ import { toApiError } from './pve/client'
 import { PveManager } from './pve/service'
 import { SettingsStore } from './settings'
 import type { ConsoleWindowManager } from './console-windows'
+import { checkForUpdates } from './updates'
 
 function wrap<T>(operation: () => Promise<T>): Promise<ApiResult<T>> {
   return operation()
@@ -181,6 +182,21 @@ export function registerIpc(options: {
         throw new Error('日志参数无效。')
       }
       return manager.getNodeLogs(rawNode, rawKind)
+    })
+  })
+
+  ipcMain.handle(IPC.checkUpdates, async () => {
+    return wrap(async () => checkForUpdates())
+  })
+
+  ipcMain.handle(IPC.openExternal, async (_event, rawUrl: unknown) => {
+    return wrap(async () => {
+      if (typeof rawUrl !== 'string') throw new Error('链接参数无效。')
+      const url = new URL(rawUrl)
+      if (url.protocol !== 'https:' && url.protocol !== 'mailto:') {
+        throw new Error('仅允许打开 HTTPS 或邮件链接。')
+      }
+      await shell.openExternal(url.toString())
     })
   })
 

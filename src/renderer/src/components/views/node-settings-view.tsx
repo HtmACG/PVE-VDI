@@ -3,16 +3,14 @@ import type { LucideIcon } from 'lucide-react'
 import {
   AlertTriangle,
   ArrowLeft,
-  ChevronDown,
-  ChevronRight,
   Clock3,
   Database,
+  EthernetPort,
   Folder,
   Globe2,
   HardDrive,
   KeyRound,
   Layers3,
-  ListTree,
   Loader2,
   Network,
   Pencil,
@@ -36,7 +34,8 @@ import type {
   NodeNetworkType,
   NodeRepositorySummary,
   NodeSettingsData,
-  NodeZfsPool
+  NodeZfsPool,
+  NetworkView
 } from '@shared/types'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
@@ -57,7 +56,7 @@ import { Label } from '@renderer/components/ui/label'
 import { Progress } from '@renderer/components/ui/primitives'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@renderer/components/ui/select'
 import { Switch } from '@renderer/components/ui/switch'
-import { EmptyState } from '@renderer/components/common'
+import { EmptyIllustration, EmptyState } from '@renderer/components/common'
 import { errorDetail, unwrap } from '@renderer/lib/api'
 import { formatBytes, formatDateTime, formatPercent } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
@@ -215,7 +214,7 @@ function SectionShell({
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
         <div>
           <h2 className="text-[15px] font-medium text-foreground">{title}</h2>
-          <p className="mt-1 max-w-2xl text-[11px] leading-5 text-muted-foreground">{description}</p>
+          <p className="mt-1 max-w-2xl text-[12px] leading-5 text-muted-foreground">{description}</p>
         </div>
         {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
@@ -239,7 +238,7 @@ function Field({
     <div className={cn('space-y-1.5', className)}>
       <Label>{label}</Label>
       {children}
-      {hint && <div className="text-[10px] leading-4 text-muted-foreground">{hint}</div>}
+      {hint && <div className="text-[11px] leading-4 text-muted-foreground">{hint}</div>}
     </div>
   )
 }
@@ -429,7 +428,7 @@ function NetworkEditorDialog({
         </DialogHeader>
         <div className="space-y-4">
           {error && (
-            <div className="border border-destructive/35 bg-destructive/[0.05] p-3 text-[11px] leading-5 text-destructive">
+            <div className="border border-destructive/35 bg-destructive/[0.05] p-3 text-[12px] leading-5 text-destructive">
               {error}
             </div>
           )}
@@ -439,7 +438,7 @@ function NetworkEditorDialog({
                 value={form.iface}
                 onChange={(event) => set('iface', event.target.value)}
                 placeholder="例如 vmbr1"
-                className="font-mono text-[11px]"
+                className="font-mono text-[12px]"
                 disabled={existing}
                 autoFocus
               />
@@ -469,7 +468,7 @@ function NetworkEditorDialog({
                 value={form.cidr}
                 onChange={(event) => set('cidr', event.target.value)}
                 placeholder="192.0.2.10/24"
-                className="font-mono text-[11px]"
+                className="font-mono text-[12px]"
               />
             </Field>
             <Field label="IPv4 网关">
@@ -477,7 +476,7 @@ function NetworkEditorDialog({
                 value={form.gateway}
                 onChange={(event) => set('gateway', event.target.value)}
                 placeholder="192.0.2.1"
-                className="font-mono text-[11px]"
+                className="font-mono text-[12px]"
               />
             </Field>
             <Field label="IPv6 CIDR">
@@ -485,7 +484,7 @@ function NetworkEditorDialog({
                 value={form.cidr6}
                 onChange={(event) => set('cidr6', event.target.value)}
                 placeholder="2001:db8::10/64"
-                className="font-mono text-[11px]"
+                className="font-mono text-[12px]"
               />
             </Field>
             <Field label="IPv6 网关">
@@ -493,7 +492,7 @@ function NetworkEditorDialog({
                 value={form.gateway6}
                 onChange={(event) => set('gateway6', event.target.value)}
                 placeholder="2001:db8::1"
-                className="font-mono text-[11px]"
+                className="font-mono text-[12px]"
               />
             </Field>
             <Field label="MTU" hint="留空使用系统默认值。">
@@ -501,12 +500,12 @@ function NetworkEditorDialog({
                 value={form.mtu}
                 onChange={(event) => set('mtu', event.target.value)}
                 inputMode="numeric"
-                className="font-mono text-[11px]"
+                className="font-mono text-[12px]"
               />
             </Field>
             <div className="flex items-end">
               <div className="flex h-9 w-full items-center justify-between border border-border bg-panel/30 px-3">
-                <span className="text-[11px] text-muted-foreground">随节点自动启动</span>
+                <span className="text-[12px] text-muted-foreground">随节点自动启动</span>
                 <Switch checked={form.autostart} onCheckedChange={(value) => set('autostart', value)} />
               </div>
             </div>
@@ -520,7 +519,7 @@ function NetworkEditorDialog({
                     value={form.bridgePorts}
                     onChange={(event) => set('bridgePorts', event.target.value)}
                     placeholder="enp1s0"
-                    className="font-mono text-[11px]"
+                    className="font-mono text-[12px]"
                   />
                 </Field>
                 <Field label="允许的 VLAN">
@@ -528,16 +527,16 @@ function NetworkEditorDialog({
                     value={form.bridgeVids}
                     onChange={(event) => set('bridgeVids', event.target.value)}
                     placeholder="2-4094"
-                    className="font-mono text-[11px]"
+                    className="font-mono text-[12px]"
                     disabled={!form.bridgeVlanAware}
                   />
                 </Field>
                 <div className="flex h-9 items-center justify-between border border-border bg-panel/30 px-3">
-                  <span className="text-[11px] text-muted-foreground">生成树协议 STP</span>
+                  <span className="text-[12px] text-muted-foreground">生成树协议 STP</span>
                   <Switch checked={form.bridgeStp} onCheckedChange={(value) => set('bridgeStp', value)} />
                 </div>
                 <div className="flex h-9 items-center justify-between border border-border bg-panel/30 px-3">
-                  <span className="text-[11px] text-muted-foreground">VLAN 感知</span>
+                  <span className="text-[12px] text-muted-foreground">VLAN 感知</span>
                   <Switch
                     checked={form.bridgeVlanAware}
                     onCheckedChange={(value) => set('bridgeVlanAware', value)}
@@ -555,7 +554,7 @@ function NetworkEditorDialog({
                   onChange={(event) => set('vlanId', event.target.value)}
                   inputMode="numeric"
                   placeholder="100"
-                  className="font-mono text-[11px]"
+                  className="font-mono text-[12px]"
                 />
               </Field>
               <Field label="父接口">
@@ -563,7 +562,7 @@ function NetworkEditorDialog({
                   value={form.vlanRawDevice}
                   onChange={(event) => set('vlanRawDevice', event.target.value)}
                   placeholder="例如 enp1s0"
-                  className="font-mono text-[11px]"
+                  className="font-mono text-[12px]"
                 />
               </Field>
             </div>
@@ -576,7 +575,7 @@ function NetworkEditorDialog({
                   value={form.slaves}
                   onChange={(event) => set('slaves', event.target.value)}
                   placeholder="使用空格分隔接口"
-                  className="font-mono text-[11px]"
+                  className="font-mono text-[12px]"
                 />
               </Field>
               <Field label="Bond 模式">
@@ -639,10 +638,12 @@ function NetworkEditorDialog({
 function NetworkSection({
   node,
   data,
+  networkView,
   onChanged
 }: {
   node: string
   data: NodeSettingsData
+  networkView: NetworkView
   onChanged: () => Promise<void>
 }): React.JSX.Element {
   const [editorOpen, setEditorOpen] = useState(false)
@@ -709,7 +710,7 @@ function NetworkSection({
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
         <div>
           <h2 className="text-[15px] font-medium text-foreground">网络</h2>
-          <p className="mt-1 max-w-2xl text-[11px] leading-5 text-muted-foreground">
+          <p className="mt-1 max-w-2xl text-[12px] leading-5 text-muted-foreground">
             管理节点的物理网卡、网桥、VLAN 和 Bond。修改先写入待应用配置，应用后才会生效。
           </p>
         </div>
@@ -734,19 +735,65 @@ function NetworkSection({
       <div className="p-5">
         <div className="mb-3 flex items-start gap-2 border border-warning/25 bg-warning/[0.035] px-3 py-2.5">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-          <div className="text-[10px] leading-5 text-muted-foreground">
+          <div className="text-[11px] leading-5 text-muted-foreground">
             应用网络配置可能会短暂中断节点管理连接。请确认当前有带外管理或本地终端访问能力后再操作。
           </div>
         </div>
+
+        {networkView === 'cards' && data.network.length > 0 && (
+          <div className="mb-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="text-[11px] font-medium text-foreground">接口概览</div>
+              <div className="text-[11px] text-muted-foreground">点击卡片编辑参数</div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
+              {data.network.map((iface) => {
+                const highlighted = Boolean(iface.gateway || iface.bridge_ports || iface.slaves)
+                return (
+                  <button
+                    key={`card-${iface.iface}`}
+                    type="button"
+                    data-network-card={iface.iface}
+                    onClick={() => startEdit(iface)}
+                    className={cn(
+                      'border p-2.5 text-left transition-colors',
+                      highlighted
+                        ? 'border-brand/35 bg-brand/[0.035] hover:border-brand/60'
+                        : 'border-border bg-panel/20 hover:border-border-strong'
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <EthernetPort
+                        className={cn(
+                          'h-8 w-12',
+                          highlighted ? 'text-brand' : iface.active ? 'text-foreground/65' : 'text-muted-foreground/60'
+                        )}
+                        strokeWidth={1.3}
+                      />
+                      <span className="text-[10px] text-muted-foreground">
+                        {iface.active ? '已启用' : '未启用'}
+                      </span>
+                    </div>
+                    <div className="mt-2 truncate font-mono text-[11px] text-foreground">{iface.iface}</div>
+                    <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                      {typeLabel(iface.type)} · {interfaceAddress(iface)}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {actionError && (
-          <div className="mb-3 border border-destructive/35 bg-destructive/[0.05] p-3 text-[11px] text-destructive">
+          <div className="mb-3 border border-destructive/35 bg-destructive/[0.05] p-3 text-[12px] text-destructive">
             {actionError}
           </div>
         )}
         <div className="overflow-x-auto border border-border">
           <table className="w-full min-w-[760px] text-left">
             <thead>
-              <tr className="border-b border-border bg-panel/40 text-[10px] text-muted-foreground">
+              <tr className="border-b border-border bg-panel/40 text-[11px] text-muted-foreground">
                 <th className="px-3 py-2.5 font-medium">接口</th>
                 <th className="px-3 py-2.5 font-medium">类型</th>
                 <th className="px-3 py-2.5 font-medium">地址</th>
@@ -760,16 +807,16 @@ function NetworkSection({
               {data.network.map((iface) => (
                 <tr key={iface.iface} className="border-b border-border/60 last:border-b-0">
                   <td className="px-3 py-3">
-                    <div className="font-mono text-[11px] text-foreground">{iface.iface}</div>
-                    <div className="mt-0.5 text-[10px] text-muted-foreground">
+                    <div className="font-mono text-[12px] text-foreground">{iface.iface}</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
                       {iface.active ? '已启用' : '未启用'} · {iface.autostart ? '自动启动' : '手动启动'}
                     </div>
                   </td>
-                  <td className="px-3 py-3 text-[11px] text-foreground">{typeLabel(iface.type)}</td>
-                  <td className="px-3 py-3 font-mono text-[10px] text-foreground">{interfaceAddress(iface)}</td>
-                  <td className="px-3 py-3 font-mono text-[10px] text-muted-foreground">{iface.gateway ?? '—'}</td>
-                  <td className="px-3 py-3 font-mono text-[10px] text-muted-foreground">{networkPorts(iface)}</td>
-                  <td className="max-w-[180px] truncate px-3 py-3 text-[10px] text-muted-foreground" title={iface.comments}>
+                  <td className="px-3 py-3 text-[12px] text-foreground">{typeLabel(iface.type)}</td>
+                  <td className="px-3 py-3 font-mono text-[11px] text-foreground">{interfaceAddress(iface)}</td>
+                  <td className="px-3 py-3 font-mono text-[11px] text-muted-foreground">{iface.gateway ?? '—'}</td>
+                  <td className="px-3 py-3 font-mono text-[11px] text-muted-foreground">{networkPorts(iface)}</td>
+                  <td className="max-w-[180px] truncate px-3 py-3 text-[11px] text-muted-foreground" title={iface.comments}>
                     {iface.comments?.trim() || '—'}
                   </td>
                   <td className="px-3 py-3">
@@ -882,7 +929,7 @@ function DnsSection({
           <Input
             value={form.search ?? ''}
             onChange={(event) => setForm((previous) => ({ ...previous, search: event.target.value }))}
-            className="font-mono text-[11px]"
+            className="font-mono text-[12px]"
             placeholder="example.com"
           />
         </Field>
@@ -890,7 +937,7 @@ function DnsSection({
           <Input
             value={form.dns1 ?? ''}
             onChange={(event) => setForm((previous) => ({ ...previous, dns1: event.target.value }))}
-            className="font-mono text-[11px]"
+            className="font-mono text-[12px]"
             placeholder="192.0.2.53"
           />
         </Field>
@@ -898,7 +945,7 @@ function DnsSection({
           <Input
             value={form.dns2 ?? ''}
             onChange={(event) => setForm((previous) => ({ ...previous, dns2: event.target.value }))}
-            className="font-mono text-[11px]"
+            className="font-mono text-[12px]"
             placeholder="198.51.100.53"
           />
         </Field>
@@ -906,7 +953,7 @@ function DnsSection({
           <Input
             value={form.dns3 ?? ''}
             onChange={(event) => setForm((previous) => ({ ...previous, dns3: event.target.value }))}
-            className="font-mono text-[11px]"
+            className="font-mono text-[12px]"
             placeholder="203.0.113.53"
           />
         </Field>
@@ -960,15 +1007,15 @@ function TimeSection({
             value={timezone}
             onChange={(event) => setTimezone(event.target.value)}
             placeholder="Asia/Shanghai"
-            className="font-mono text-[11px]"
+            className="font-mono text-[12px]"
           />
         </Field>
         <div className="border border-border bg-panel/30 p-3">
-          <div className="text-[10px] text-muted-foreground">节点当前时间</div>
+          <div className="text-[11px] text-muted-foreground">节点当前时间</div>
           <div className="mt-1 text-[12px] text-foreground">
             {time ? formatDateTime(time.localtime * 1000) : '—'}
           </div>
-          <div className="mt-1 text-[10px] text-muted-foreground">
+          <div className="mt-1 text-[11px] text-muted-foreground">
             {time && Math.abs(time.time - time.localtime) > 60 ? '节点时间与浏览器时间存在差异' : '时间已同步'}
           </div>
         </div>
@@ -1022,12 +1069,12 @@ function OptionsSection({
         </Field>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="border border-border bg-panel/30 p-3">
-            <div className="text-[10px] text-muted-foreground">节点名称</div>
-            <div className="mt-1 font-mono text-[11px] text-foreground">{node}</div>
+            <div className="text-[11px] text-muted-foreground">节点名称</div>
+            <div className="mt-1 font-mono text-[12px] text-foreground">{node}</div>
           </div>
           <div className="border border-border bg-panel/30 p-3">
-            <div className="text-[10px] text-muted-foreground">启动行为</div>
-            <div className="mt-1 text-[11px] text-foreground">由 PVE 节点配置管理</div>
+            <div className="text-[11px] text-muted-foreground">启动行为</div>
+            <div className="mt-1 text-[12px] text-foreground">由 PVE 节点配置管理</div>
           </div>
         </div>
       </div>
@@ -1058,12 +1105,12 @@ function HostnameSection({
             ['管理地址', addresses.map((entry) => `${entry.iface}: ${entry.address}`).join('  ·  ') || '—']
           ].map(([label, value]) => (
             <div key={label} className="flex items-start justify-between gap-6 border-b border-border/60 px-3 py-2.5 last:border-b-0">
-              <span className="text-[11px] text-muted-foreground">{label}</span>
-              <span className="max-w-[70%] text-right font-mono text-[11px] text-foreground">{value}</span>
+              <span className="text-[12px] text-muted-foreground">{label}</span>
+              <span className="max-w-[70%] text-right font-mono text-[12px] text-foreground">{value}</span>
             </div>
           ))}
         </div>
-        <p className="mt-3 text-[10px] leading-5 text-muted-foreground">
+        <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
           修改节点主机名需要同时更新系统主机名和网络配置，当前版本仅展示，避免误操作导致节点失联。
         </p>
       </div>
@@ -1083,13 +1130,13 @@ function CertificatesSection({ certificates }: { certificates: NodeCertificateIn
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2.5">
                 <div className="flex items-center gap-2">
                   <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-mono text-[11px] text-foreground">{cert.filename}</span>
+                  <span className="font-mono text-[12px] text-foreground">{cert.filename}</span>
                 </div>
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-[11px] text-muted-foreground">
                   {formatDate(cert.notbefore)} — {formatDate(cert.notafter)}
                 </span>
               </div>
-              <dl className="px-3 py-2 text-[11px]">
+              <dl className="px-3 py-2 text-[12px]">
                 {[
                   ['主体', cert.subject ?? '—'],
                   ['签发者', cert.issuer ?? '—'],
@@ -1099,7 +1146,7 @@ function CertificatesSection({ certificates }: { certificates: NodeCertificateIn
                 ].map(([label, value]) => (
                   <div key={label} className="flex items-start justify-between gap-6 border-b border-border/50 py-1.5 last:border-b-0">
                     <dt className="shrink-0 text-muted-foreground">{label}</dt>
-                    <dd className="max-w-[76%] break-all text-right font-mono text-[10px] text-foreground">{value}</dd>
+                    <dd className="max-w-[76%] break-all text-right font-mono text-[11px] text-foreground">{value}</dd>
                   </div>
                 ))}
               </dl>
@@ -1119,16 +1166,16 @@ function RepositoriesSection({ repositories }: { repositories: NodeRepositorySum
       ) : (
         <div className="space-y-4">
           {repositories.errors.length > 0 && (
-            <div className="border border-warning/25 bg-warning/[0.035] p-3 text-[10px] leading-5 text-warning">
+            <div className="border border-warning/25 bg-warning/[0.035] p-3 text-[11px] leading-5 text-warning">
               {repositories.errors.join(' · ')}
             </div>
           )}
           {repositories.standardRepos.length > 0 && (
             <div>
-              <div className="mb-2 text-[11px] font-medium text-foreground">标准组件</div>
+              <div className="mb-2 text-[12px] font-medium text-foreground">标准组件</div>
               <div className="flex flex-wrap gap-2">
                 {repositories.standardRepos.map((repo) => (
-                  <span key={repo.handle} className="border border-border px-2 py-1 font-mono text-[10px] text-muted-foreground">
+                  <span key={repo.handle} className="border border-border px-2 py-1 font-mono text-[11px] text-muted-foreground">
                     {repo.name}
                   </span>
                 ))}
@@ -1138,7 +1185,7 @@ function RepositoriesSection({ repositories }: { repositories: NodeRepositorySum
           <div className="space-y-3">
             {repositories.sources.map((source) => (
               <div key={source.path} className="border border-border">
-                <div className="border-b border-border px-3 py-2 font-mono text-[10px] text-muted-foreground">
+                <div className="border-b border-border px-3 py-2 font-mono text-[11px] text-muted-foreground">
                   {source.path}
                   {source.fileType ? ` · ${source.fileType}` : ''}
                 </div>
@@ -1146,14 +1193,14 @@ function RepositoriesSection({ repositories }: { repositories: NodeRepositorySum
                   {source.repositories.map((repo, index) => (
                     <div key={`${source.path}-${index}`} className="px-3 py-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={repo.enabled ? 'text-[10px] text-success' : 'text-[10px] text-muted-foreground'}>
+                        <span className={repo.enabled ? 'text-[11px] text-success' : 'text-[11px] text-muted-foreground'}>
                           {repo.enabled ? '启用' : '禁用'}
                         </span>
-                        <span className="font-mono text-[10px] text-foreground">
+                        <span className="font-mono text-[11px] text-foreground">
                           {repo.uris.join(' ')} {repo.suites.join(' ')} {repo.components.join(' ')}
                         </span>
                       </div>
-                      {repo.comment && <div className="mt-1 text-[10px] text-muted-foreground">{repo.comment}</div>}
+                      {repo.comment && <div className="mt-1 text-[11px] text-muted-foreground">{repo.comment}</div>}
                     </div>
                   ))}
                 </div>
@@ -1176,8 +1223,8 @@ function FirewallOptionsSection({ options }: { options: Record<string, unknown> 
         <dl className="max-w-3xl border border-border">
           {entries.map(([key, value]) => (
             <div key={key} className="flex items-start justify-between gap-6 border-b border-border/60 px-3 py-2.5 last:border-b-0">
-              <dt className="font-mono text-[10px] text-muted-foreground">{key}</dt>
-              <dd className="max-w-[68%] break-all text-right font-mono text-[10px] text-foreground">
+              <dt className="font-mono text-[11px] text-muted-foreground">{key}</dt>
+              <dd className="max-w-[68%] break-all text-right font-mono text-[11px] text-foreground">
                 {Array.isArray(value) ? value.join(', ') : String(value)}
               </dd>
             </div>
@@ -1224,14 +1271,14 @@ function LogsSection({ node, title, kind }: { node: string; title: string; kind:
       }
     >
       {error ? (
-        <div className="border border-destructive/30 bg-destructive/[0.05] p-3 text-[11px] text-destructive">{error}</div>
+        <div className="border border-destructive/30 bg-destructive/[0.05] p-3 text-[12px] text-destructive">{error}</div>
       ) : lines === null || loading ? (
-        <div className="flex items-center gap-2 py-6 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2 py-6 text-[12px] text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 spin" />
           正在读取日志
         </div>
       ) : (
-        <pre className="max-h-[540px] overflow-auto border border-border bg-background p-3 font-mono text-[10px] leading-5 text-foreground">
+        <pre className="max-h-[540px] overflow-auto border border-border bg-background p-3 font-mono text-[11px] leading-5 text-foreground">
           {lines.length ? lines.join('\n') : '没有日志。'}
         </pre>
       )}
@@ -1250,7 +1297,7 @@ function LvmSection({ groups }: { groups: NodeSettingsData['lvm'] }): React.JSX.
             <div key={group.name} className="border-b border-border/60 px-4 py-3 last:border-b-0">
               <div className="flex items-center justify-between gap-4">
                 <span className="font-mono text-[12px] text-foreground">{group.name}</span>
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-[11px] text-muted-foreground">
                   {formatBytes(group.free)} 可用 / {formatBytes(group.size)}
                 </span>
               </div>
@@ -1274,10 +1321,10 @@ function LvmThinSection({ pools }: { pools: NodeSettingsData['lvmthin'] }): Reac
             <div key={`${pool.vg}/${pool.lv}`} className="border border-border p-4">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-mono text-[12px] text-foreground">{pool.vg}/{pool.lv}</span>
-                <span className="text-[10px] text-muted-foreground">{formatPercent(pool.lvSize > 0 ? pool.used / pool.lvSize : 0, 1)}</span>
+                <span className="text-[11px] text-muted-foreground">{formatPercent(pool.lvSize > 0 ? pool.used / pool.lvSize : 0, 1)}</span>
               </div>
               <Progress value={pool.lvSize > 0 ? (pool.used / pool.lvSize) * 100 : 0} className="mt-2 h-1" />
-              <div className="mt-2 text-[10px] text-muted-foreground">
+              <div className="mt-2 text-[11px] text-muted-foreground">
                 {formatBytes(pool.used)} / {formatBytes(pool.lvSize)} · 元数据 {pool.metadataSize ? formatBytes(pool.metadataUsed ?? 0) : '—'}
               </div>
             </div>
@@ -1298,12 +1345,12 @@ function DirectorySection({ directories }: { directories: NodeDirectoryStorage[]
           {directories.map((entry) => (
             <div key={entry.path} className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3 last:border-b-0">
               <div>
-                <div className="font-mono text-[11px] text-foreground">{entry.path}</div>
-                <div className="mt-0.5 text-[10px] text-muted-foreground">
+                <div className="font-mono text-[12px] text-foreground">{entry.path}</div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">
                   {entry.storage ?? entry.type ?? '目录'}
                 </div>
               </div>
-              <div className="text-right text-[10px] text-muted-foreground">
+              <div className="text-right text-[11px] text-muted-foreground">
                 {entry.used !== undefined && entry.total !== undefined
                   ? `${formatBytes(entry.used)} / ${formatBytes(entry.total)}`
                   : '容量不可用'}
@@ -1327,9 +1374,9 @@ function ZfsSection({ pools }: { pools: NodeZfsPool[] }): React.JSX.Element {
             <div key={pool.name} className="border-b border-border/60 px-4 py-3 last:border-b-0">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-mono text-[12px] text-foreground">{pool.name}</span>
-                <span className="text-[10px] text-muted-foreground">{pool.health ?? '—'}</span>
+                <span className="text-[11px] text-muted-foreground">{pool.health ?? '—'}</span>
               </div>
-              <div className="mt-1 text-[10px] text-muted-foreground">
+              <div className="mt-1 text-[11px] text-muted-foreground">
                 {pool.size ? `${formatBytes(pool.alloc ?? (pool.size - (pool.free ?? 0)))} / ${formatBytes(pool.size)}` : '容量不可用'}
               </div>
             </div>
@@ -1343,10 +1390,12 @@ function ZfsSection({ pools }: { pools: NodeZfsPool[] }): React.JSX.Element {
 export function NodeSettingsView({
   node,
   clusterName,
+  networkView,
   onBack
 }: {
   node: string
   clusterName: string
+  networkView: NetworkView
   onBack: () => void
 }): React.JSX.Element {
   const [data, setData] = useState<NodeSettingsData | null>(null)
@@ -1354,12 +1403,7 @@ export function NodeSettingsView({
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [active, setActive] = useState<SectionId>('network')
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    system: true,
-    updates: true,
-    firewall: true,
-    disks: true
-  })
+  const [activeGroup, setActiveGroup] = useState('system')
 
   const load = async (): Promise<void> => {
     setRefreshing(true)
@@ -1385,7 +1429,7 @@ export function NodeSettingsView({
   const sectionContent = (): React.ReactNode => {
     if (loading) {
       return (
-        <div className="flex items-center gap-2 px-5 py-10 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2 px-5 py-10 text-[12px] text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 spin" />
           正在读取节点设置
         </div>
@@ -1394,7 +1438,10 @@ export function NodeSettingsView({
     if (error) {
       return (
         <div className="px-5 py-10">
-          <div className="border border-destructive/35 bg-destructive/[0.05] p-4 text-[11px] text-destructive">{error}</div>
+          <div className="border border-destructive/35 bg-destructive/[0.05] p-4">
+            <EmptyIllustration className="mb-3 h-10 w-10" />
+            <div className="text-[12px] text-destructive">{error}</div>
+          </div>
           <Button variant="outline" size="sm" className="mt-3" onClick={() => void load()}>
             重试
           </Button>
@@ -1405,7 +1452,7 @@ export function NodeSettingsView({
 
     switch (active) {
       case 'network':
-        return <NetworkSection node={node} data={data} onChanged={load} />
+        return <NetworkSection node={node} data={data} networkView={networkView} onChanged={load} />
       case 'dns':
         return <DnsSection node={node} dns={data.dns} onChanged={load} />
       case 'time':
@@ -1443,8 +1490,11 @@ export function NodeSettingsView({
     }
   }
 
+  const currentGroup = SETTINGS_GROUPS.find((group) => group.id === activeGroup) ?? SETTINGS_GROUPS[0]
+  const CurrentGroupIcon = currentGroup.icon
+
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-full flex-col">
       <PageHeader
         eyebrow={`${clusterName} 集群`}
         title="节点设置"
@@ -1463,63 +1513,69 @@ export function NodeSettingsView({
         }
       />
 
-      <div className="grid overflow-hidden border border-border bg-card xl:grid-cols-[222px_minmax(0,1fr)]">
-        <aside className="border-b border-border xl:border-b-0 xl:border-r">
-          <div className="flex items-center gap-2 border-b border-border px-3 py-3">
-            <Server className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="font-mono text-[11px] text-foreground">{node}</span>
-            <span className="ml-auto text-[10px] text-muted-foreground">节点</span>
+      <div className="mt-4 flex min-h-[620px] flex-1 border-t border-border">
+        <aside className="w-[168px] shrink-0 border-r border-border bg-card/30 py-2">
+          {SETTINGS_GROUPS.map((group) => {
+            const GroupIcon = group.icon
+            const selectedGroup = activeGroup === group.id
+            return (
+              <button
+                key={group.id}
+                type="button"
+                data-group={group.id}
+                onClick={() => {
+                  setActiveGroup(group.id)
+                  if (!group.items.some((item) => item.id === active)) setActive(group.items[0].id)
+                }}
+                className={cn(
+                  'relative flex h-12 w-full items-center gap-3 px-4 text-left text-[13px] transition-colors',
+                  selectedGroup
+                    ? 'bg-panel text-foreground'
+                    : 'text-muted-foreground hover:bg-panel/60 hover:text-foreground'
+                )}
+              >
+                {selectedGroup && <span className="absolute inset-y-0 left-0 w-[2px] bg-brand" />}
+                <GroupIcon className={cn('h-4 w-4', selectedGroup ? 'text-brand' : 'text-muted-foreground')} />
+                <span>{group.label}</span>
+              </button>
+            )
+          })}
+        </aside>
+
+        <aside className="w-[188px] shrink-0 border-r border-border bg-panel/15">
+          <div className="flex h-11 items-center gap-2 border-b border-border px-4 text-[12px] font-medium text-foreground">
+            <CurrentGroupIcon className="h-4 w-4 text-brand" />
+            {currentGroup.label}
           </div>
           <nav className="py-2">
-            {SETTINGS_GROUPS.map((group) => {
-              const GroupIcon = group.icon
-              const isExpanded = expanded[group.id]
+            {currentGroup.items.map((item) => {
+              const Icon = item.icon
+              const selected = active === item.id
               return (
-                <div key={group.id} className="mb-1">
-                  <button
-                    type="button"
-                    onClick={() => setExpanded((previous) => ({ ...previous, [group.id]: !isExpanded }))}
-                    className="flex h-7 w-full items-center gap-2 px-3 text-left text-[10px] font-medium text-muted-foreground hover:text-foreground"
-                  >
-                    {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                    <GroupIcon className="h-3.5 w-3.5" />
-                    <span>{group.label}</span>
-                  </button>
-                  {isExpanded && (
-                    <div>
-                      {group.items.map((item) => {
-                        const Icon = item.icon
-                        const selected = active === item.id
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            data-section={item.id}
-                            onClick={() => setActive(item.id)}
-                            className={cn(
-                              'relative flex h-8 w-full items-center gap-2.5 pl-9 pr-3 text-left text-[11px] transition-colors',
-                              selected
-                                ? 'bg-panel text-foreground'
-                                : 'text-muted-foreground hover:bg-panel/60 hover:text-foreground'
-                            )}
-                          >
-                            {selected && <span className="absolute inset-y-0 left-0 w-[2px] bg-brand" />}
-                            <Icon className={cn('h-3.5 w-3.5', selected ? 'text-brand' : 'text-muted-foreground')} />
-                            <span>{item.label}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
+                <button
+                  key={item.id}
+                  type="button"
+                  data-section={item.id}
+                  onClick={() => setActive(item.id)}
+                  className={cn(
+                    'relative flex h-10 w-full items-center gap-3 px-4 text-left text-[12px] transition-colors',
+                    selected
+                      ? 'bg-panel text-foreground'
+                      : 'text-muted-foreground hover:bg-panel/60 hover:text-foreground'
                   )}
-                </div>
+                >
+                  {selected && <span className="absolute inset-y-0 left-0 w-[2px] bg-brand" />}
+                  <Icon className={cn('h-3.5 w-3.5', selected ? 'text-brand' : 'text-muted-foreground')} />
+                  <span>{item.label}</span>
+                </button>
               )
             })}
           </nav>
         </aside>
 
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           {data && data.warnings.length > 0 && (
-            <div className="flex items-start gap-2 border-b border-warning/25 bg-warning/[0.035] px-5 py-2.5 text-[10px] leading-5 text-warning">
+            <div className="flex items-start gap-2 border-b border-warning/25 bg-warning/[0.035] px-5 py-2.5 text-[11px] leading-5 text-warning">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               {data.warnings.join(' · ')}
             </div>

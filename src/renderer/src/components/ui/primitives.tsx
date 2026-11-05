@@ -1,4 +1,5 @@
 import * as React from 'react'
+import * as ProgressPrimitive from '@radix-ui/react-progress'
 import { cn } from '@renderer/lib/utils'
 
 function Separator({
@@ -31,12 +32,15 @@ function Progress({
 }): React.JSX.Element {
   const width = Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0
   return (
-    <div className={cn('h-1 w-full overflow-hidden bg-muted', className)}>
-      <div
-        className={cn('h-full bg-foreground transition-[width] duration-500', indicatorClassName)}
-        style={{ width: `${width}%` }}
+    <ProgressPrimitive.Root
+      value={width}
+      className={cn('relative h-1 w-full overflow-hidden bg-muted', className)}
+    >
+      <ProgressPrimitive.Indicator
+        className={cn('h-full w-full flex-1 bg-foreground transition-transform duration-500', indicatorClassName)}
+        style={{ transform: `translateX(-${100 - width}%)` }}
       />
-    </div>
+    </ProgressPrimitive.Root>
   )
 }
 

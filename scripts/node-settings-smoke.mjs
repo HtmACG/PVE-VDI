@@ -44,9 +44,15 @@ const attach = (page) => {
   if (attached.has(page)) return
   attached.add(page)
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`[console] ${message.text()}`)
+    if (message.type() === 'error') {
+      errors.push(`[console] ${message.text()}`)
+      console.error(`[console] ${message.text()}`)
+    }
   })
-  page.on('pageerror', (error) => errors.push(`[pageerror] ${error.message}`))
+  page.on('pageerror', (error) => {
+    errors.push(`[pageerror] ${error.message}`)
+    console.error(`[pageerror] ${error.message}`)
+  })
 }
 electronApp.on('window', attach)
 
@@ -67,7 +73,8 @@ try {
   await win.waitForSelector('text=应用配置', { timeout: 30_000 })
   await win.waitForTimeout(700)
   const networkRows = await win.locator('tbody tr').count()
-  console.log('network rows:', networkRows)
+  const networkCards = await win.locator('[data-network-card]').count()
+  console.log('network rows:', networkRows, 'cards:', networkCards)
   await win.screenshot({ path: path.join(screenshotDir, 'node-network.png'), fullPage: true })
 
   await win.getByRole('button', { name: '添加接口' }).click()
@@ -75,29 +82,32 @@ try {
   await win.getByRole('button', { name: '取消', exact: true }).click()
   await win.waitForTimeout(300)
 
-  for (const section of [
-    'dns',
-    'time',
-    'certificates',
-    'hostname',
-    'options',
-    'repositories',
-    'firewall-options',
-    'lvm',
-    'lvmthin',
-    'directory',
-    'zfs'
-  ]) {
-    await win.locator(`[data-section="${section}"]`).click()
-    await win.waitForTimeout(450)
-    console.log('opened', section)
+  const groups = {
+    system: ['dns', 'time', 'certificates', 'hostname', 'options'],
+    updates: ['repositories'],
+    firewall: ['firewall-options'],
+    disks: ['lvm', 'lvmthin', 'directory', 'zfs']
+  }
+  for (const [group, sections] of Object.entries(groups)) {
+    await win.locator(`[data-group="${group}"]`).click()
+    await win.waitForTimeout(250)
+    for (const section of sections) {
+      await win.locator(`[data-section="${section}"]`).click()
+      await win.waitForTimeout(350)
+      if (section === 'zfs') {
+        await win.screenshot({ path: path.join(screenshotDir, 'node-empty.png'), fullPage: true })
+      }
+      console.log('opened', section)
+    }
   }
 
+  await win.locator('[data-group="system"]').click()
   await win.locator('[data-section="syslog"]').click()
   await win.waitForSelector('text=系统日志', { timeout: 10_000 })
   await win.waitForTimeout(2500)
   console.log('opened syslog')
 
+  await win.locator('[data-group="firewall"]').click()
   await win.locator('[data-section="firewall-log"]').click()
   await win.waitForSelector('text=防火墙日志', { timeout: 10_000 })
   await win.waitForTimeout(1200)
@@ -109,6 +119,13 @@ try {
   } else {
     console.log('node settings smoke passed without renderer errors')
   }
+} catch (error) {
+  const win = electronApp.windows()[0]
+  if (win) {
+    await win.screenshot({ path: path.join(screenshotDir, 'node-settings-failure.png'), fullPage: true }).catch(() => {})
+    console.error('BODY:', (await win.locator('body').innerText().catch(() => '')).slice(0, 2000))
+  }
+  throw error
 } finally {
   await electronApp.close().catch(() => {})
 }

@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
-import { AlertTriangle, ArrowRight, Eye, EyeOff, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, ShieldAlert, ShieldCheck } from 'lucide-react'
 import type { ApiError, AppSettings, LoginResult } from '@shared/types'
 import { BrandLockup } from '@renderer/components/brand'
+import { EmptyIllustration } from '@renderer/components/common'
 import { WindowButtons } from '@renderer/components/layout/window-buttons'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
@@ -67,10 +68,10 @@ export function LoginView({ settings, appVersion, initialError, onAuthenticated 
         <div className="flex items-center gap-3">
           <BrandLockup compact />
           <span className="h-3 w-px bg-border" />
-          <span className="text-[10px] text-muted-foreground">Proxmox VE 运维控制台</span>
+          <span className="text-[11px] text-muted-foreground">Proxmox VE 运维控制台</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden text-[10px] text-muted-foreground sm:block">未连接</span>
+          <span className="hidden text-[11px] text-muted-foreground sm:block">未连接</span>
           <WindowButtons className="border-l-0" />
         </div>
       </header>
@@ -91,7 +92,7 @@ export function LoginView({ settings, appVersion, initialError, onAuthenticated 
           </div>
           <div className="relative z-10 flex w-full flex-col p-10 pl-14 xl:p-14 xl:pl-16">
             <div className="mt-auto max-w-[360px]">
-              <div className="text-[10px] text-muted-foreground">Proxmox VE</div>
+              <div className="text-[11px] text-muted-foreground">Proxmox VE</div>
               <p className="mt-2 text-[20px] leading-7 tracking-[-0.02em] text-foreground">
                 节点、虚拟机
                 <br />
@@ -101,8 +102,8 @@ export function LoginView({ settings, appVersion, initialError, onAuthenticated 
                 连接集群后查看资源、管理虚拟机，并为每台虚拟机或节点打开独立控制台窗口。
               </p>
             </div>
-            <div className="mt-8 flex items-center justify-between border-t border-border pt-4 text-[10px] text-muted-foreground">
-              <span>PVE VDI {appVersion ?? '1.4.0'}</span>
+            <div className="mt-8 flex items-center justify-between border-t border-border pt-4 text-[11px] text-muted-foreground">
+              <span>PVE VDI {appVersion ?? '1.5.0'}</span>
             </div>
           </div>
         </section>
@@ -110,7 +111,7 @@ export function LoginView({ settings, appVersion, initialError, onAuthenticated 
         <section className="flex min-h-0 w-full flex-col justify-center overflow-y-auto bg-background px-8 py-10 xl:px-12">
           <div className="mx-auto w-full max-w-[360px]">
             <div className="mb-8">
-              <div className="text-[10px] font-medium text-muted-foreground">Proxmox VE</div>
+              <div className="text-[11px] font-medium text-muted-foreground">Proxmox VE</div>
               <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.025em] text-foreground">连接集群</h2>
               <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
                 输入 PVE 账户信息以建立 API 会话。密码默认不会写入磁盘。
@@ -120,12 +121,12 @@ export function LoginView({ settings, appVersion, initialError, onAuthenticated 
             {error && (
               <div className="mb-5 border border-destructive/35 bg-destructive/[0.06] p-3">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                  <EmptyIllustration className="mt-0.5 h-5 w-5 shrink-0" />
                   <div className="min-w-0">
                     <div className="text-[12px] font-medium text-destructive">连接失败</div>
-                    <div className="mt-1 break-words text-[11px] leading-5 text-destructive/90">{error}</div>
+                    <div className="mt-1 break-words text-[12px] leading-5 text-destructive/90">{error}</div>
                     {detail && (
-                      <div className="mt-1 break-words font-mono text-[10px] leading-4 text-destructive/70">{detail}</div>
+                      <div className="mt-1 break-words font-mono text-[11px] leading-4 text-destructive/70">{detail}</div>
                     )}
                   </div>
                 </div>
@@ -191,7 +192,7 @@ export function LoginView({ settings, appVersion, initialError, onAuthenticated 
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <div className="text-[12px] text-foreground">记住凭据</div>
-                    <div className="mt-0.5 text-[10px] text-muted-foreground">使用 Windows DPAPI 加密保存</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">使用 Windows DPAPI 加密保存</div>
                   </div>
                   <Switch
                     checked={remember}
@@ -206,7 +207,7 @@ export function LoginView({ settings, appVersion, initialError, onAuthenticated 
                       允许自签名证书
                       <ShieldAlert className="h-3 w-3 text-warning" />
                     </div>
-                    <div className="mt-0.5 text-[10px] text-muted-foreground">PVE 默认证书由本地 CA 签发</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">PVE 默认证书由本地 CA 签发</div>
                   </div>
                   <Switch
                     checked={allowSelfSigned}
@@ -222,7 +223,7 @@ export function LoginView({ settings, appVersion, initialError, onAuthenticated 
               </Button>
             </form>
 
-            <div className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-[10px] leading-5 text-muted-foreground">
+            <div className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-[11px] leading-5 text-muted-foreground">
               <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>认证由 PVE API 直接处理。票据仅保存在主进程内存中，不会暴露给页面。</span>
             </div>

@@ -76,7 +76,7 @@ export function Sidebar({
         type="button"
         onClick={() => onNavigate(item.key)}
         className={cn(
-          'relative flex h-9 w-full items-center gap-2.5 px-3 text-left text-[12px] transition-colors',
+          'relative flex h-10 w-full items-center gap-2.5 px-3 text-left text-[13px] transition-colors',
           selected ? 'bg-panel text-foreground' : 'text-muted-foreground hover:bg-panel/70 hover:text-foreground'
         )}
       >
@@ -84,40 +84,40 @@ export function Sidebar({
         <Icon className={cn('h-[15px] w-[15px]', selected ? 'text-brand' : 'text-muted-foreground')} />
         <span className="flex-1">{item.label}</span>
         {count !== undefined && (
-          <span className={cn('font-mono text-[10px]', selected ? 'text-foreground' : 'text-muted-foreground')}>{count}</span>
+          <span className={cn('font-mono text-[11px]', selected ? 'text-foreground' : 'text-muted-foreground')}>{count}</span>
         )}
       </button>
     )
   }
 
   return (
-    <aside className="flex w-[210px] shrink-0 flex-col border-r border-border bg-card">
+    <aside className="flex w-[220px] shrink-0 flex-col border-r border-border bg-card">
       <div className="border-b border-border p-3">
         <Button variant="outline" className="w-full justify-start" onClick={onCreateVm}>
-          <Plus className="h-3.5 w-3.5 text-brand" />
+          <Plus className="h-4 w-4 text-brand" />
           新建虚拟机
         </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto py-4">
-        <div className="px-4 pb-1.5 text-[10px] font-medium text-muted-foreground">工作负载</div>
+        <div className="px-4 pb-1.5 text-[11px] font-medium text-muted-foreground">工作负载</div>
         <nav className="px-2">{WORKLOAD_NAV.map(renderItem)}</nav>
 
-        <div className="mt-5 px-4 pb-1.5 text-[10px] font-medium text-muted-foreground">基础设施</div>
+        <div className="mt-5 px-4 pb-1.5 text-[11px] font-medium text-muted-foreground">基础设施</div>
         <nav className="px-2">{INFRA_NAV.map(renderItem)}</nav>
 
         <div className="mx-3 mt-5 border-t border-border pt-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-medium text-foreground">{dashboard?.cluster.name ?? session.clusterName}</span>
-            <span className="text-[10px] text-success">
+            <span className="text-[12px] font-medium text-foreground">{dashboard?.cluster.name ?? session.clusterName}</span>
+            <span className="text-[11px] text-success">
               {dashboard?.cluster.quorate ? 'Quorum 正常' : 'Quorum 异常'}
             </span>
           </div>
-          <div className="mt-1 text-[10px] text-muted-foreground">
+          <div className="mt-1 text-[11px] text-muted-foreground">
             {nodes.length} 个节点 · {runningVms} 台虚拟机运行中
           </div>
           <div className="mt-3">
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span>集群内存</span>
               <span className="font-mono">{memoryPercent.toFixed(1)}%</span>
             </div>
@@ -127,7 +127,7 @@ export function Sidebar({
               indicatorClassName={memoryPercent > 85 ? 'bg-destructive' : 'bg-brand'}
             />
           </div>
-          <div className="mt-2.5 font-mono text-[10px] text-muted-foreground">
+          <div className="mt-2.5 font-mono text-[11px] text-muted-foreground">
             PVE {dashboard?.version.version ?? '—'}
           </div>
         </div>
@@ -151,8 +151,8 @@ export function Sidebar({
         <div className="flex items-center gap-2 border-t border-border px-3 py-2.5">
           <UserRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[11px] text-foreground">{session.username}</div>
-            <div className="text-[10px] text-muted-foreground">已连接</div>
+            <div className="truncate text-[12px] text-foreground">{session.username}</div>
+            <div className="text-[11px] text-muted-foreground">已连接</div>
           </div>
           <Tooltip>
             <TooltipTrigger asChild>

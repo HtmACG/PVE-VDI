@@ -54,7 +54,7 @@ export function ConsoleWindowApp(): React.JSX.Element {
               <MonitorX className="h-4 w-4" />
               无法打开控制台窗口
             </div>
-            <p className="mt-2 break-words text-[11px] leading-5 text-muted-foreground">{error}</p>
+            <p className="mt-2 break-words text-[12px] leading-5 text-muted-foreground">{error}</p>
             <Button variant="outline" size="sm" className="mt-4" onClick={() => window.pvevdi.windowClose()}>
               关闭窗口
             </Button>
@@ -62,7 +62,7 @@ export function ConsoleWindowApp(): React.JSX.Element {
         ) : (
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <Loader2 className="h-5 w-5 spin text-brand" />
-            <div className="text-[11px]">正在准备控制台窗口…</div>
+            <div className="text-[12px]">正在准备控制台窗口…</div>
           </div>
         )}
       </div>

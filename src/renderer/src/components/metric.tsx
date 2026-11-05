@@ -23,8 +23,8 @@ export function MetricBar({
   return (
     <div className={cn('space-y-1.5', className)}>
       <div className="flex items-baseline justify-between gap-4">
-        {label && <span className={cn('text-muted-foreground', compact ? 'text-[10px]' : 'text-[11px]')}>{label}</span>}
-        <span className={cn('ml-auto font-mono tabular text-foreground', compact ? 'text-[10px]' : 'text-[11px]')}>
+        {label && <span className={cn('text-muted-foreground', compact ? 'text-[11px]' : 'text-[12px]')}>{label}</span>}
+        <span className={cn('ml-auto font-mono tabular text-foreground', compact ? 'text-[11px]' : 'text-[12px]')}>
           {valueLabel ?? `${formatPercent(ratio)}`}
         </span>
       </div>
@@ -47,11 +47,11 @@ export function StorageBar({
   return (
     <div className={cn('space-y-1.5', className)}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="font-mono text-[10px] text-muted-foreground">{formatBytes(total)} 总量</span>
-        <span className="font-mono text-[10px] text-foreground">{formatPercent(ratio, 1)}</span>
+        <span className="font-mono text-[11px] text-muted-foreground">{formatBytes(total)} 总量</span>
+        <span className="font-mono text-[11px] text-foreground">{formatPercent(ratio, 1)}</span>
       </div>
       <Progress value={ratio * 100} className="h-[3px]" indicatorClassName={color} />
-      <div className="flex justify-between font-mono text-[9px] text-muted-foreground/80">
+      <div className="flex justify-between font-mono text-[10px] text-muted-foreground/80">
         <span>{formatBytes(used)} 已用</span>
         <span>{formatBytes(Math.max(0, total - used))} 可用</span>
       </div>

@@ -19,11 +19,11 @@ export function VmStatusBadge({
   className?: string
 }): React.JSX.Element {
   if (template) {
-    return <span className={cn('inline-flex h-5 items-center text-[11px] font-medium text-info', className)}>模板</span>
+    return <span className={cn('inline-flex h-5 items-center text-[12px] font-medium text-info', className)}>模板</span>
   }
   const meta = STATUS_META[status] ?? STATUS_META.unknown
   return (
-    <span className={cn('inline-flex h-5 items-center text-[11px] font-medium', meta.text, className)}>
+    <span className={cn('inline-flex h-5 items-center text-[12px] font-medium', meta.text, className)}>
       {meta.label}
     </span>
   )
@@ -32,7 +32,7 @@ export function VmStatusBadge({
 export function NodeStatusBadge({ status }: { status: string }): React.JSX.Element {
   const online = status === 'online'
   return (
-    <span className={cn('inline-flex h-5 items-center text-[11px] font-medium', online ? 'text-success' : 'text-destructive')}>
+    <span className={cn('inline-flex h-5 items-center text-[12px] font-medium', online ? 'text-success' : 'text-destructive')}>
       {online ? '在线' : '离线'}
     </span>
   )
@@ -46,7 +46,7 @@ export function TaskStatusBadge({ status }: { status: TaskSummary['status'] }): 
     unknown: { label: '未知', className: 'text-muted-foreground' }
   }[status]
   return (
-    <span className={cn('inline-flex h-5 items-center text-[11px] font-medium', map.className)}>
+    <span className={cn('inline-flex h-5 items-center text-[12px] font-medium', map.className)}>
       {map.label}
     </span>
   )
@@ -54,7 +54,7 @@ export function TaskStatusBadge({ status }: { status: TaskSummary['status'] }): 
 
 export function QuorumBadge({ quorate }: { quorate: boolean }): React.JSX.Element {
   return (
-    <span className={cn('inline-flex h-5 items-center text-[11px] font-medium', quorate ? 'text-success' : 'text-destructive')}>
+    <span className={cn('inline-flex h-5 items-center text-[12px] font-medium', quorate ? 'text-success' : 'text-destructive')}>
       {quorate ? 'Quorum 正常' : 'Quorum 异常'}
     </span>
   )

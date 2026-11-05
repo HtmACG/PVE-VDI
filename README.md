@@ -19,8 +19,10 @@
 
 ### 节点设置
 
-- 从节点卡片进入独立设置页，左侧按“系统 / 更新 / 防火墙 / 磁盘”分组，结构与 PVE 节点设置一致
+- 从节点卡片进入独立设置页，采用一级分组 + 二级子导航的双侧边栏布局，不嵌套设置卡片
+- 一级分组为“系统 / 更新 / 防火墙 / 磁盘”，二级导航随分组切换
 - **网络**：读取物理网卡、网桥、VLAN、Bond；创建、编辑、删除接口；写入待应用配置后可应用或还原，应用前有中断提示
+- 网络接口支持可视化端口卡片，可在设置中切换“卡片 / 列表”展示
 - DNS 搜索域与三组上游服务器编辑
 - 节点时区、描述编辑；证书、APT 存储库、防火墙参数与日志、系统日志查看
 - 证书只展示主体、签发者、有效期、指纹和 SAN，不返回私钥或 PEM；存储库与防火墙规则只读
@@ -29,7 +31,7 @@
 ### 虚拟机
 
 - 搜索、按运行状态 / 节点 / 标签过滤，展示工作负载的实时状态
-- 每台虚拟机显示操作系统图标：Windows、Ubuntu、Debian、Arch Linux、Alpine、Fedora、Rocky、openSUSE、Kali、通用 Linux 等
+- 操作系统图标识别使用 `simple-icons` 与 `react-icons`：Windows、Ubuntu、Debian、Arch Linux、Fedora、Rocky、openSUSE、Kali、通用 Linux 等；没有适配图标的系统显示 Proxmox VE 标识，不显示问号
 - OS 识别优先使用 PVE 配置中的 `ostype`，QEMU Linux 会再通过 Guest Agent 的 `get-osinfo` 补充发行版信息，并以名称 / 描述作为回退
 - CPU、内存、磁盘、网络 I/O、运行时长、标签、模板标记
 - 电源操作：启动、ACPI 关机、强制停止、重启、重置、挂起、恢复
@@ -53,6 +55,9 @@
 - 强调色：工业橙、信号蓝、青绿、紫罗兰、玫红、琥珀六种预设，也支持输入任意 `#RRGGBB`
 - 字体与强调色会持久化到本地设置，并在新打开的控制台窗口中应用
 - 配色只调整强调色，不改动状态色和资源预警色，避免降低可读性
+- “可视化设置”可切换网络接口卡片 / 列表展示
+- 空内容、无法连接等状态使用 Vue 3 生态 Element Plus 的官方空状态 SVG 插图；第三方图形来源见 [NOTICE](NOTICE)
+- 设置页提供 GitHub Release / Tag 更新检查、更新日志、开发者信息
 
 ### 创建虚拟机
 
@@ -65,7 +70,10 @@
 
 - **Electron 44**：主进程持有 PVE 会话与 TLS 连接
 - **electron-vite 6 + Vite 8 + React 19 + TypeScript 5.9**
-- **Tailwind CSS 4** + **Radix UI** 原语，自研 shadcn 风格组件层
+- **Tailwind CSS 4** + **Radix UI** 原语，shadcn/ui 风格的扁平组件层，全局 0px 圆角
+- **Recharts**：资源与遥测面积图；**Radix Progress**：资源进度条
+- **lucide-react**：界面与网络接口图标；**simple-icons** / **react-icons**：操作系统品牌图标
+- **semver**：GitHub 更新检查的版本比较
 - **noVNC 1.7**：QEMU RFB 控制台
 - **xterm.js 6 + FitAddon**：LXC / 节点 Shell 终端
 - **ws**：主进程内的回环 WebSocket 控制台桥
@@ -104,8 +112,8 @@ src/
 
 Windows 安装包与便携版位于 `release/`：
 
-- `PVE-VDI-1.4.0-x64.exe`：NSIS 安装包
-- `PVE-VDI-Portable-1.4.0-x64.exe`：便携版
+- `PVE-VDI-1.5.0-x64.exe`：NSIS 安装包
+- `PVE-VDI-Portable-1.5.0-x64.exe`：便携版
 
 两个产物均未使用商业代码签名证书，Windows SmartScreen 可能提示“未知发布者”。
 
@@ -209,7 +217,7 @@ pnpm test:appearance
 - 登录页插画、深色 / 浅色主题与控制台外观设置
 - 登录、集群/节点/存储/任务读取
 - 服务器资源看板 2 秒刷新：界面时间戳持续推进
-- 操作系统图标识别：Windows、Ubuntu、Debian、Alpine 与通用 Linux
+- 操作系统图标识别：Windows、Ubuntu、Debian、通用 Linux 与 Proxmox VE 回退
 - 虚拟机详情、硬件、网络、快照、任务日志读取
 - 创建向导加载节点/存储/网络选项，空名称校验返回“请输入虚拟机名称。”
 - noVNC 在独立窗口中连接运行中的 QEMU 虚拟机并完成 RFB 渲染
@@ -238,8 +246,25 @@ pnpm test:appearance
 - `win-unpacked` 中节点设置页和独立 noVNC / xterm.js 控制台窗口验证通过
 - NSIS 安装包与便携版已生成，安装包未使用商业代码签名
 
+### 1.5.0 验证
+
+- `pnpm build` 与 `pnpm typecheck` 通过
+- 界面切换为 Windows 10 风格中性灰 / Windows 蓝、系统字体和 0px 圆角
+- 节点设置、网络卡片、Element Plus 空状态、GitHub 更新检查和更新日志验证通过
+- UI 冒烟、节点设置、外观、控制台与更新检查测试无 Renderer 控制台错误
+- 图表使用 Recharts，进度条使用 Radix Progress，网络图标使用 lucide，OS 图标使用 npm 图标库
+
 ## License
 
 Copyright (C) 2026 PVE VDI contributors.
 
 This project is licensed under the **GNU General Public License v3.0 only** (`GPL-3.0-only`). See [LICENSE](LICENSE) for the complete license text.
+
+## 开发者
+
+- 作者：北慕林奈
+- 邮箱：htmacg@163.com
+- 网站：https://www.htmacg.com
+- GitHub：https://github.com/HtmACG/PVE-VDI
+- 更新日志：[CHANGELOG.md](CHANGELOG.md)
+- 第三方图形与商标说明：[NOTICE](NOTICE)

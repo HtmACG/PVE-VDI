@@ -1,0 +1,25 @@
+# Third-party artwork
+
+PVE VDI includes the following brand assets and illustrations.
+
+## Element Plus empty-state SVG
+
+- File: `src/renderer/src/assets/el-empty.svg`
+- Source artwork: https://github.com/element-plus/element-plus/blob/dev/packages/components/empty/src/img-empty.vue
+- Project: Element Plus, the Vue 3 UI component library
+- License: MIT
+- Usage: empty-state and error-state placeholder illustration, vendored from the official component.
+
+## Proxmox VE mark
+
+- File: `src/renderer/src/assets/proxmox-logo.png`
+- Source: https://github.com/proxmox/pve-manager/blob/master/www/images/logo-128.png
+- Proxmox is a registered trademark of Proxmox Server Solutions GmbH.
+- Usage: fallback OS icon when no specific operating-system icon is available.
+
+## OS brand icons
+
+Brand paths in `src/renderer/src/components/os-icon.tsx` come from Simple Icons
+(CC0 1.0); the Windows mark is rendered through `react-icons` (Font Awesome
+Brands). Operating-system names and logos are trademarks of their respective
+owners.

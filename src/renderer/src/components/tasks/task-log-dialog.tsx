@@ -86,14 +86,14 @@ export function TaskLogDialog({
             ['开始', task ? formatFullDateTime(task.startTime * 1000) : '—']
           ].map(([label, value]) => (
             <div key={label} className="min-w-0">
-              <div className="text-[10px] text-muted-foreground">{label}</div>
-              <div className="mt-1 truncate font-mono text-[11px] text-foreground">{value}</div>
+              <div className="text-[11px] text-muted-foreground">{label}</div>
+              <div className="mt-1 truncate font-mono text-[12px] text-foreground">{value}</div>
             </div>
           ))}
         </div>
 
         <div className="flex items-center justify-between border-b border-border px-5 py-2">
-          <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
             {refreshing ? <Loader2 className="h-3 w-3 spin text-brand" /> : <CheckCircle2 className="h-3 w-3" />}
             {lines.length} 行输出
           </div>
@@ -105,30 +105,30 @@ export function TaskLogDialog({
 
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto bg-[#07080a] p-4 dark:bg-[#07080a]">
           {loading && lines.length === 0 ? (
-            <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
               <Loader2 className="h-3 w-3 spin" />
               正在读取任务输出…
             </div>
           ) : error ? (
-            <div className="flex items-start gap-2 border border-destructive/30 bg-destructive/[0.06] p-3 text-[11px] text-destructive">
+            <div className="flex items-start gap-2 border border-destructive/30 bg-destructive/[0.06] p-3 text-[12px] text-destructive">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               {error}
             </div>
           ) : lines.length === 0 ? (
-            <div className="font-mono text-[10px] text-muted-foreground">任务尚未产生输出。</div>
+            <div className="font-mono text-[11px] text-muted-foreground">任务尚未产生输出。</div>
           ) : (
-            <pre className="whitespace-pre-wrap break-words font-mono text-[10px] leading-[1.75] text-zinc-300">
+            <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-[1.75] text-zinc-300">
               {body}
             </pre>
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-border px-4 py-2 text-[9px] text-muted-foreground">
+        <div className="flex items-center justify-between border-t border-border px-4 py-2 text-[10px] text-muted-foreground">
           <span className="font-mono">task/{task?.id ?? '—'} · {task?.user ?? ''}</span>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="flex items-center gap-1 text-[10px] text-foreground hover:text-brand"
+            className="flex items-center gap-1 text-[11px] text-foreground hover:text-brand"
           >
             关闭
             <ChevronRight className="h-3 w-3" />

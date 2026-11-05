@@ -23,7 +23,7 @@ export function BrandLockup({
       <BrandMark />
       <span className="flex items-baseline gap-1">
         <span className="text-[12px] font-semibold tracking-[0.08em] text-foreground">PVE</span>
-        <span className="text-[10px] font-medium tracking-[0.16em] text-muted-foreground">VDI</span>
+        <span className="text-[11px] font-medium tracking-[0.16em] text-muted-foreground">VDI</span>
         {!compact && <span className="ml-1 h-3 w-px bg-border-strong" />}
       </span>
     </span>
