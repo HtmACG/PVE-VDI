@@ -1,0 +1,248 @@
+import { useState, type FormEvent } from 'react'
+import { AlertTriangle, ArrowRight, Eye, EyeOff, ShieldAlert, ShieldCheck } from 'lucide-react'
+import type { ApiError, AppSettings, LoginResult } from '@shared/types'
+import { BrandLockup, BrandMark } from '@renderer/components/brand'
+import { WindowButtons } from '@renderer/components/layout/window-buttons'
+import { Button } from '@renderer/components/ui/button'
+import { Input } from '@renderer/components/ui/input'
+import { Label } from '@renderer/components/ui/label'
+import { Switch } from '@renderer/components/ui/switch'
+import { ClientApiError, errorDetail, unwrap } from '@renderer/lib/api'
+import loginIllustration from '@renderer/assets/login-illustration.webp'
+
+interface LoginViewProps {
+  settings: AppSettings
+  initialError?: ApiError
+  onAuthenticated: (result: LoginResult) => void
+}
+
+export function LoginView({ settings, initialError, onAuthenticated }: LoginViewProps): React.JSX.Element {
+  const [serverUrl, setServerUrl] = useState(settings.serverUrl)
+  const [username, setUsername] = useState(settings.username)
+  const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(settings.rememberPassword)
+  const [allowSelfSigned, setAllowSelfSigned] = useState(settings.allowSelfSigned)
+  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(
+    initialError ? [initialError.message, initialError.detail].filter(Boolean).join(' · ') : null
+  )
+  const [detail, setDetail] = useState<string | null>(
+    initialError?.detail && initialError.detail !== initialError.message ? initialError.detail : null
+  )
+
+  const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    if (loading) return
+    setLoading(true)
+    setError(null)
+    setDetail(null)
+    try {
+      const result = await unwrap(
+        window.pvevdi.login({
+          serverUrl,
+          username,
+          password,
+          rememberPassword: remember,
+          allowSelfSigned
+        })
+      )
+      onAuthenticated(result)
+    } catch (err) {
+      if (err instanceof ClientApiError) {
+        setError(err.message)
+        setDetail(err.detail ?? null)
+      } else {
+        setError(errorDetail(err))
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <header className="drag-region flex h-10 shrink-0 items-center justify-between border-b border-border pl-4">
+        <div className="flex items-center gap-3">
+          <BrandLockup compact />
+          <span className="h-3 w-px bg-border" />
+          <span className="text-[10px] text-muted-foreground">Proxmox VE 运维控制台</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="hidden text-[10px] text-muted-foreground sm:block">未连接</span>
+          <WindowButtons className="border-l-0" />
+        </div>
+      </header>
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
+        <section className="grid-surface relative hidden min-w-0 overflow-hidden border-r border-border bg-card lg:flex">
+          <div className="absolute left-0 top-0 h-full w-[3px] bg-brand" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[60%] overflow-hidden xl:block">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_62%_45%,rgba(115,158,255,0.18),transparent_66%)]" />
+            <img
+              src={loginIllustration}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+              className="absolute bottom-0 right-0 h-[94%] w-full object-contain object-bottom opacity-95 [mask-image:linear-gradient(to_right,transparent,black_22%,black_100%)]"
+            />
+            <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-card via-card/70 to-transparent" />
+          </div>
+          <div className="relative z-10 flex w-full flex-col p-10 pl-14 xl:p-14 xl:pl-16">
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <BrandMark className="h-4 w-4" />
+              <span className="font-medium text-foreground">PVE VDI</span>
+              <span>Proxmox VE 控制台</span>
+            </div>
+
+            <div className="my-auto max-w-[560px] py-12 xl:max-w-[440px]">
+              <h1 className="text-[38px] font-semibold leading-[1.18] tracking-[-0.035em] text-foreground">
+                管理虚拟化集群
+                <br />
+                从一个控制台开始。
+              </h1>
+              <p className="mt-4 max-w-[470px] text-[13px] leading-6 text-muted-foreground">
+                查看节点资源和集群健康状态，管理虚拟机与容器的运行，并通过内置 noVNC 或 xterm.js
+                连接控制台。所有 PVE 请求都由本地主进程处理。
+              </p>
+
+              <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-4 text-[11px] text-muted-foreground">
+                <span>集群与节点</span>
+                <span>虚拟机管理</span>
+                <span>noVNC / xterm.js</span>
+                <span>任务日志</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-[10px] text-muted-foreground">
+              <span>PVE VDI 1.3.0</span>
+              <span>TLS · API2 · Windows DPAPI</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="flex min-h-0 w-full flex-col justify-center overflow-y-auto bg-background px-8 py-10 xl:px-12">
+          <div className="mx-auto w-full max-w-[360px]">
+            <div className="mb-8">
+              <div className="text-[10px] font-medium text-muted-foreground">Proxmox VE</div>
+              <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.025em] text-foreground">连接集群</h2>
+              <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+                输入 PVE 账户信息以建立 API 会话。密码默认不会写入磁盘。
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-5 border border-destructive/35 bg-destructive/[0.06] p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-medium text-destructive">连接失败</div>
+                    <div className="mt-1 break-words text-[11px] leading-5 text-destructive/90">{error}</div>
+                    {detail && (
+                      <div className="mt-1 break-words font-mono text-[10px] leading-4 text-destructive/70">{detail}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={submit} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="server-url">PVE 地址</Label>
+                <Input
+                  id="server-url"
+                  value={serverUrl}
+                  onChange={(event) => setServerUrl(event.target.value)}
+                  placeholder="https://pve.example.com:8006"
+                  autoComplete="url"
+                  spellCheck={false}
+                  className="h-9 font-mono text-[12px]"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="username">用户名</Label>
+                <Input
+                  id="username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="root@pam"
+                  autoComplete="username"
+                  spellCheck={false}
+                  className="h-9 font-mono text-[12px]"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="password">密码</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="输入 PVE 账户密码"
+                    autoComplete="current-password"
+                    autoFocus
+                    className="h-9 pr-9 font-mono text-[12px]"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((value) => !value)}
+                    className="absolute inset-y-0 right-0 flex w-8 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3 border-y border-border py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-[12px] text-foreground">记住凭据</div>
+                    <div className="mt-0.5 text-[10px] text-muted-foreground">使用 Windows DPAPI 加密保存</div>
+                  </div>
+                  <Switch
+                    checked={remember}
+                    onCheckedChange={setRemember}
+                    disabled={!settings.credentialStorageAvailable}
+                    aria-label="记住凭据"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-[12px] text-foreground">
+                      允许自签名证书
+                      <ShieldAlert className="h-3 w-3 text-warning" />
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-muted-foreground">PVE 默认证书由本地 CA 签发</div>
+                  </div>
+                  <Switch
+                    checked={allowSelfSigned}
+                    onCheckedChange={setAllowSelfSigned}
+                    aria-label="允许自签名证书"
+                  />
+                </div>
+              </div>
+
+              <Button type="submit" size="lg" className="w-full justify-between" loading={loading}>
+                <span>{loading ? '正在验证凭据…' : '建立连接'}</span>
+                {!loading && <ArrowRight className="h-4 w-4" />}
+              </Button>
+            </form>
+
+            <div className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-[10px] leading-5 text-muted-foreground">
+              <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>认证由 PVE API 直接处理。票据仅保存在主进程内存中，不会暴露给页面。</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}

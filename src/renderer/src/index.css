@@ -1,0 +1,314 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import 'tailwindcss';
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--card);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--fg);
+  --color-panel: var(--panel);
+  --color-panel-hover: var(--panel-hover);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-fg);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-fg);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-fg);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-fg);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-fg);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-fg);
+  --color-ring: var(--ring);
+  --font-sans: 'Inter Variable', 'Inter', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'Cascadia Code', Consolas, monospace;
+  --radius-none: 0px;
+}
+
+:root {
+  color-scheme: dark;
+  --bg: #08090b;
+  --fg: #f4f4f5;
+  --card: #0c0d10;
+  --panel: #101116;
+  --panel-hover: #14161b;
+  --popover: #0f1014;
+  --muted: #16181d;
+  --muted-fg: #9698a2;
+  --border: #23252b;
+  --border-strong: #33363e;
+  --input: #2a2d34;
+  --primary: #f4f4f5;
+  --primary-fg: #09090b;
+  --secondary: #1a1c21;
+  --secondary-fg: #e4e4e7;
+  --accent: #1b1d23;
+  --accent-fg: #fafafa;
+  --destructive: #ef4444;
+  --destructive-fg: #fff7f7;
+  --success: #35d07f;
+  --warning: #f4a62a;
+  --info: #51a2ff;
+  --brand: #f26b1d;
+  --brand-fg: #0b0b0b;
+  --ring: #f26b1d;
+  --ui-font: 'Inter Variable', 'Inter', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
+  --grid-line: rgba(255, 255, 255, 0.045);
+  --chart-grid: #22242a;
+  --overlay: rgba(2, 3, 5, 0.78);
+}
+
+html.light {
+  color-scheme: light;
+  --bg: #f3f3f1;
+  --fg: #18181b;
+  --card: #fbfbfa;
+  --panel: #ffffff;
+  --panel-hover: #f5f5f3;
+  --popover: #ffffff;
+  --muted: #efefed;
+  --muted-fg: #62626a;
+  --border: #dededb;
+  --border-strong: #c9c9c4;
+  --input: #d2d2cd;
+  --primary: #18181b;
+  --primary-fg: #fafafa;
+  --secondary: #ececea;
+  --secondary-fg: #27272a;
+  --accent: #f0f0ee;
+  --accent-fg: #111113;
+  --destructive: #dc2626;
+  --destructive-fg: #ffffff;
+  --success: #15803d;
+  --warning: #b45309;
+  --info: #2563eb;
+  --brand: #d8570a;
+  --brand-fg: #fffaf5;
+  --ring: #d8570a;
+  --ui-font: 'Inter Variable', 'Inter', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
+  --grid-line: rgba(20, 20, 20, 0.055);
+  --chart-grid: #e3e3df;
+  --overlay: rgba(24, 24, 27, 0.38);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-radius: 0 !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--ui-font, var(--font-sans));
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+::selection {
+  background: var(--brand);
+  color: var(--brand-fg);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.hairline-top {
+  box-shadow: inset 0 1px 0 var(--border);
+}
+
+.grid-surface {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.diagonal-surface {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 5px,
+    var(--grid-line) 5px,
+    var(--grid-line) 6px
+  );
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-line {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -300px 0;
+  }
+  100% {
+    background-position: 300px 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-overlay-in {
+  animation: overlay-in 140ms ease-out;
+}
+
+.animate-dialog-in {
+  animation: dialog-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-sheet-in {
+  animation: sheet-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-fade-up {
+  animation: fade-up 220ms ease-out both;
+}
+
+.animate-pulse-line {
+  animation: pulse-line 1.4s ease-in-out infinite;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--muted) 25%, var(--panel-hover) 50%, var(--muted) 75%);
+  background-size: 600px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

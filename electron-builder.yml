@@ -1,0 +1,39 @@
+appId: com.pvevdi.desktop
+productName: PVE VDI
+copyright: Copyright © 2026 PVE VDI
+directories:
+  buildResources: build
+  output: release
+files:
+  - out/**/*
+  - package.json
+  - '!node_modules/**/*'
+extraResources:
+  - from: build/icon.png
+    to: icon.png
+asar: true
+npmRebuild: false
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: build/icon.ico
+  artifactName: PVE-VDI-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: PVE VDI
+  installerLanguages:
+    - zh_CN
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+portable:
+  artifactName: PVE-VDI-Portable-${version}-${arch}.${ext}

@@ -1,0 +1,244 @@
+import { useDeferredValue, useMemo, useState } from 'react'
+import { ClipboardList, ExternalLink, RefreshCw, Search, Terminal, X } from 'lucide-react'
+import type { DashboardData, TaskSummary } from '@shared/types'
+import { TASK_TYPE_LABELS } from '@shared/ipc'
+import { PageHeader } from '@renderer/components/layout/page-header'
+import { Button } from '@renderer/components/ui/button'
+import { Input } from '@renderer/components/ui/input'
+import { Badge } from '@renderer/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@renderer/components/ui/select'
+import { EmptyState } from '@renderer/components/common'
+import { TaskStatusBadge } from '@renderer/components/status-badges'
+import { formatDuration, formatFullDateTime, relativeTime } from '@renderer/lib/format'
+import { cn } from '@renderer/lib/utils'
+
+type TaskFilter = 'all' | 'running' | 'ok' | 'error'
+
+const FILTERS: Array<{ value: TaskFilter; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'running', label: '运行中' },
+  { value: 'ok', label: '成功' },
+  { value: 'error', label: '失败' }
+]
+
+function truncateUpid(upid: string): string {
+  if (upid.length <= 42) return upid
+  return `${upid.slice(0, 20)}…${upid.slice(-18)}`
+}
+
+export function TasksView({
+  dashboard,
+  onRefresh,
+  onOpenTask
+}: {
+  dashboard: DashboardData
+  onRefresh: () => void
+  onOpenTask: (task: TaskSummary) => void
+}): React.JSX.Element {
+  const [filter, setFilter] = useState<TaskFilter>('all')
+  const [query, setQuery] = useState('')
+  const [node, setNode] = useState('all')
+  const deferredQuery = useDeferredValue(query)
+
+  const nodes = useMemo(() => Array.from(new Set(dashboard.tasks.map((task) => task.node))).sort(), [dashboard.tasks])
+  const counts = useMemo(
+    () => ({
+      all: dashboard.tasks.length,
+      running: dashboard.tasks.filter((task) => task.status === 'running').length,
+      ok: dashboard.tasks.filter((task) => task.status === 'ok').length,
+      error: dashboard.tasks.filter((task) => task.status === 'error').length
+    }),
+    [dashboard.tasks]
+  )
+
+  const filtered = useMemo(() => {
+    const q = deferredQuery.trim().toLowerCase()
+    return dashboard.tasks
+      .filter((task) => filter === 'all' || task.status === filter)
+      .filter((task) => node === 'all' || task.node === node)
+      .filter((task) => {
+        if (!q) return true
+        return (
+          task.type.toLowerCase().includes(q) ||
+          (task.id ?? '').includes(q) ||
+          task.user.toLowerCase().includes(q) ||
+          task.upid.toLowerCase().includes(q) ||
+          (TASK_TYPE_LABELS[task.type] ?? '').includes(deferredQuery.trim())
+        )
+      })
+  }, [dashboard.tasks, deferredQuery, filter, node])
+
+  const hasFilters = Boolean(query) || filter !== 'all' || node !== 'all'
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow={`${dashboard.cluster.name} 集群`}
+        title="任务"
+        description="查看 PVE 任务执行记录与节点任务日志。"
+        actions={
+          <Button variant="outline" onClick={onRefresh}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            刷新
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-2 border border-border bg-card sm:grid-cols-4 sm:divide-x sm:divide-border">
+        {[
+          ['全部任务', counts.all],
+          ['运行中', counts.running],
+          ['成功', counts.ok],
+          ['失败', counts.error]
+        ].map(([label, value]) => (
+          <div key={String(label)} className="border-b border-border px-4 py-3 last:border-b-0 sm:border-b-0">
+            <div className="text-[11px] text-muted-foreground">{label}</div>
+            <div className="mt-1.5 font-mono text-[19px] text-foreground">{value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border border-border bg-card">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
+          <div className="flex items-center border border-border">
+            {FILTERS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setFilter(item.value)}
+                className={cn(
+                  'flex h-8 items-center gap-1.5 border-r border-border px-2.5 text-[11px] transition-colors last:border-r-0',
+                  filter === item.value
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                )}
+              >
+                {item.label}
+                <span className="font-mono text-[10px] opacity-65">{counts[item.value]}</span>
+              </button>
+            ))}
+          </div>
+          <div className="relative ml-auto w-full sm:w-[250px]">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索类型、VMID、用户、UPID…"
+              className="h-8 pl-8 pr-8 text-[11px]"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="absolute right-0 top-0 flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground"
+                aria-label="清除搜索"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          <Select value={node} onValueChange={setNode}>
+            <SelectTrigger className="h-8 w-[120px] text-[11px]">
+              <SelectValue placeholder="节点" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">所有节点</SelectItem>
+              {nodes.map((item) => (
+                <SelectItem key={item} value={item}>
+                  {item}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setQuery('')
+                setFilter('all')
+                setNode('all')
+              }}
+            >
+              <X className="h-3 w-3" />
+              重置
+            </Button>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[960px] text-left">
+            <thead>
+              <tr className="border-b border-border bg-panel/30 text-[10px] text-muted-foreground">
+                <th className="px-4 py-2.5 font-medium">状态</th>
+                <th className="px-3 py-2.5 font-medium">任务</th>
+                <th className="px-3 py-2.5 font-medium">对象</th>
+                <th className="px-3 py-2.5 font-medium">节点</th>
+                <th className="px-3 py-2.5 font-medium">用户</th>
+                <th className="px-3 py-2.5 font-medium">开始时间</th>
+                <th className="px-3 py-2.5 font-medium">时长</th>
+                <th className="px-4 py-2.5 text-right font-medium">日志</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((task) => (
+                <tr
+                  key={task.upid}
+                  onClick={() => onOpenTask(task)}
+                  className="group cursor-pointer border-b border-border/60 transition-colors last:border-b-0 hover:bg-panel/50"
+                >
+                  <td className="px-4 py-3">
+                    <TaskStatusBadge status={task.status} />
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="text-[12px] text-foreground">{TASK_TYPE_LABELS[task.type] ?? task.type}</div>
+                    <div className="mt-1 max-w-[300px] truncate font-mono text-[9px] text-muted-foreground">
+                      {truncateUpid(task.upid)}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    {task.id ? (
+                      <span className="font-mono text-[10px] text-foreground">{task.id}</span>
+                    ) : (
+                      <span className="font-mono text-[10px] text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 font-mono text-[10px] text-muted-foreground">{task.node}</td>
+                  <td className="px-3 py-3 font-mono text-[10px] text-muted-foreground">{task.user || '—'}</td>
+                  <td className="px-3 py-3 font-mono text-[10px] text-muted-foreground">
+                    {formatFullDateTime(task.startTime * 1000)}
+                  </td>
+                  <td className="px-3 py-3 font-mono text-[10px] text-muted-foreground">{formatDuration(task.duration)}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <span className="inline-flex h-6 w-6 items-center justify-center border border-transparent text-muted-foreground transition-colors group-hover:border-border group-hover:bg-background group-hover:text-foreground">
+                      <ExternalLink className="h-3 w-3" />
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {filtered.length === 0 && (
+          <EmptyState
+            icon={hasFilters ? <Search className="h-5 w-5" /> : <ClipboardList className="h-5 w-5" />}
+            title={hasFilters ? '没有匹配的任务' : '没有任务记录'}
+            description={hasFilters ? '调整筛选条件后再试。' : '集群任务会在执行电源操作、创建虚拟机或维护时出现。'}
+          />
+        )}
+
+        <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-2">
+            <Terminal className="h-3 w-3" />
+            显示 {filtered.length} / {dashboard.tasks.length} 条任务
+          </span>
+          <span>
+            最近同步 {relativeTime(Math.floor(dashboard.fetchedAt / 1000))}
+            {counts.running > 0 && <span className="text-brand"> · {counts.running} 条运行中</span>}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}

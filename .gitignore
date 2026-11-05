@@ -1,0 +1,15 @@
+node_modules/
+out/
+release/
+dist/
+.probe-*
+.probe-pve.json
+.probe-extra.txt
+.probe/
+*.log
+/screenshots/
+/docs/screenshots/
+playwright-report/
+test-results/
+.env
+.env.*
