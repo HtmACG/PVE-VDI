@@ -37,7 +37,6 @@ import type {
   NodeZfsPool,
   NetworkView
 } from '@shared/types'
-import { PageHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@renderer/components/ui/dialog'
@@ -211,7 +210,7 @@ function SectionShell({
 }): React.JSX.Element {
   return (
     <div className="min-w-0">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+      <div className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-b border-border bg-background px-5 py-4">
         <div>
           <h2 className="text-[15px] font-medium text-foreground">{title}</h2>
           <p className="mt-1 max-w-2xl text-[12px] leading-5 text-muted-foreground">{description}</p>
@@ -707,7 +706,7 @@ function NetworkSection({
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+      <div className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-b border-border bg-background px-5 py-4">
         <div>
           <h2 className="text-[15px] font-medium text-foreground">网络</h2>
           <p className="mt-1 max-w-2xl text-[12px] leading-5 text-muted-foreground">
@@ -715,10 +714,6 @@ function NetworkSection({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => void onChanged()}>
-            <RefreshCw className="h-3.5 w-3.5" />
-            刷新
-          </Button>
           <Button variant="outline" size="sm" onClick={() => setRevertOpen(true)}>
             还原未应用
           </Button>
@@ -746,7 +741,7 @@ function NetworkSection({
               <div className="text-[11px] font-medium text-foreground">接口概览</div>
               <div className="text-[11px] text-muted-foreground">点击卡片编辑参数</div>
             </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
               {data.network.map((iface) => {
                 const highlighted = Boolean(iface.gateway || iface.bridge_ports || iface.slaves)
                 return (
@@ -1491,30 +1486,33 @@ export function NodeSettingsView({
   }
 
   const currentGroup = SETTINGS_GROUPS.find((group) => group.id === activeGroup) ?? SETTINGS_GROUPS[0]
-  const CurrentGroupIcon = currentGroup.icon
 
   return (
-    <div className="flex min-h-full flex-col">
-      <PageHeader
-        eyebrow={`${clusterName} 集群`}
-        title="节点设置"
-        description={`${node} · 网络、系统、防火墙与磁盘配置`}
-        actions={
-          <>
-            <Button variant="outline" onClick={onBack}>
-              <ArrowLeft className="h-3.5 w-3.5" />
-              返回节点
-            </Button>
-            <Button variant="outline" onClick={() => void load()} loading={refreshing}>
-              <RefreshCw className="h-3.5 w-3.5" />
-              刷新
-            </Button>
-          </>
-        }
-      />
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button variant="outline" size="icon" onClick={onBack} title="返回节点" aria-label="返回节点">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-border bg-panel text-muted-foreground">
+            <Server className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <h1 className="text-[16px] font-semibold tracking-tight text-foreground">{node} 节点设置</h1>
+              <span className="text-[11px] text-muted-foreground">{clusterName} 集群</span>
+            </div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">网络、系统、防火墙与磁盘配置</div>
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => void load()} loading={refreshing}>
+          <RefreshCw className="h-3.5 w-3.5" />
+          刷新
+        </Button>
+      </div>
 
-      <div className="mt-4 flex min-h-[620px] flex-1 border-t border-border">
-        <aside className="w-[168px] shrink-0 border-r border-border bg-card/30 py-2">
+      <div className="flex min-h-0 flex-1 border-t border-border">
+        <aside className="w-[168px] shrink-0 overflow-y-auto border-r border-border bg-card/30 py-2">
           {SETTINGS_GROUPS.map((group) => {
             const GroupIcon = group.icon
             const selectedGroup = activeGroup === group.id
@@ -1542,11 +1540,7 @@ export function NodeSettingsView({
           })}
         </aside>
 
-        <aside className="w-[188px] shrink-0 border-r border-border bg-panel/15">
-          <div className="flex h-11 items-center gap-2 border-b border-border px-4 text-[12px] font-medium text-foreground">
-            <CurrentGroupIcon className="h-4 w-4 text-brand" />
-            {currentGroup.label}
-          </div>
+        <aside className="w-[184px] shrink-0 overflow-y-auto border-r border-border bg-panel/15">
           <nav className="py-2">
             {currentGroup.items.map((item) => {
               const Icon = item.icon
@@ -1573,7 +1567,7 @@ export function NodeSettingsView({
           </nav>
         </aside>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-y-auto">
           {data && data.warnings.length > 0 && (
             <div className="flex items-start gap-2 border-b border-warning/25 bg-warning/[0.035] px-5 py-2.5 text-[11px] leading-5 text-warning">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
