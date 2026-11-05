@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.5.2',
+    date: '2026-11-06',
+    items: [
+      '网络接口概览改为紧凑端口条，按 WAN / LAN / ETH / VLAN / VNET 标注角色',
+      '移除网络卡片上错误的小图标叠加',
+      '简化节点设置头部与网络警告条'
+    ]
+  },
+  {
     version: '1.5.1',
     date: '2026-11-06',
     items: [

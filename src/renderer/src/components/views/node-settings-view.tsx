@@ -3,9 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   AlertTriangle,
   ArrowLeft,
-  ArrowUpRight,
   Clock3,
-  Cloud,
   Database,
   EthernetPort,
   Folder,
@@ -13,7 +11,6 @@ import {
   HardDrive,
   KeyRound,
   Layers3,
-  Link2,
   Loader2,
   Network,
   Pencil,
@@ -193,6 +190,16 @@ function interfaceAddress(iface: NodeNetworkInterface): string {
 
 function networkPorts(iface: NodeNetworkInterface): string {
   return iface.bridge_ports || iface.slaves || iface['vlan-raw-device'] || '—'
+}
+
+function networkRole(iface: NodeNetworkInterface): string {
+  if (iface.gateway) return 'WAN'
+  if (iface.iface.startsWith('vnet')) return 'VNET'
+  if (iface.type === 'vlan') return 'VLAN'
+  if (iface.type === 'bridge') return 'LAN'
+  if (iface.type === 'bond') return 'BOND'
+  if (iface.type === 'eth') return 'ETH'
+  return 'IF'
 }
 
 function formatDate(seconds: number | undefined): string {
@@ -731,21 +738,23 @@ function NetworkSection({
       </div>
 
       <div className="p-5">
-        <div className="mb-3 flex items-start gap-2 border border-warning/25 bg-warning/[0.035] px-3 py-2.5">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-          <div className="text-[11px] leading-5 text-muted-foreground">
+        <div className="mb-3 flex items-start gap-2 text-[11px] leading-5 text-warning">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <div className="text-muted-foreground">
             应用网络配置可能会短暂中断节点管理连接。请确认当前有带外管理或本地终端访问能力后再操作。
           </div>
         </div>
 
         {networkView === 'cards' && data.network.length > 0 && (
-          <div className="mb-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="mb-4 border border-border">
+            <div className="flex items-center justify-between border-b border-border px-3 py-2">
               <div className="text-[11px] font-medium text-foreground">接口概览</div>
+              <div className="font-mono text-[10px] text-muted-foreground">{data.network.length}</div>
             </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
+            <div className="flex flex-wrap gap-1 p-2">
               {data.network.map((iface) => {
-                const highlighted = Boolean(iface.gateway || iface.bridge_ports || iface.slaves)
+                const role = networkRole(iface)
+                const isUplink = role === 'WAN' || role === 'LAN' || role === 'VNET'
                 return (
                   <button
                     key={`card-${iface.iface}`}
@@ -753,39 +762,28 @@ function NetworkSection({
                     data-network-card={iface.iface}
                     onClick={() => startEdit(iface)}
                     className={cn(
-                      'border p-2.5 text-left transition-colors',
-                      highlighted
-                        ? 'border-brand/35 bg-brand/[0.035] hover:border-brand/60'
-                        : 'border-border bg-panel/20 hover:border-border-strong'
+                      'flex w-[92px] flex-col items-center border px-2 py-2 text-center transition-colors',
+                      isUplink
+                        ? 'border-border bg-panel/30 hover:border-brand/50'
+                        : 'border-transparent hover:border-border hover:bg-panel/30'
                     )}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="relative">
-                        <EthernetPort
-                          className={cn(
-                            'h-8 w-12',
-                            highlighted ? 'text-brand' : iface.active ? 'text-foreground/65' : 'text-muted-foreground/60'
-                          )}
-                          strokeWidth={1.3}
-                        />
-                        {iface.gateway && (
-                          <ArrowUpRight className="absolute -right-1 -top-1 h-3.5 w-3.5 text-brand" aria-hidden="true" />
-                        )}
-                        {!iface.gateway && iface.bridge_ports && (
-                          <Link2 className="absolute -right-1 -top-1 h-3.5 w-3.5 text-brand" aria-hidden="true" />
-                        )}
-                        {!iface.gateway && !iface.bridge_ports && iface.iface.startsWith('vnet') && (
-                          <Cloud className="absolute -right-1 -top-1 h-3.5 w-3.5 text-brand" aria-hidden="true" />
-                        )}
-                      </div>
-                      <span className="text-[10px] text-muted-foreground">
-                        {iface.active ? '已启用' : '未启用'}
-                      </span>
-                    </div>
-                    <div className="mt-2 truncate font-mono text-[11px] text-foreground">{iface.iface}</div>
-                    <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                      {typeLabel(iface.type)} · {interfaceAddress(iface)}
-                    </div>
+                    <EthernetPort
+                      className={cn(
+                        'h-7 w-10',
+                        isUplink ? 'text-brand' : iface.active ? 'text-foreground/65' : 'text-muted-foreground/60'
+                      )}
+                      strokeWidth={1.3}
+                    />
+                    <span className="mt-1 max-w-full truncate font-mono text-[10px] text-foreground">{iface.iface}</span>
+                    <span
+                      className={cn(
+                        'mt-0.5 text-[9px] font-medium tracking-wide',
+                        isUplink ? 'text-brand' : 'text-muted-foreground'
+                      )}
+                    >
+                      {role}
+                    </span>
                   </button>
                 )
               })}
@@ -1507,8 +1505,8 @@ export function NodeSettingsView({
           <Button variant="outline" size="icon" onClick={onBack} title="返回节点" aria-label="返回节点">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-border bg-panel text-muted-foreground">
-            <Server className="h-4 w-4" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center text-muted-foreground">
+            <Server className="h-5 w-5" />
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">

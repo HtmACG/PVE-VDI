@@ -113,8 +113,8 @@ src/
 
 Windows 安装包与便携版位于 `release/`：
 
-- `PVE-VDI-1.5.1-x64.exe`：NSIS 安装包
-- `PVE-VDI-Portable-1.5.1-x64.exe`：便携版
+- `PVE-VDI-1.5.2-x64.exe`：NSIS 安装包
+- `PVE-VDI-Portable-1.5.2-x64.exe`：便携版
 
 两个产物均未使用商业代码签名证书，Windows SmartScreen 可能提示“未知发布者”。
 
@@ -264,6 +264,13 @@ pnpm test:appearance
 - 精简设置和节点设置中的重复描述
 - `pnpm typecheck`、`pnpm build`、节点设置、UI、控制台和更新检查通过
 - `win-unpacked` 中验证开机自启开关可写入并移除当前用户登录项
+
+### 1.5.2 验证
+
+- 网络接口概览改为紧凑端口条，按 WAN / LAN / ETH / VLAN / VNET 标注角色
+- 移除网络卡片上错误的小图标叠加
+- 简化节点设置头部图标与网络警告条
+- `pnpm typecheck`、`pnpm build` 与节点设置测试通过
 
 ## License
 
