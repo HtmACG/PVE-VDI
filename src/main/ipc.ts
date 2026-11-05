@@ -1,4 +1,6 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import fs from 'node:fs'
+import path from 'node:path'
 import { IPC } from '@shared/ipc'
 import type {
   ApiResult,
@@ -6,11 +8,17 @@ import type {
   CloneVmInput,
   ConsoleOpenRequest,
   CreateVmInput,
+  IsoUploadInput,
+  IsoUrlInput,
   LoginInput,
   NodeDnsSettings,
   NodeNetworkInput,
   PreferencesPatch,
   VmAction,
+  VmConfigPatchInput,
+  VmDiskAddInput,
+  VmDiskRemoveInput,
+  VmDiskResizeInput,
   VmRef
 } from '@shared/types'
 import { toApiError } from './pve/client'
@@ -74,6 +82,7 @@ export function registerIpc(options: {
       return {
         settings: store.get(),
         session: manager.session,
+        backgrounds: store.getBackgrounds(),
         autoLoginError,
         appVersion: app.getVersion(),
         platform: process.platform,
@@ -96,7 +105,7 @@ export function registerIpc(options: {
       }
       const session = await manager.login(input)
       store.recordLogin(input, session)
-      return { session, settings: store.get() }
+      return { session, settings: store.get(), backgrounds: store.getBackgrounds() }
     })
   })
 
@@ -120,6 +129,30 @@ export function registerIpc(options: {
     return wrap(async () => store.forgetCredentials())
   })
 
+  ipcMain.handle(IPC.pickBackground, async (_event, rawKind: unknown) => {
+    return wrap(async () => {
+      if (rawKind !== 'login' && rawKind !== 'app') throw new Error('背景类型无效。')
+      const win = getWindow()
+      const options = {
+        title: rawKind === 'login' ? '选择登录页背景' : '选择软件背景',
+        properties: ['openFile'] as Array<'openFile'>,
+        filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
+      }
+      const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+      if (result.canceled || !result.filePaths[0]) return null
+      const backgrounds = store.setBackground(rawKind, result.filePaths[0])
+      return { settings: store.get(), backgrounds }
+    })
+  })
+
+  ipcMain.handle(IPC.clearBackground, async (_event, rawKind: unknown) => {
+    return wrap(async () => {
+      if (rawKind !== 'login' && rawKind !== 'app') throw new Error('背景类型无效。')
+      const backgrounds = store.clearBackground(rawKind)
+      return { settings: store.get(), backgrounds }
+    })
+  })
+
   ipcMain.handle(IPC.dashboard, async () => {
     return wrap(async () => manager.getDashboard())
   })
@@ -130,6 +163,49 @@ export function registerIpc(options: {
 
   ipcMain.handle(IPC.nodeSettings, async (_event, rawNode: unknown) => {
     return wrap(async () => manager.getNodeSettings(typeof rawNode === 'string' ? rawNode : ''))
+  })
+
+  ipcMain.handle(IPC.nodeHardware, async (_event, rawNode: unknown, rawRefresh: unknown) => {
+    return wrap(async () =>
+      manager.getNodeHardware(typeof rawNode === 'string' ? rawNode : '', rawRefresh === true)
+    )
+  })
+
+  ipcMain.handle(IPC.isoImages, async (_event, rawNode: unknown) => {
+    return wrap(async () => manager.getIsoImages(typeof rawNode === 'string' ? rawNode : ''))
+  })
+
+  ipcMain.handle(IPC.pickIsoFile, async () => {
+    return wrap(async () => {
+      const win = getWindow()
+      const options = {
+        title: '选择 ISO 镜像',
+        properties: ['openFile'] as Array<'openFile'>,
+        filters: [{ name: 'ISO 镜像', extensions: ['iso', 'img'] }]
+      }
+      const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+      if (result.canceled || !result.filePaths[0]) return null
+      const filePath = result.filePaths[0]
+      const stat = fs.statSync(filePath)
+      return { path: filePath, name: path.basename(filePath), size: stat.size }
+    })
+  })
+
+  ipcMain.handle(IPC.uploadIso, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.uploadIso(asObject<IsoUploadInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.importIsoUrl, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.importIsoUrl(asObject<IsoUrlInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.deleteIso, async (_event, rawNode: unknown, rawStorage: unknown, rawVolid: unknown) => {
+    return wrap(async () => {
+      if (typeof rawNode !== 'string' || typeof rawStorage !== 'string' || typeof rawVolid !== 'string') {
+        throw new Error('ISO 参数无效。')
+      }
+      await manager.deleteIso(rawNode, rawStorage, rawVolid)
+    })
   })
 
   ipcMain.handle(IPC.nodeNetworkSave, async (_event, rawInput: unknown) => {
@@ -209,6 +285,22 @@ export function registerIpc(options: {
       const ref = asObject<VmRef & { action: VmAction }>(rawRef)
       return manager.vmAction(ref)
     })
+  })
+
+  ipcMain.handle(IPC.vmConfigUpdate, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.vmConfigUpdate(asObject<VmConfigPatchInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.vmDiskAdd, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.vmDiskAdd(asObject<VmDiskAddInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.vmDiskResize, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.vmDiskResize(asObject<VmDiskResizeInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.vmDiskRemove, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.vmDiskRemove(asObject<VmDiskRemoveInput>(rawInput)))
   })
 
   ipcMain.handle(IPC.createOptions, async (_event, rawNode: unknown) => {

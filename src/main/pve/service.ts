@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import {
   GUEST_TYPES,
   MAX_REFRESH_INTERVAL,
@@ -16,7 +18,13 @@ import type {
   DashboardData,
   DiskStorageOption,
   HaStatus,
+  IsoImageInfo,
+  IsoImageList,
+  IsoMutationResult,
   IsoOption,
+  IsoStorageInfo,
+  IsoUploadInput,
+  IsoUrlInput,
   LiveMetricsData,
   LiveNodeMetrics,
   MutationResult,
@@ -25,6 +33,7 @@ import type {
   NodeDirectoryStorage,
   NodeDiskInfo,
   NodeDnsSettings,
+  NodeHardwareInfo,
   NodeLogEntry,
   NodeLvmGroup,
   NodeLvmThinPool,
@@ -45,8 +54,14 @@ import type {
   TaskSummary,
   TemplateOption,
   VmAction,
+  VmConfigPatchInput,
   VmDetail,
+  VmDiskAddInput,
+  VmDiskInfo,
+  VmDiskRemoveInput,
+  VmDiskResizeInput,
   VmMetricPoint,
+  VmMutationResult,
   VmOsInfo,
   VmRef,
   VmRuntime,
@@ -55,6 +70,7 @@ import type {
   VmType
 } from '@shared/types'
 import { PveClient, PveError, normalizeServerUrl, validateUpid } from './client'
+import { probeNodeHardware } from './node-hardware'
 import { ConsoleHost, type ConsoleUpstream } from '../console-host'
 import { agentEnabledFromConfig, detectAgentOs, detectVmOs, isGenericLinuxOs } from './os'
 
@@ -69,6 +85,36 @@ interface LoginInput {
 }
 
 const TERMINAL_TASK_STATES = new Set(['stopped'])
+
+const QEMU_CONFIG_KEYS = new Set([
+  'cores',
+  'sockets',
+  'memory',
+  'balloon',
+  'cpu',
+  'machine',
+  'bios',
+  'boot',
+  'agent',
+  'onboot',
+  'numa',
+  'vga',
+  'keyboard',
+  'description',
+  'protection',
+  'tags'
+])
+
+const LXC_CONFIG_KEYS = new Set([
+  'cores',
+  'memory',
+  'swap',
+  'hostname',
+  'description',
+  'onboot',
+  'protection',
+  'tags'
+])
 
 function object(value: unknown): Raw {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Raw) : {}
@@ -577,9 +623,94 @@ function mapNodeDisks(raw: unknown[]): NodeDiskInfo[] {
       used: optionalText(disk.used),
       wearout: typeof disk.wearout === 'number' || typeof disk.wearout === 'string' ? disk.wearout : undefined,
       vendor: optionalText(disk.vendor),
-      rpm: typeof disk.rpm === 'number' || typeof disk.rpm === 'string' ? disk.rpm : undefined
+      rpm: typeof disk.rpm === 'number' || typeof disk.rpm === 'string' ? disk.rpm : undefined,
+      temperature: optionalNumber(disk.temperature),
+      temperatureMax: optionalNumber(disk.temperature_max),
+      temperatureCritical: optionalNumber(disk.temperature_critical)
     }
   })
+}
+
+function smartNumber(value: unknown): number | undefined {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''))
+  if (!Number.isFinite(parsed) || parsed < -40 || parsed > 200) return undefined
+  return Math.round(parsed * 10) / 10
+}
+
+function smartTemperature(raw: Raw): Pick<NodeDiskInfo, 'temperature' | 'temperatureMax' | 'temperatureCritical'> {
+  const attributes = array(raw.attributes).map(object)
+  for (const attribute of attributes) {
+    const id = number(attribute.id)
+    const name = text(attribute.name)
+    if (id !== 194 && id !== 190 && !/temperature/i.test(name)) continue
+    const rawValue = text(attribute.raw)
+    const valueMatch = /(-?\d+(?:\.\d+)?)/.exec(rawValue)
+    const value = valueMatch ? smartNumber(valueMatch[1]) : undefined
+    if (value === undefined) continue
+    const range = /Min\/Max\s+(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)/i.exec(rawValue)
+    return {
+      temperature: value,
+      temperatureMax: range ? smartNumber(range[2]) : smartNumber(attribute.threshold)
+    }
+  }
+
+  const smartText = text(raw.text)
+  if (!smartText) return {}
+  const patterns = [
+    /(?:^|\n)\s*(?:Composite\s+)?Temperature(?:\s+Sensor\s+\d+)?:\s*(-?\d+(?:\.\d+)?)/i,
+    /Current Drive Temperature:\s*(-?\d+(?:\.\d+)?)/i,
+    /Drive Temperature:\s*(-?\d+(?:\.\d+)?)/i
+  ]
+  for (const pattern of patterns) {
+    const match = pattern.exec(smartText)
+    if (!match) continue
+    const value = smartNumber(match[1])
+    if (value !== undefined) return { temperature: value }
+  }
+  return {}
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return []
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const index = cursor
+      cursor += 1
+      if (index >= items.length) return
+      results[index] = await mapper(items[index])
+    }
+  })
+  await Promise.all(workers)
+  return results
+}
+
+async function attachDiskTemperatures(
+  client: PveClient,
+  node: string,
+  disks: NodeDiskInfo[]
+): Promise<{ disks: NodeDiskInfo[]; warnings: string[] }> {
+  const warnings: string[] = []
+  const enriched = await mapWithConcurrency(disks.slice(0, 24), 4, async (disk) => {
+    if (!/^\/dev\/[A-Za-z0-9/]+$/.test(disk.devpath)) return disk
+    try {
+      const smart = await client.request<Raw>(`/nodes/${encodeURIComponent(node)}/disks/smart`, {
+        params: { disk: disk.devpath },
+        timeoutMs: 9_000
+      })
+      const temperature = smartTemperature(object(smart))
+      return { ...disk, ...temperature }
+    } catch {
+      warnings.push(`${disk.devpath} 温度读取失败`)
+      return disk
+    }
+  })
+  return { disks: enriched, warnings }
 }
 
 function validateNetworkInterfaceName(value: string): string {
@@ -587,6 +718,102 @@ function validateNetworkInterfaceName(value: string): string {
     throw new PveError('VALIDATION', '网络接口名称格式无效。')
   }
   return value
+}
+
+function validateStorageName(value: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(value)) {
+    throw new PveError('VALIDATION', '存储名称格式无效。')
+  }
+  return value
+}
+
+function validateIsoVolume(value: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*:iso\/[^\\/\r\n\u0000-\u001f]+$/.test(value)) {
+    throw new PveError('VALIDATION', 'ISO 卷标识格式无效。')
+  }
+  return value
+}
+
+function parseDiskEntry(value: string | number): {
+  volume: string
+  storage?: string
+  isCdrom: boolean
+  options: string[]
+} {
+  const tokens = String(value)
+    .split(',')
+    .map((token) => token.trim())
+    .filter(Boolean)
+  const volume = tokens.shift() ?? ''
+  const isCdrom = tokens.some((token) => /^media=cdrom$/i.test(token))
+  const storage = volume.includes(':') ? volume.slice(0, volume.indexOf(':')) : undefined
+  return { volume, storage, isCdrom, options: tokens }
+}
+
+function nextDiskKey(config: Raw, bus: 'scsi' | 'virtio' | 'sata'): string {
+  const max = bus === 'sata' ? 5 : bus === 'virtio' ? 15 : 30
+  for (let index = 0; index <= max; index += 1) {
+    const key = `${bus}${index}`
+    if (config[key] === undefined) return key
+  }
+  throw new PveError('VALIDATION', `${bus.toUpperCase()} 总线没有空闲位置。`)
+}
+
+function validateDiskKey(type: VmType, value: string): string {
+  const allowed =
+    type === 'qemu' ? /^(scsi|virtio|sata|ide)\d+$/ : /^(rootfs|mp\d+)$/
+  if (!allowed.test(value)) throw new PveError('VALIDATION', '磁盘标识无效。')
+  return value
+}
+
+function validateVmConfigPatch(
+  type: VmType,
+  patch: Record<string, string | number>
+): Record<string, string | number> {
+  const allowed = type === 'qemu' ? QEMU_CONFIG_KEYS : LXC_CONFIG_KEYS
+  const form: Record<string, string | number> = {}
+  for (const [key, value] of Object.entries(patch)) {
+    if (!allowed.has(key)) {
+      throw new PveError('VALIDATION', `不支持的虚拟机配置项：${key}`)
+    }
+    if (key === 'cores') {
+      const parsed = number(value, 0)
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 128) {
+        throw new PveError('VALIDATION', 'CPU 核心数必须在 1-128 之间。')
+      }
+      form[key] = parsed
+    } else if (key === 'sockets') {
+      const parsed = number(value, 0)
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 8) {
+        throw new PveError('VALIDATION', 'CPU 插槽数必须在 1-8 之间。')
+      }
+      form[key] = parsed
+    } else if (key === 'memory' || key === 'balloon' || key === 'swap') {
+      const parsed = number(value, -1)
+      const min = key === 'balloon' || key === 'swap' ? 0 : 16
+      if (!Number.isInteger(parsed) || parsed < min || parsed > 1_048_576) {
+        throw new PveError('VALIDATION', '内存配置值无效。')
+      }
+      form[key] = parsed
+    } else if (key === 'agent' || key === 'onboot' || key === 'numa' || key === 'protection') {
+      const truthy = value === 1 || value === '1'
+      const falsy = value === 0 || value === '0'
+      if (!truthy && !falsy) throw new PveError('VALIDATION', `配置项 ${key} 必须是布尔值。`)
+      form[key] = truthy ? 1 : 0
+    } else if (key === 'bios') {
+      const textValue = text(value)
+      if (textValue !== 'seabios' && textValue !== 'ovmf') {
+        throw new PveError('VALIDATION', '固件类型无效。')
+      }
+      form[key] = textValue
+    } else {
+      const textValue = text(value)
+      const limit = key === 'description' ? 4096 : 256
+      if (textValue.length > limit) throw new PveError('VALIDATION', `配置项 ${key} 过长。`)
+      form[key] = textValue
+    }
+  }
+  return form
 }
 
 function buildNetworkForm(input: NodeNetworkInput): Record<string, string> {
@@ -625,6 +852,7 @@ export class PveManager {
   private profile: SessionProfile | null = null
   private lastDashboard: DashboardData | null = null
   private lastDashboardAt = 0
+  private readonly hardwareCache = new Map<string, { data: NodeHardwareInfo; at: number }>()
   private readonly consoleHost = new ConsoleHost()
   private readonly osCache = new Map<
     number,
@@ -671,6 +899,7 @@ export class PveManager {
       this.client = nextClient
       this.lastDashboard = null
       this.lastDashboardAt = 0
+      this.hardwareCache.clear()
       this.osCache.clear()
       this.profile = {
         serverUrl,
@@ -692,6 +921,7 @@ export class PveManager {
     this.profile = null
     this.lastDashboard = null
     this.lastDashboardAt = 0
+    this.hardwareCache.clear()
     this.osCache.clear()
   }
 
@@ -862,7 +1092,6 @@ export class PveManager {
       client.request<unknown[]>(`${base}/certificates/info`),
       client.request<unknown>(`${base}/apt/repositories`),
       client.request<unknown>(`${base}/firewall/options`),
-      client.request<unknown[]>(`${base}/disks/list`),
       client.request<unknown>(`${base}/disks/lvm`),
       client.request<unknown[]>(`${base}/disks/lvmthin`),
       client.request<unknown[]>(`${base}/disks/directory`),
@@ -883,11 +1112,10 @@ export class PveManager {
     const certificatesRaw = take<unknown[]>(4, '证书', [])
     const repositoriesRaw = take<unknown>(5, '存储库', null)
     const firewallRaw = take<unknown>(6, '防火墙', null)
-    const disksRaw = take<unknown[]>(7, '磁盘', [])
-    const lvmRaw = take<unknown>(8, 'LVM', null)
-    const lvmthinRaw = take<unknown[]>(9, 'LVM-Thin', [])
-    const directoryRaw = take<unknown[]>(10, '目录存储', [])
-    const zfsRaw = take<unknown[]>(11, 'ZFS', [])
+    const lvmRaw = take<unknown>(7, 'LVM', null)
+    const lvmthinRaw = take<unknown[]>(8, 'LVM-Thin', [])
+    const directoryRaw = take<unknown[]>(9, '目录存储', [])
+    const zfsRaw = take<unknown[]>(10, 'ZFS', [])
 
     const dnsSource = dnsRaw && typeof dnsRaw === 'object' ? object(dnsRaw) : {}
     const timeSource = timeRaw && typeof timeRaw === 'object' ? object(timeRaw) : {}
@@ -924,13 +1152,192 @@ export class PveManager {
       repositories:
         repositoriesRaw && typeof repositoriesRaw === 'object' ? mapNodeRepositories(object(repositoriesRaw)) : null,
       firewallOptions: Object.keys(firewallSource).length ? { ...firewallSource } : null,
-      disks: mapNodeDisks(array(disksRaw)),
       lvm: mapLvmGroups(lvmRaw),
       lvmthin: mapLvmThinPools(lvmthinRaw),
       directories: mapDirectoryStorages(directoryRaw),
       zfs: mapZfsPools(zfsRaw),
       warnings
     }
+  }
+
+  async getNodeHardware(nodeInput: string, refresh = false): Promise<NodeHardwareInfo> {
+    const node = validateNode(nodeInput)
+    const cached = this.hardwareCache.get(node)
+    if (!refresh && cached && Date.now() - cached.at < 60_000) return cached.data
+
+    const client = this.requireClient()
+    const base = `/nodes/${encodeURIComponent(node)}`
+    const [statusResult, disksResult] = await Promise.all([
+      client.request<Raw>(`${base}/status`).catch(() => null),
+      client.request<unknown[]>(`${base}/disks/list`).catch(() => null)
+    ])
+    const status = object(statusResult)
+    const cpuinfo = object(status.cpuinfo)
+    const disks = mapNodeDisks(array(disksResult))
+    const warnings: string[] = []
+    if (!disksResult) warnings.push('磁盘列表读取失败')
+    if (!statusResult) warnings.push('CPU 信息读取失败')
+
+    const probePromise = probeNodeHardware(client, node).catch((error: unknown) => {
+      const detail = error instanceof Error ? error.message : String(error)
+      warnings.push(`服务器型号与 CPU 温度：${detail}`)
+      return null
+    })
+    const smarted = await attachDiskTemperatures(client, node, disks)
+    warnings.push(...smarted.warnings)
+    const probe = await probePromise
+    if (probe) warnings.push(...probe.warnings)
+
+    const data: NodeHardwareInfo = {
+      node,
+      manufacturer: probe?.manufacturer,
+      productName: probe?.productName,
+      productVersion: probe?.productVersion,
+      boardName: probe?.boardName,
+      cpuModel: text(cpuinfo.model) || undefined,
+      cpuTemperature: probe?.cpuTemperature,
+      cpuTemperatureMax: probe?.cpuTemperatureMax,
+      cpuTemperatureCritical: probe?.cpuTemperatureCritical,
+      temperatures: probe?.temperatures ?? [],
+      disks: smarted.disks,
+      warnings,
+      collectedAt: Date.now()
+    }
+    this.hardwareCache.set(node, { data, at: Date.now() })
+    return data
+  }
+
+  async getIsoImages(nodeInput: string): Promise<IsoImageList> {
+    const node = validateNode(nodeInput)
+    const client = this.requireClient()
+    const base = `/nodes/${encodeURIComponent(node)}`
+    const rawStorages = await client.request<unknown[]>(`${base}/storage`)
+    const storages = array(rawStorages)
+      .map(object)
+      .map((entry) => {
+        const content = text(entry.content)
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+        return {
+          node,
+          storage: text(entry.storage),
+          type: text(entry.type, 'dir'),
+          avail: number(entry.avail),
+          total: number(entry.total),
+          active: boolean(entry.active),
+          content
+        }
+      })
+      .filter((entry) => entry.storage && entry.content.includes('iso'))
+      .sort((a, b) => a.storage.localeCompare(b.storage))
+
+    const imageResults = await Promise.allSettled(
+      storages
+        .filter((entry) => entry.active)
+        .map(async (storage) => {
+          const raw = await client.request<unknown[]>(
+            `${base}/storage/${encodeURIComponent(storage.storage)}/content?content=iso`,
+            { timeoutMs: 20_000 }
+          )
+          return array(raw)
+            .map(object)
+            .filter((item) => text(item.content) === 'iso' || text(item.volid).includes(':iso/'))
+            .map<IsoImageInfo>((item) => {
+              const volid = text(item.volid)
+              return {
+                node,
+                storage: storage.storage,
+                volid,
+                name: volid.split('/').pop() || volid,
+                size: number(item.size),
+                format: optionalText(item.format),
+                ctime: optionalNumber(item.ctime)
+              }
+            })
+        })
+    )
+    const images = imageResults
+      .flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+      .filter((image) => image.volid)
+      .sort((a, b) => a.storage.localeCompare(b.storage) || a.name.localeCompare(b.name))
+
+    return {
+      node,
+      storages: storages.map(({ content: _content, ...storage }) => storage),
+      images
+    }
+  }
+
+  async uploadIso(input: IsoUploadInput): Promise<IsoMutationResult> {
+    const node = validateNode(input.node)
+    const storage = validateStorageName(input.storage)
+    const filePath = path.resolve(input.filePath)
+    if (!/\.(iso|img)$/i.test(filePath)) {
+      throw new PveError('VALIDATION', '仅支持上传 .iso 或 .img 文件。')
+    }
+    let stat: fs.Stats
+    try {
+      stat = fs.statSync(filePath)
+    } catch {
+      throw new PveError('VALIDATION', '无法读取待上传的 ISO 文件。')
+    }
+    if (!stat.isFile()) throw new PveError('VALIDATION', '待上传路径不是文件。')
+    const client = this.requireClient()
+    const upid = await client.uploadStorageFile({ node, storage, content: 'iso', filePath })
+    return {
+      message: 'ISO 上传任务已提交。',
+      upid: upid ?? undefined
+    }
+  }
+
+  async importIsoUrl(input: IsoUrlInput): Promise<IsoMutationResult> {
+    const node = validateNode(input.node)
+    const storage = validateStorageName(input.storage)
+    let url: URL
+    try {
+      url = new URL(input.url)
+    } catch {
+      throw new PveError('VALIDATION', 'ISO 下载地址格式无效。')
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      throw new PveError('VALIDATION', 'ISO 下载地址只支持 HTTP 或 HTTPS。')
+    }
+    if (input.url.length > 2048) throw new PveError('VALIDATION', 'ISO 下载地址过长。')
+    const filename = input.filename.trim()
+    if (!filename || filename.length > 200 || /[\\/\u0000-\u001f]/.test(filename)) {
+      throw new PveError('VALIDATION', 'ISO 文件名无效。')
+    }
+    if (input.checksum && !input.checksumAlgorithm) {
+      throw new PveError('VALIDATION', '填写校验值时必须选择校验算法。')
+    }
+    const client = this.requireClient()
+    const form: Record<string, string | number> = {
+      url: input.url,
+      filename,
+      content: 'iso',
+      'verify-certificates': input.verifyCertificates ? 1 : 0
+    }
+    if (input.checksum) {
+      form.checksum = input.checksum
+      form['checksum-algorithm'] = input.checksumAlgorithm ?? 'sha256'
+    }
+    const upid = await client.request<string>(
+      `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/download-url`,
+      { method: 'POST', form, timeoutMs: 30_000 }
+    )
+    return { message: 'ISO 下载任务已提交。', upid: upid || undefined }
+  }
+
+  async deleteIso(nodeInput: string, storageInput: string, volidInput: string): Promise<void> {
+    const node = validateNode(nodeInput)
+    const storage = validateStorageName(storageInput)
+    const volid = validateIsoVolume(volidInput)
+    const client = this.requireClient()
+    await client.request(
+      `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content/${encodeURIComponent(volid)}`,
+      { method: 'DELETE', timeoutMs: 30_000 }
+    )
   }
 
   async saveNodeNetwork(input: NodeNetworkInput): Promise<NodeNetworkActionResult> {
@@ -1165,17 +1572,195 @@ export class PveManager {
     }
 
     const name = text(config.name, text(status.name, `${ref.type === 'qemu' ? 'VM' : 'CT'} ${ref.vmid}`))
+    const normalizedRef: VmRef = {
+      node: validateNode(ref.node),
+      type: validateVmType(ref.type),
+      vmid: validateVmid(ref.vmid)
+    }
+    const disks = await this.mapVmDisks(client, normalizedRef, config)
     return {
-      ref: { node: validateNode(ref.node), type: ref.type, vmid: validateVmid(ref.vmid) },
+      ref: normalizedRef,
       name,
       os: detectVmOs(ref.type, config, name),
       runtime,
       config: sanitizeConfig(config),
+      disks,
       snapshots: mapSnapshots(array(rawSnapshots)),
       tasks: array(rawTasks).map(object).map(mapTask).slice(0, 12),
       metrics: mapVmMetrics(array(rawMetrics)),
       agentInterfaces,
       agentError
+    }
+  }
+
+  private async mapVmDisks(client: PveClient, ref: VmRef, config: Raw): Promise<VmDiskInfo[]> {
+    const entries = Object.entries(config).filter(
+      ([key]) => /^(scsi|sata|virtio|ide)\d+$/.test(key) || key === 'efidisk0' || key === 'tpmstate0'
+    )
+    const disks = await Promise.all(
+      entries.map(async ([key, value]) => {
+        const parsed = parseDiskEntry(value as string | number)
+        let size: number | undefined
+        let format: string | undefined
+        if (
+          parsed.storage &&
+          parsed.volume.includes(':') &&
+          !parsed.isCdrom &&
+          parsed.volume !== 'none' &&
+          !parsed.volume.startsWith('/dev/')
+        ) {
+          try {
+            const info = await client.request<Raw>(
+              `/nodes/${encodeURIComponent(ref.node)}/storage/${encodeURIComponent(parsed.storage)}/content/${encodeURIComponent(parsed.volume)}`,
+              { timeoutMs: 5_000 }
+            )
+            size = optionalNumber(object(info).size)
+            format = optionalText(object(info).format)
+          } catch {
+            // Some volumes (for example snapshots or mapped devices) do not
+            // expose a storage content record; size simply stays unknown.
+          }
+        }
+        return {
+          key,
+          volume: parsed.volume,
+          storage: parsed.storage,
+          size,
+          format,
+          isCdrom: parsed.isCdrom,
+          options: parsed.options
+        }
+      })
+    )
+    return disks.sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }))
+  }
+
+  private async requireVmStopped(client: PveClient, ref: VmRef): Promise<void> {
+    const status = await client.request<Raw>(`${vmBase(ref)}/status/current`, { timeoutMs: 10_000 })
+    if (text(status.status) === 'running') {
+      throw new PveError('VM_RUNNING', '请先关闭虚拟机，再修改配置或磁盘。')
+    }
+  }
+
+  async vmConfigUpdate(input: VmConfigPatchInput): Promise<VmMutationResult> {
+    const ref: VmRef = {
+      node: validateNode(input.node),
+      type: validateVmType(input.type),
+      vmid: validateVmid(input.vmid)
+    }
+    const client = this.requireClient()
+    await this.requireVmStopped(client, ref)
+    if (!input.patch || typeof input.patch !== 'object' || Array.isArray(input.patch)) {
+      throw new PveError('VALIDATION', '虚拟机配置参数无效。')
+    }
+    if (input.digest !== undefined && typeof input.digest !== 'string') {
+      throw new PveError('VALIDATION', '配置摘要参数无效。')
+    }
+    const form = validateVmConfigPatch(ref.type, input.patch)
+    if (input.digest) form.digest = input.digest
+    await client.request(`${vmBase(ref)}/config`, {
+      method: 'PUT',
+      form,
+      timeoutMs: 30_000
+    })
+    return { message: '虚拟机配置已更新。' }
+  }
+
+  async vmDiskAdd(input: VmDiskAddInput): Promise<VmMutationResult> {
+    const ref: VmRef = {
+      node: validateNode(input.node),
+      type: 'qemu',
+      vmid: validateVmid(input.vmid)
+    }
+    const client = this.requireClient()
+    await this.requireVmStopped(client, ref)
+    const storage = validateStorageName(input.storage)
+    if (!Number.isInteger(input.sizeGiB) || input.sizeGiB < 1 || input.sizeGiB > 4096) {
+      throw new PveError('VALIDATION', '磁盘大小必须在 1-4096 GiB 之间。')
+    }
+    if (input.bus !== 'scsi' && input.bus !== 'virtio' && input.bus !== 'sata') {
+      throw new PveError('VALIDATION', '不支持的磁盘总线类型。')
+    }
+    const config = object(await client.request<Raw>(`${vmBase(ref)}/config`, { timeoutMs: 10_000 }))
+    const disk = nextDiskKey(config, input.bus)
+    const form: Record<string, string | number> = {
+      [disk]: `${storage}:${input.sizeGiB}`
+    }
+    if (input.bus === 'scsi' && !text(config.scsihw)) form.scsihw = 'virtio-scsi-single'
+    if (text(config.digest)) form.digest = text(config.digest)
+    await client.request(`${vmBase(ref)}/config`, {
+      method: 'PUT',
+      form,
+      timeoutMs: 30_000
+    })
+    return { message: `已添加磁盘 ${disk}。`, disk }
+  }
+
+  async vmDiskResize(input: VmDiskResizeInput): Promise<VmMutationResult> {
+    const ref: VmRef = {
+      node: validateNode(input.node),
+      type: validateVmType(input.type),
+      vmid: validateVmid(input.vmid)
+    }
+    const client = this.requireClient()
+    await this.requireVmStopped(client, ref)
+    const disk = validateDiskKey(ref.type, input.disk)
+    const size = input.size.trim()
+    if (!/^\+?\d+(\.\d+)?[KMGT]?$/.test(size)) {
+      throw new PveError('VALIDATION', '磁盘容量格式无效，例如 64G 或 +10G。')
+    }
+    const upid = await client.request<string>(`${vmBase(ref)}/resize`, {
+      method: 'PUT',
+      form: { disk, size },
+      timeoutMs: 30_000
+    })
+    return { message: '磁盘扩容任务已提交。', upid: upid || undefined }
+  }
+
+  async vmDiskRemove(input: VmDiskRemoveInput): Promise<VmMutationResult> {
+    const ref: VmRef = {
+      node: validateNode(input.node),
+      type: validateVmType(input.type),
+      vmid: validateVmid(input.vmid)
+    }
+    const client = this.requireClient()
+    await this.requireVmStopped(client, ref)
+    if (typeof input.destroy !== 'boolean') {
+      throw new PveError('VALIDATION', '磁盘删除参数无效。')
+    }
+    const disk = validateDiskKey(ref.type, input.disk)
+    if (ref.type === 'lxc' && disk === 'rootfs') {
+      throw new PveError('VALIDATION', '容器 rootfs 不能移除。')
+    }
+    const config = object(await client.request<Raw>(`${vmBase(ref)}/config`, { timeoutMs: 10_000 }))
+    if (config[disk] === undefined) {
+      throw new PveError('NOT_FOUND', `磁盘 ${disk} 不存在。`)
+    }
+    const parsed = parseDiskEntry(config[disk] as string | number)
+    const form: Record<string, string | number> = { delete: disk }
+    if (text(config.digest)) form.digest = text(config.digest)
+    await client.request(`${vmBase(ref)}/config`, {
+      method: 'PUT',
+      form,
+      timeoutMs: 30_000
+    })
+
+    let volumeDeleted = false
+    if (input.destroy && parsed.storage && parsed.volume && !parsed.isCdrom && parsed.volume !== 'none') {
+      try {
+        await client.request(
+          `/nodes/${encodeURIComponent(ref.node)}/storage/${encodeURIComponent(parsed.storage)}/content/${encodeURIComponent(parsed.volume)}`,
+          { method: 'DELETE', timeoutMs: 30_000 }
+        )
+        volumeDeleted = true
+      } catch (error) {
+        throw new PveError('DISK_DELETE_FAILED', '磁盘配置已移除，但删除数据卷失败。', {
+          detail: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }
+    return {
+      message: volumeDeleted ? '磁盘已移除，数据卷已删除。' : '磁盘配置已移除，数据卷仍保留在存储中。'
     }
   }
 

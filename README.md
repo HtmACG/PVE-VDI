@@ -19,8 +19,9 @@
 
 ### 节点设置
 
-- 从节点卡片进入独立设置页，采用一级分组 + 二级子导航的双侧边栏布局，不嵌套设置卡片
-- 一级分组为“系统 / 更新 / 防火墙 / 磁盘”，二级导航随分组切换
+- 从节点卡片进入独立设置页，使用与“设置”页一致的单页卡片布局，不再使用双侧边栏
+- **硬件**：服务器型号、主板、CPU 型号与 CPU 温度、温度传感器；磁盘型号、容量、健康状态与 SMART 温度
+- 服务器型号、CPU 温度与传感器通过一次性的 PVE termproxy 终端会话读取 DMI / hwmon / lm-sensors，需要 `root@pam` 与 `Sys.Console` 权限；脚本固定且只读，连接完成后立即关闭
 - **网络**：读取物理网卡、网桥、VLAN、Bond；创建、编辑、删除接口；写入待应用配置后可应用或还原，应用前有中断提示
 - 网络接口支持可视化端口卡片，可在设置中切换“卡片 / 列表”展示
 - DNS 搜索域与三组上游服务器编辑
@@ -36,6 +37,8 @@
 - CPU、内存、磁盘、网络 I/O、运行时长、标签、模板标记
 - 电源操作：启动、ACPI 关机、强制停止、重启、重置、挂起、恢复
 - 破坏性操作二次确认；操作下发后自动刷新列表与详情
+- **关机配置**：虚拟机关机后可修改 CPU 核心 / 插槽、内存、Balloon、CPU 类型、机器类型、固件、显示设备、启动顺序和 Guest Agent 等配置
+- **磁盘管理**：关机后可添加 SCSI / VirtIO / SATA 磁盘、扩容现有磁盘、移除磁盘，并可选择同时删除底层数据卷；运行状态会禁用操作并由主进程再次校验
 - 详情面板包含：
   - 运行状态、QMP 状态、HA、Guest Agent、PID、压力指标
   - 1 小时 CPU / 内存遥测
@@ -45,18 +48,27 @@
 - **内置控制台**：
   - QEMU 虚拟机使用 **noVNC**，支持 Ctrl+Alt+Del、剪贴板双向读写、适应窗口、全屏与重连
   - LXC 容器和节点 Shell 使用 **xterm.js**，支持流式输出、终端尺寸同步、复制选区与 30 秒心跳
+  - 控制台工具栏位于标题栏“已连接”旁，使用无边框、无底色的图标按钮
   - noVNC 与 xterm.js 均在**独立原生窗口**中打开，可单独移动、最小化、最大化或关闭；窗口使用自定义标题栏
   - 控制台通过主进程建立回环 WebSocket 桥，Renderer 不直接连接 PVE TLS，也不持久化控制台票据；关闭窗口会结束对应控制台会话
+
+### 镜像与磁盘
+
+- 新增“镜像”页面，按节点列出启用 ISO 内容类型的存储与镜像
+- 支持上传本地 ISO / IMG、从 HTTP(S) URL 导入、删除 ISO；上传使用主进程流式 multipart，不在内存中加载整个镜像
+- URL 导入支持 SHA-1 / SHA-256 等校验值和自签名 HTTPS 证书开关
+- 虚拟机详情“硬件”页展示磁盘容量、格式和 CD-ROM 标记，并提供添加、扩容、移除操作
 
 ### 界面与外观
 
 - 登录页使用独立插画，支持深色 / 浅色主题与自定义强调色
+- 支持自定义登录页背景和软件主界面背景，背景图片保存在本机应用数据目录，可在设置中选择、预览和清除
 - 界面字体：Inter、Windows 系统字体、JetBrains Mono 或自定义 CSS `font-family`
 - 强调色：工业橙、信号蓝、青绿、紫罗兰、玫红、琥珀六种预设，也支持输入任意 `#RRGGBB`
 - 字体与强调色会持久化到本地设置，并在新打开的控制台窗口中应用
 - 配色只调整强调色，不改动状态色和资源预警色，避免降低可读性
 - “可视化设置”可切换网络接口卡片 / 列表展示
-- 空内容、无法连接等状态使用 Vue 3 生态 Element Plus 的官方空状态 SVG 插图；第三方图形来源见 [NOTICE](NOTICE)
+- 空内容使用 Vue 3 生态 Element Plus 的官方空状态 SVG 插图；连接失败改用网络断开图标，不再误用空状态插图；第三方图形来源见 [NOTICE](NOTICE)
 - 设置页提供 GitHub Release / Tag 更新检查、更新日志、开发者信息
 - **开机自启**：登录 Windows 后自动启动 PVE VDI，仅注册当前用户登录项，不保存密码
 
@@ -91,8 +103,9 @@ src/
     settings.ts           本地设置、字体 / 强调色与 DPAPI 凭据
     console-host.ts       127.0.0.1 回环 WebSocket 控制台桥
     console-windows.ts    独立控制台窗口与窗口级会话清理
-    pve/client.ts         PVE API 客户端（ticket + CSRF）
+    pve/client.ts         PVE API 客户端（ticket + CSRF + 流式上传）
     pve/os.ts             VM 操作系统识别与 Guest Agent 补充
+    pve/node-hardware.ts  一次性 termproxy 会话读取 DMI / CPU / 传感器
     pve/service.ts        集群 / VM / 控制台会话与实时资源采样
   preload/index.ts        最小化 DesktopApi 桥
   renderer/               React 界面
@@ -101,7 +114,7 @@ src/
     src/components/os-icon.tsx 操作系统图标
     src/lib/appearance.ts 字体 / 强调色运行时应用
     src/hooks/            仪表盘与 2 秒实时资源采样
-    src/components/views/ 总览 / 虚拟机 / 节点 / 集群 / 任务 / 设置
+    src/components/views/ 总览 / 虚拟机 / 节点 / 镜像 / 集群 / 任务 / 设置
   shared/
     appearance.ts         字体预设、强调色校验与对比色计算
     types.ts / ipc.ts     共享类型与 IPC 通道
@@ -113,8 +126,8 @@ src/
 
 Windows 安装包与便携版位于 `release/`：
 
-- `PVE-VDI-1.5.2-x64.exe`：NSIS 安装包
-- `PVE-VDI-Portable-1.5.2-x64.exe`：便携版
+- `PVE-VDI-1.7.0-x64.exe`：NSIS 安装包
+- `PVE-VDI-Portable-1.7.0-x64.exe`：便携版
 
 两个产物均未使用商业代码签名证书，Windows SmartScreen 可能提示“未知发布者”。
 
@@ -264,6 +277,24 @@ pnpm test:appearance
 - 精简设置和节点设置中的重复描述
 - `pnpm typecheck`、`pnpm build`、节点设置、UI、控制台和更新检查通过
 - `win-unpacked` 中验证开机自启开关可写入并移除当前用户登录项
+
+### 1.7.0 验证
+
+- 网络编辑弹窗改为分组式表单，固定底部操作栏
+- 登录页 / 主界面背景可设置并持久化
+- 镜像页支持列表、URL 导入、本地流式上传和删除
+- 虚拟机关机配置编辑、磁盘添加 / 扩容 / 移除通过主进程状态校验
+- `pnpm typecheck`、`pnpm build` 与本地 PVE Mock 界面截图验证通过
+
+### 1.6.0 验证
+
+- 连接失败提示改用网络断开图标，移除误用的空状态插图
+- 标题栏刷新按钮恢复图标与同步旋转状态
+- 控制台工具栏移至标题栏“已连接”旁，图标按钮移除边框和底色
+- 设置页与节点设置中的图标容器移除多余边框和底色
+- 节点设置改为与软件设置一致的单页卡片布局，移除双侧边栏
+- 新增服务器型号、CPU 温度、温度传感器与磁盘型号 / SMART 温度
+- `pnpm typecheck`、`pnpm build` 与本地界面截图验证通过
 
 ### 1.5.2 验证
 

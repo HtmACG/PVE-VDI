@@ -4,6 +4,7 @@ import type { ConsoleWindowBootstrap } from '@shared/types'
 import { Button } from '@renderer/components/ui/button'
 import { WindowButtons } from '@renderer/components/layout/window-buttons'
 import { Toaster } from '@renderer/components/ui/sonner'
+import { TooltipProvider } from '@renderer/components/ui/tooltip'
 import { ConsoleView } from '@renderer/components/console/console-view'
 import { errorDetail, unwrap } from '@renderer/lib/api'
 import { applyAppearance } from '@renderer/lib/appearance'
@@ -32,13 +33,13 @@ export function ConsoleWindowApp(): React.JSX.Element {
 
   if (bootstrap) {
     return (
-      <>
+      <TooltipProvider delayDuration={250}>
         <ConsoleView
           request={bootstrap.request}
           onClose={() => window.pvevdi.windowClose()}
         />
         <Toaster theme={bootstrap.settings.theme} />
-      </>
+      </TooltipProvider>
     )
   }
 

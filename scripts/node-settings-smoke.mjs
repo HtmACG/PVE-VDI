@@ -82,36 +82,36 @@ try {
   await win.getByRole('button', { name: '取消', exact: true }).click()
   await win.waitForTimeout(300)
 
-  const groups = {
-    system: ['dns', 'time', 'certificates', 'hostname', 'options'],
-    updates: ['repositories'],
-    firewall: ['firewall-options'],
-    disks: ['lvm', 'lvmthin', 'directory', 'zfs']
-  }
-  for (const [group, sections] of Object.entries(groups)) {
-    await win.locator(`[data-group="${group}"]`).click()
-    await win.waitForTimeout(250)
-    for (const section of sections) {
-      await win.locator(`[data-section="${section}"]`).click()
-      await win.waitForTimeout(350)
-      if (section === 'zfs') {
-        await win.screenshot({ path: path.join(screenshotDir, 'node-empty.png'), fullPage: true })
-      }
-      console.log('opened', section)
-    }
+  const sections = [
+    'hardware',
+    'network',
+    'dns',
+    'time',
+    'hostname',
+    'options',
+    'disks',
+    'storage',
+    'certificates',
+    'repositories',
+    'firewall-options',
+    'logs'
+  ]
+  for (const section of sections) {
+    const card = win.locator(`[data-section="${section}"]`)
+    await card.scrollIntoViewIfNeeded()
+    await win.waitForTimeout(200)
+    console.log('checked', section)
   }
 
-  await win.locator('[data-group="system"]').click()
-  await win.locator('[data-section="syslog"]').click()
-  await win.waitForSelector('text=系统日志', { timeout: 10_000 })
-  await win.waitForTimeout(2500)
-  console.log('opened syslog')
+  await win.locator('[data-section="hardware"]').scrollIntoViewIfNeeded()
+  await win.waitForTimeout(1500)
+  await win.screenshot({ path: path.join(screenshotDir, 'node-hardware.png') })
 
-  await win.locator('[data-group="firewall"]').click()
-  await win.locator('[data-section="firewall-log"]').click()
-  await win.waitForSelector('text=防火墙日志', { timeout: 10_000 })
+  await win.locator('[data-section="logs"]').scrollIntoViewIfNeeded()
+  await win.waitForTimeout(500)
+  await win.getByRole('button', { name: '防火墙', exact: true }).click()
   await win.waitForTimeout(1200)
-  console.log('opened firewall-log')
+  console.log('opened firewall log')
 
   if (errors.length) {
     console.error(errors.join('\n'))

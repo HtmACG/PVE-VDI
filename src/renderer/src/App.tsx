@@ -3,6 +3,8 @@ import { AlertTriangle, RefreshCw } from 'lucide-react'
 import type {
   ApiError,
   AppSettings,
+  BackgroundImages,
+  BackgroundPickResult,
   BootstrapData,
   ConsoleOpenRequest,
   DashboardData,
@@ -26,6 +28,7 @@ import { VmsView } from '@renderer/components/views/vms-view'
 import { NodesView } from '@renderer/components/views/nodes-view'
 import { NodeSettingsView } from '@renderer/components/views/node-settings-view'
 import { ClusterView } from '@renderer/components/views/cluster-view'
+import { ImagesView } from '@renderer/components/views/images-view'
 import { TasksView } from '@renderer/components/views/tasks-view'
 import { SettingsView } from '@renderer/components/views/settings-view'
 import { CreateVmDialog } from '@renderer/components/vms/create-vm-dialog'
@@ -48,7 +51,6 @@ import {
 import { TooltipProvider } from '@renderer/components/ui/tooltip'
 import { Toaster } from '@renderer/components/ui/sonner'
 import { errorDetail, unwrap } from '@renderer/lib/api'
-import { EmptyIllustration } from '@renderer/components/common'
 import { applyAppearance } from '@renderer/lib/appearance'
 import { useDashboard } from '@renderer/hooks/use-dashboard'
 import { useLiveMetrics } from '@renderer/hooks/use-live-metrics'
@@ -94,7 +96,6 @@ function BootFailure({
       </div>
       <div className="flex flex-1 items-center justify-center p-8">
         <div className="w-[420px] border border-destructive/35 bg-card p-5">
-          <EmptyIllustration className="mb-3 h-10 w-10" />
           <div className="flex items-center gap-2 text-[12px] font-medium text-destructive">
             <AlertTriangle className="h-4 w-4" />
             无法初始化桌面控制台
@@ -114,7 +115,9 @@ interface ConnectedAppProps {
   bootstrap: BootstrapData
   session: SessionProfile
   settings: AppSettings
+  backgrounds: BackgroundImages
   onSettingsChange: (settings: AppSettings) => void
+  onBackgroundChange: (result: BackgroundPickResult) => void
   onLogout: () => Promise<void>
   onSessionLost: (message: string) => Promise<void>
 }
@@ -123,7 +126,9 @@ function ConnectedApp({
   bootstrap,
   session,
   settings,
+  backgrounds,
   onSettingsChange,
+  onBackgroundChange,
   onLogout,
   onSessionLost
 }: ConnectedAppProps): React.JSX.Element {
@@ -332,6 +337,16 @@ function ConnectedApp({
     }
   }
 
+  const openNodeSettings = (node: string): void => {
+    mainRef.current?.scrollTo({ top: 0 })
+    setNodeSettingsNode(node)
+  }
+
+  const closeNodeSettings = (): void => {
+    mainRef.current?.scrollTo({ top: 0 })
+    setNodeSettingsNode(null)
+  }
+
   const renderView = (dashboard: DashboardData): React.JSX.Element => {
     switch (view) {
       case 'vms':
@@ -353,7 +368,7 @@ function ConnectedApp({
               node={nodeSettingsNode}
               clusterName={dashboard.cluster.name}
               networkView={settings.networkView}
-              onBack={() => setNodeSettingsNode(null)}
+              onBack={closeNodeSettings}
             />
           )
         }
@@ -366,7 +381,7 @@ function ConnectedApp({
             onRefresh={() => void refresh()}
             onNavigate={setView}
             onOpenShell={openNodeShell}
-            onOpenSettings={setNodeSettingsNode}
+            onOpenSettings={openNodeSettings}
           />
         )
       case 'cluster':
@@ -377,6 +392,8 @@ function ConnectedApp({
             onOpenTask={setTaskLog}
           />
         )
+      case 'images':
+        return <ImagesView dashboard={dashboard} onRefresh={() => void refresh()} />
       case 'tasks':
         return (
           <TasksView
@@ -394,7 +411,9 @@ function ConnectedApp({
             theme={settings.theme}
             appVersion={bootstrap.appVersion}
             electronVersion={bootstrap.electronVersion}
+            backgrounds={backgrounds}
             onUpdatePreferences={updatePreferences}
+            onBackgroundChange={onBackgroundChange}
             onForgetCredentials={forgetCredentials}
             onDisconnect={() => setDisconnectOpen(true)}
           />
@@ -422,55 +441,66 @@ function ConnectedApp({
   const initialNode = viewData?.nodes.find((node) => node.status === 'online')?.node ?? viewData?.nodes[0]?.node ?? ''
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <Titlebar session={session} dashboard={viewData} refreshing={refreshing} onRefresh={() => void refresh()} />
-      <div className="flex min-h-0 flex-1">
-        <Sidebar
-          active={view}
-          dashboard={viewData}
-          session={session}
-          theme={settings.theme}
-          onNavigate={setView}
-          onCreateVm={() => setCreateOpen(true)}
-          onToggleTheme={toggleTheme}
-          onDisconnect={() => setDisconnectOpen(true)}
-        />
-        <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto [overflow-anchor:none]">
-          <div className="mx-auto w-full max-w-[1600px] p-5 lg:p-6">
-            {error && data && (
-              <div className="mb-4 flex items-center gap-3 border border-warning/30 bg-warning/[0.05] px-3 py-2">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
-                <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
-                  最近一次同步失败：{error}
-                </span>
-                <Button variant="ghost" size="sm" onClick={() => void refresh()}>
-                  <RefreshCw className="h-3 w-3" />
-                  重试
-                </Button>
-              </div>
-            )}
-
-            {loading && !viewData ? (
-              <ContentSkeleton />
-            ) : !viewData && error ? (
-              <Card>
-                <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-                  <div className="mb-4 flex h-11 w-11 items-center justify-center border border-destructive/35 bg-destructive/[0.05] text-destructive">
-                    <AlertTriangle className="h-5 w-5" />
-                  </div>
-                  <div className="text-[13px] font-medium text-foreground">无法读取集群状态</div>
-                  <p className="mt-1 max-w-md text-[12px] leading-5 text-muted-foreground">{error}</p>
-                  <Button variant="outline" size="sm" className="mt-4" onClick={() => void refresh()}>
+    <div className="relative flex h-screen flex-col overflow-hidden bg-background">
+      {backgrounds.app && (
+        <>
+          <div
+            className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
+            style={{ backgroundImage: `url("${backgrounds.app}")` }}
+          />
+          <div className="pointer-events-none absolute inset-0 bg-background/[0.65]" />
+        </>
+      )}
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+        <Titlebar session={session} dashboard={viewData} refreshing={refreshing} onRefresh={() => void refresh()} />
+        <div className="flex min-h-0 flex-1">
+          <Sidebar
+            active={view}
+            dashboard={viewData}
+            session={session}
+            theme={settings.theme}
+            onNavigate={setView}
+            onCreateVm={() => setCreateOpen(true)}
+            onToggleTheme={toggleTheme}
+            onDisconnect={() => setDisconnectOpen(true)}
+          />
+          <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto [overflow-anchor:none]">
+            <div className="mx-auto w-full max-w-[1600px] p-5 lg:p-6">
+              {error && data && (
+                <div className="mb-4 flex items-center gap-3 border border-warning/30 bg-warning/[0.05] px-3 py-2">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
+                  <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+                    最近一次同步失败：{error}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => void refresh()}>
                     <RefreshCw className="h-3 w-3" />
                     重试
                   </Button>
                 </div>
-              </Card>
-            ) : viewData ? (
-              renderView(viewData)
-            ) : null}
-          </div>
-        </main>
+              )}
+
+              {loading && !viewData ? (
+                <ContentSkeleton />
+              ) : !viewData && error ? (
+                <Card>
+                  <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
+                    <div className="mb-4 flex h-11 w-11 items-center justify-center border border-destructive/35 bg-destructive/[0.05] text-destructive">
+                      <AlertTriangle className="h-5 w-5" />
+                    </div>
+                    <div className="text-[13px] font-medium text-foreground">无法读取集群状态</div>
+                    <p className="mt-1 max-w-md text-[12px] leading-5 text-muted-foreground">{error}</p>
+                    <Button variant="outline" size="sm" className="mt-4" onClick={() => void refresh()}>
+                      <RefreshCw className="h-3 w-3" />
+                      重试
+                    </Button>
+                  </div>
+                </Card>
+              ) : viewData ? (
+                renderView(viewData)
+              ) : null}
+            </div>
+          </main>
+        </div>
       </div>
 
       <CreateVmDialog
@@ -488,6 +518,11 @@ function ConnectedApp({
         vmRef={selectedRef}
         refreshToken={detailRefreshToken}
         actionBusy={detailBusy}
+        storages={viewData?.storages ?? []}
+        onRefresh={() => {
+          setDetailRefreshToken((value) => value + 1)
+          void refresh()
+        }}
         onAction={requestAction}
         onConsole={openConsole}
         onViewTask={setTaskLog}
@@ -575,6 +610,7 @@ export default function App(): React.JSX.Element {
   const [booting, setBooting] = useState(true)
   const [bootstrap, setBootstrap] = useState<BootstrapData | null>(null)
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [backgrounds, setBackgrounds] = useState<BackgroundImages>({})
   const [session, setSession] = useState<SessionProfile | null>(null)
   const [loginError, setLoginError] = useState<ApiError | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
@@ -593,6 +629,7 @@ export default function App(): React.JSX.Element {
         if (cancelled) return
         setBootstrap(result)
         setSettings(result.settings)
+        setBackgrounds(result.backgrounds)
         setSession(result.session)
         setLoginError(result.autoLoginError ?? null)
       })
@@ -609,8 +646,14 @@ export default function App(): React.JSX.Element {
 
   const handleAuthenticated = (result: LoginResult): void => {
     setSettings(result.settings)
+    setBackgrounds(result.backgrounds)
     setSession(result.session)
     setLoginError(null)
+  }
+
+  const handleBackgroundChange = (result: BackgroundPickResult): void => {
+    setSettings(result.settings)
+    setBackgrounds(result.backgrounds)
   }
 
   const handleSessionLost = useCallback(async (message: string): Promise<void> => {
@@ -644,6 +687,7 @@ export default function App(): React.JSX.Element {
           settings={settings}
           appVersion={bootstrap?.appVersion}
           initialError={loginError ?? undefined}
+          loginBackground={backgrounds.login}
           onAuthenticated={handleAuthenticated}
         />
         <Toaster theme={settings.theme} />
@@ -658,7 +702,9 @@ export default function App(): React.JSX.Element {
         bootstrap={bootstrap}
         session={session}
         settings={settings}
+        backgrounds={backgrounds}
         onSettingsChange={setSettings}
+        onBackgroundChange={handleBackgroundChange}
         onLogout={handleLogout}
         onSessionLost={handleSessionLost}
       />

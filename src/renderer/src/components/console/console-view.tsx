@@ -8,13 +8,14 @@ import {
   Minimize2,
   Monitor,
   RefreshCw,
+  Scaling,
   TerminalSquare,
   Unplug,
   X
 } from 'lucide-react'
 import type { ConsoleOpenRequest, ConsoleSessionInfo } from '@shared/types'
 import { Button } from '@renderer/components/ui/button'
-import { EmptyIllustration } from '@renderer/components/common'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import { WindowButtons } from '@renderer/components/layout/window-buttons'
 import { Textarea } from '@renderer/components/ui/input'
 import { errorDetail, unwrap } from '@renderer/lib/api'
@@ -56,6 +57,38 @@ function phaseBadge(phase: ConsolePhase): React.JSX.Element {
           ? 'text-muted-foreground'
           : 'text-brand'
   return <span className={cn('text-[12px] font-medium', color)}>{phaseLabel(phase)}</span>
+}
+
+function ConsoleToolButton({
+  label,
+  onClick,
+  disabled = false,
+  active = false,
+  children
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  active?: boolean
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={cn('no-drag text-muted-foreground', active && 'text-brand')}
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
 }
 
 function utf8Length(value: string): number {
@@ -446,58 +479,59 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
             {session?.subtitle ?? `${request.node} · ${request.type?.toUpperCase() ?? 'NODE'} ${request.vmid ?? ''}`}
           </span>
         </div>
-        <div className="flex shrink-0 items-center gap-3 px-3">{phaseBadge(phase)}</div>
-        <WindowButtons />
-      </header>
 
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-b border-border bg-card px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="no-drag flex shrink-0 items-center gap-0.5 px-1">
           {isNoVnc && (
             <>
-              <Button
-                variant="outline"
-                size="sm"
+              <ConsoleToolButton
+                label="Ctrl+Alt+Del"
                 onClick={() => noVncClientRef.current?.sendCtrlAltDel()}
                 disabled={phase !== 'connected'}
               >
                 <Keyboard className="h-3.5 w-3.5" />
-                Ctrl+Alt+Del
-              </Button>
-              <Button
-                variant={clipboardOpen ? 'secondary' : 'outline'}
-                size="sm"
+              </ConsoleToolButton>
+              <ConsoleToolButton
+                label="剪贴板"
+                active={clipboardOpen}
                 onClick={() => setClipboardOpen((value) => !value)}
                 disabled={phase !== 'connected'}
               >
                 <Clipboard className="h-3.5 w-3.5" />
-                剪贴板
-              </Button>
-              <Button
-                variant={scaleViewport ? 'secondary' : 'outline'}
-                size="sm"
+              </ConsoleToolButton>
+              <ConsoleToolButton
+                label={scaleViewport ? '原始尺寸' : '适应窗口'}
+                active={scaleViewport}
                 onClick={() => setScale(!scaleViewport)}
                 disabled={phase !== 'connected'}
               >
-                <Maximize2 className="h-3.5 w-3.5" />
-                {scaleViewport ? '适应窗口' : '原始尺寸'}
-              </Button>
+                <Scaling className="h-3.5 w-3.5" />
+              </ConsoleToolButton>
             </>
           )}
           {isXterm && (
-            <Button variant="outline" size="sm" onClick={() => void copySelection()} disabled={phase !== 'connected'}>
+            <ConsoleToolButton
+              label="复制选区"
+              onClick={() => void copySelection()}
+              disabled={phase !== 'connected'}
+            >
               <ClipboardCopy className="h-3.5 w-3.5" />
-              复制选区
-            </Button>
+            </ConsoleToolButton>
           )}
-          <Button variant="outline" size="sm" onClick={retry} disabled={phase === 'opening'}>
+          <ConsoleToolButton label="重连" onClick={retry} disabled={phase === 'opening'}>
             <RefreshCw className="h-3.5 w-3.5" />
-            重连
-          </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => void toggleFullscreen()} aria-label={isFullscreen ? '退出全屏' : '全屏'}>
+          </ConsoleToolButton>
+          <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+          <ConsoleToolButton
+            label={isFullscreen ? '退出全屏' : '全屏'}
+            onClick={() => void toggleFullscreen()}
+          >
             {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-          </Button>
+          </ConsoleToolButton>
         </div>
-      </div>
+
+        <div className="flex shrink-0 items-center gap-2 px-2">{phaseBadge(phase)}</div>
+        <WindowButtons />
+      </header>
 
         <div className="relative min-h-0 flex-1 overflow-hidden bg-[#050608]">
           <div ref={noVncRef} className={cn('absolute inset-0', isNoVnc ? 'block' : 'hidden')} />
@@ -509,9 +543,7 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
           {phase === 'opening' || phase === 'connecting' ? (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#050608]/92">
               <div className="flex flex-col items-center gap-3">
-                <div className="relative flex h-12 w-12 items-center justify-center border border-border bg-card">
-                  <Loader2 className="h-5 w-5 spin text-brand" />
-                </div>
+                <Loader2 className="h-6 w-6 spin text-brand" />
                 <div className="text-center">
                   <div className="text-[12px] text-foreground">
                     {phase === 'opening' ? '正在分配控制台会话' : '正在建立 PVE 控制通道'}
@@ -527,9 +559,8 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
           {phase === 'error' || phase === 'disconnected' ? (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#050608]/95">
               <div className="w-[380px] max-w-[calc(100%-32px)] border border-destructive/35 bg-card p-4">
-                <EmptyIllustration className="mb-3 h-10 w-10" />
                 <div className="flex items-center gap-2 text-[12px] font-medium text-destructive">
-                  <Unplug className="h-3.5 w-3.5" />
+                  <Unplug className="h-4 w-4" />
                   控制台连接中断
                 </div>
                 <p className="mt-2 break-words text-[11px] leading-5 text-muted-foreground">

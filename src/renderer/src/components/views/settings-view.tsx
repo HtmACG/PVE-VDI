@@ -6,6 +6,7 @@ import {
   EthernetPort,
   Globe2,
   History,
+  Image as ImageIcon,
   Mail,
   Moon,
   Power,
@@ -24,6 +25,9 @@ import {
 import { FaGithub } from 'react-icons/fa6'
 import type {
   AppSettings,
+  BackgroundImages,
+  BackgroundKind,
+  BackgroundPickResult,
   DashboardData,
   PreferencesPatch,
   SessionProfile,
@@ -62,6 +66,7 @@ import { APP_CHANGELOG } from '@shared/changelog'
 import { errorDetail, unwrap } from '@renderer/lib/api'
 import { formatDateTime, splitLicense } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
+import { toast } from 'sonner'
 
 interface SettingsViewProps {
   settings: AppSettings
@@ -70,7 +75,9 @@ interface SettingsViewProps {
   theme: Theme
   appVersion: string
   electronVersion: string
+  backgrounds: BackgroundImages
   onUpdatePreferences: (patch: PreferencesPatch) => Promise<void>
+  onBackgroundChange: (result: BackgroundPickResult) => void
   onForgetCredentials: () => Promise<void>
   onDisconnect: () => void
 }
@@ -82,7 +89,9 @@ export function SettingsView({
   theme,
   appVersion,
   electronVersion,
+  backgrounds,
   onUpdatePreferences,
+  onBackgroundChange,
   onForgetCredentials,
   onDisconnect
 }: SettingsViewProps): React.JSX.Element {
@@ -97,6 +106,7 @@ export function SettingsView({
   const [checkingUpdates, setCheckingUpdates] = useState(false)
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [changelogOpen, setChangelogOpen] = useState(false)
+  const [backgroundBusy, setBackgroundBusy] = useState<BackgroundKind | null>(null)
 
   useEffect(() => {
     setCustomFontDraft(settings.customFont)
@@ -160,6 +170,33 @@ export function SettingsView({
     void window.pvevdi.openExternal(url)
   }
 
+  const pickBackground = async (kind: BackgroundKind): Promise<void> => {
+    setBackgroundBusy(kind)
+    try {
+      const result = await unwrap(window.pvevdi.pickBackground(kind))
+      if (!result) return
+      onBackgroundChange(result)
+      toast.success(kind === 'login' ? '登录页背景已更新' : '软件背景已更新')
+    } catch (err) {
+      toast.error('无法设置背景', { description: errorDetail(err) })
+    } finally {
+      setBackgroundBusy(null)
+    }
+  }
+
+  const clearBackground = async (kind: BackgroundKind): Promise<void> => {
+    setBackgroundBusy(kind)
+    try {
+      const result = await unwrap(window.pvevdi.clearBackground(kind))
+      onBackgroundChange(result)
+      toast.success(kind === 'login' ? '登录页背景已清除' : '软件背景已清除')
+    } catch (err) {
+      toast.error('无法清除背景', { description: errorDetail(err) })
+    } finally {
+      setBackgroundBusy(null)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -194,7 +231,7 @@ export function SettingsView({
                           active ? 'border-brand/60 bg-brand/[0.05]' : 'border-border bg-panel/30 hover:border-border-strong'
                         )}
                       >
-                        <div className={cn('flex h-8 w-8 items-center justify-center border', active ? 'border-brand/40 text-brand' : 'border-border text-muted-foreground')}>
+                        <div className={cn('flex h-8 w-8 items-center justify-center', active ? 'text-brand' : 'text-muted-foreground')}>
                           <Icon className="h-4 w-4" />
                         </div>
                         <div>
@@ -414,6 +451,68 @@ export function SettingsView({
           </Card>
 
           <Card>
+            <PanelHeader title="背景" description="登录页与主界面可分别使用本地背景图片。" />
+            <div className="divide-y divide-border">
+              {[
+                {
+                  kind: 'login' as const,
+                  label: '登录页背景',
+                  description: '显示在登录页左侧画面区域；未设置时使用默认插画。',
+                  url: backgrounds.login,
+                  has: settings.hasLoginBackground
+                },
+                {
+                  kind: 'app' as const,
+                  label: '软件背景',
+                  description: '显示在主界面内容区的空白区域；卡片、标题栏和侧栏保持不透明。',
+                  url: backgrounds.app,
+                  has: settings.hasAppBackground
+                }
+              ].map((item) => (
+                <div key={item.kind} className="flex flex-wrap items-center gap-4 p-4">
+                  <div className="relative flex h-[68px] w-[120px] shrink-0 items-center justify-center overflow-hidden border border-border bg-panel/40">
+                    {item.url ? (
+                      <img src={item.url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 text-[12px] font-medium text-foreground">
+                      {item.label}
+                      <span className={item.has ? 'text-[10px] text-success' : 'text-[10px] text-muted-foreground'}>
+                        {item.has ? '已设置' : '未设置'}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-[11px] leading-5 text-muted-foreground">{item.description}</div>
+                    <div className="mt-1 text-[10px] text-muted-foreground">支持 JPG / PNG / WebP / GIF，最大 16 MB</div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      loading={backgroundBusy === item.kind}
+                      onClick={() => void pickBackground(item.kind)}
+                    >
+                      <ImageIcon className="h-3 w-3" />
+                      选择图片
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!item.has || backgroundBusy === item.kind}
+                      onClick={() => void clearBackground(item.kind)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      清除
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card>
             <PanelHeader title="启动" />
             <div className="flex items-center justify-between gap-4 p-4">
               <div className="flex items-center gap-2.5">
@@ -443,7 +542,7 @@ export function SettingsView({
             />
             <div className="space-y-4 p-4">
               <div className="flex flex-wrap items-center gap-3 border border-border bg-panel/30 p-3">
-                <div className="flex h-8 w-8 items-center justify-center border border-border bg-background">
+                <div className="flex h-8 w-8 items-center justify-center">
                   <KeyRound className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div className="min-w-0">

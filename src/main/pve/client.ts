@@ -1,4 +1,7 @@
 import https from 'node:https'
+import fs from 'node:fs'
+import path from 'node:path'
+import { randomBytes } from 'node:crypto'
 import type { IncomingMessage } from 'node:http'
 import type { ApiError } from '@shared/types'
 
@@ -444,6 +447,124 @@ export class PveClient {
     validateNodeName(node)
     validateUpid(upid)
     return this.request(`/nodes/${encodeURIComponent(node)}/tasks/${upid}/status`)
+  }
+
+  /**
+   * Streams a local file to PVE's storage upload endpoint as multipart/form-data.
+   * PVE only accepts this endpoint through its REST handler; the file is not
+   * loaded into memory, so multi-gigabyte ISOs can be uploaded safely.
+   */
+  async uploadStorageFile(options: {
+    node: string
+    storage: string
+    content: 'iso' | 'vztmpl' | 'import'
+    filePath: string
+    timeoutMs?: number
+  }): Promise<string | null> {
+    validateNodeName(options.node)
+    await this.ensureAuth()
+
+    let stat: fs.Stats
+    try {
+      stat = fs.statSync(options.filePath)
+    } catch {
+      throw new PveError('UPLOAD_ERROR', '无法读取待上传的文件。')
+    }
+    if (!stat.isFile()) throw new PveError('UPLOAD_ERROR', '待上传路径不是文件。')
+
+    const filename = path
+      .basename(options.filePath)
+      .replace(/["\r\n]/g, '_')
+      .slice(0, 200)
+    const boundary = `----PVEVDI${randomBytes(12).toString('hex')}`
+    const preamble = Buffer.from(
+      `--${boundary}\r\n` +
+        'Content-Disposition: form-data; name="content"\r\n\r\n' +
+        `${options.content}\r\n` +
+        `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="filename"; filename="${filename}"\r\n` +
+        'Content-Type: application/octet-stream\r\n\r\n'
+    )
+    const epilogue = Buffer.from(`\r\n--${boundary}--\r\n`)
+    const totalBytes = preamble.length + stat.size + epilogue.length
+    const hostname = this.base.hostname.replace(/^\[|\]$/g, '')
+    const port = Number(this.base.port || (this.base.protocol === 'https:' ? 443 : 80))
+    const apiPath = `/api2/json/nodes/${encodeURIComponent(options.node)}/storage/${encodeURIComponent(
+      options.storage
+    )}/upload`
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'User-Agent': 'PVE-VDI/1.6',
+      Cookie: `PVEAuthCookie=${this.ticket}`,
+      CSRFPreventionToken: this.csrf,
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      'Content-Length': String(totalBytes)
+    }
+
+    return new Promise<string | null>((resolve, reject) => {
+      let settled = false
+      let fileStream: fs.ReadStream | undefined
+      const finish = (error?: Error, value?: string | null): void => {
+        if (settled) return
+        settled = true
+        if (error) {
+          fileStream?.destroy()
+          reject(error)
+        } else {
+          resolve(value ?? null)
+        }
+      }
+
+      const req = https.request(
+        { hostname, port, path: apiPath, method: 'POST', headers, agent: this.agent },
+        (response: IncomingMessage) => {
+          const chunks: Buffer[] = []
+          response.on('data', (chunk: Buffer) => chunks.push(chunk))
+          response.on('error', (error) =>
+            finish(new PveError('NETWORK_ERROR', '读取 PVE 上传响应失败。', { detail: error.message }))
+          )
+          response.on('end', () => {
+            const raw = Buffer.concat(chunks).toString('utf8')
+            const status = response.statusCode ?? 0
+            if (status < 200 || status >= 300) {
+              finish(parsePveError(status, raw, false))
+              return
+            }
+            if (!raw.trim()) {
+              finish(undefined, null)
+              return
+            }
+            try {
+              const envelope = JSON.parse(raw) as { data?: string }
+              finish(undefined, envelope.data ?? null)
+            } catch {
+              finish(
+                new PveError('INVALID_RESPONSE', 'PVE 返回了无法解析的上传响应。', {
+                  status,
+                  detail: raw.slice(0, 300)
+                })
+              )
+            }
+          })
+        }
+      )
+
+      req.setTimeout(options.timeoutMs ?? 60 * 60 * 1000, () => {
+        req.destroy(new PveError('TIMEOUT', '上传超时，请检查网络或稍后重试。'))
+      })
+      req.on('error', (error) => {
+        finish(error instanceof Error ? error : new Error(String(error)))
+      })
+
+      req.write(preamble)
+      fileStream = fs.createReadStream(options.filePath)
+      fileStream.on('error', (error) => {
+        req.destroy()
+        finish(new PveError('UPLOAD_ERROR', '读取待上传文件失败。', { detail: error.message }))
+      })
+      fileStream.pipe(req, { end: false })
+      fileStream.on('end', () => req.end(epilogue))
+    })
   }
 }
 

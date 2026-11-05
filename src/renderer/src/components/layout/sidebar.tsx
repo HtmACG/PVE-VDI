@@ -2,6 +2,7 @@ import {
   Activity,
   Boxes,
   ClipboardList,
+  Disc3,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -17,7 +18,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Progress } from '@renderer/components/ui/primitives'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 
-export type ViewKey = 'overview' | 'vms' | 'nodes' | 'cluster' | 'tasks' | 'settings'
+export type ViewKey = 'overview' | 'vms' | 'nodes' | 'images' | 'cluster' | 'tasks' | 'settings'
 
 interface SidebarProps {
   active: ViewKey
@@ -37,6 +38,7 @@ const WORKLOAD_NAV = [
 
 const INFRA_NAV = [
   { key: 'nodes' as const, label: '节点', icon: Server },
+  { key: 'images' as const, label: '镜像', icon: Disc3 },
   { key: 'cluster' as const, label: '集群', icon: Activity },
   { key: 'tasks' as const, label: '任务', icon: ClipboardList }
 ]

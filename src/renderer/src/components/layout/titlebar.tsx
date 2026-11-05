@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Copy, Maximize2, Minus, X } from 'lucide-react'
+import { Copy, Maximize2, Minus, RefreshCw, X } from 'lucide-react'
 import { BrandLockup } from '@renderer/components/brand'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import type { DashboardData, SessionProfile } from '@shared/types'
 import { formatTimeAgoFromMs } from '@renderer/lib/format'
+import { cn } from '@renderer/lib/utils'
 
 interface TitlebarProps {
   session: SessionProfile
@@ -37,9 +38,10 @@ export function Titlebar({ session, dashboard, refreshing, onRefresh }: Titlebar
         <button
           type="button"
           onClick={onRefresh}
-          className="no-drag flex min-w-[116px] items-center justify-end gap-2 border-l border-border/60 px-3 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="no-drag flex min-w-[124px] items-center justify-end gap-1.5 px-3 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
           title="刷新状态"
         >
+          <RefreshCw className={cn('h-3 w-3 shrink-0', refreshing && 'spin')} aria-hidden="true" />
           <span>
             {refreshing ? '正在同步' : dashboard ? `${formatTimeAgoFromMs(dashboard.fetchedAt)}刷新` : '等待连接'}
           </span>

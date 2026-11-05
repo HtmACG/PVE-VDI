@@ -6,17 +6,28 @@ import {
   Clock,
   Cpu,
   ExternalLink,
-  Gauge,
   HardDrive,
   Info,
   Loader2,
   MemoryStick,
   Network,
+  Pencil,
+  Plus,
   Server,
+  Settings2,
   Terminal,
+  Trash2,
   TriangleAlert
 } from 'lucide-react'
-import type { AgentInterface, TaskSummary, VmDetail, VmRef, VmSnapshot } from '@shared/types'
+import type {
+  AgentInterface,
+  StorageSummary,
+  TaskSummary,
+  VmDetail,
+  VmDiskInfo,
+  VmRef,
+  VmSnapshot
+} from '@shared/types'
 import { TASK_TYPE_LABELS, VM_ACTION_LABELS } from '@shared/ipc'
 import {
   Sheet,
@@ -28,12 +39,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@renderer/components/ui/tabs'
 import { Button } from '@renderer/components/ui/button'
 import { Badge } from '@renderer/components/ui/badge'
-import { Progress, Separator, Skeleton } from '@renderer/components/ui/primitives'
+import { Progress, Skeleton } from '@renderer/components/ui/primitives'
 import { DataRow, EmptyState } from '@renderer/components/common'
 import { AreaChart } from '@renderer/components/charts/area-chart'
 import { OsIcon } from '@renderer/components/os-icon'
 import { TaskStatusBadge, VmStatusBadge } from '@renderer/components/status-badges'
 import { VmDetailActionBar, type ActionTarget } from '@renderer/components/vms/vm-actions'
+import { AddDiskDialog, RemoveDiskDialog, ResizeDiskDialog, VmConfigDialog } from '@renderer/components/vms/vm-config-dialogs'
 import { unwrap, errorDetail } from '@renderer/lib/api'
 import {
   formatBytes,
@@ -51,6 +63,8 @@ interface VmDetailSheetProps {
   vmRef: VmRef | null
   refreshToken: number
   actionBusy: boolean
+  storages: StorageSummary[]
+  onRefresh: () => void
   onAction: (target: ActionTarget, action: VmAction) => void
   onConsole: (target: ActionTarget) => void
   onViewTask: (task: TaskSummary) => void
@@ -128,20 +142,6 @@ function parseNetwork(value: string | number): {
     }
   }
   return { model, mac, options }
-}
-
-function parseDisk(value: string | number): { volume: string; size?: string; options: string[] } {
-  const tokens = String(value)
-    .split(',')
-    .map((token) => token.trim())
-  const volume = tokens.shift() ?? String(value)
-  let size: string | undefined
-  const options: string[] = []
-  for (const option of tokens) {
-    if (option.startsWith('size=')) size = option.slice(5)
-    else if (option) options.push(option)
-  }
-  return { volume, size, options }
 }
 
 function MetricTile({
@@ -234,6 +234,8 @@ export function VmDetailSheet({
   vmRef,
   refreshToken,
   actionBusy,
+  storages,
+  onRefresh,
   onAction,
   onConsole,
   onViewTask
@@ -244,6 +246,10 @@ export function VmDetailSheet({
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState('overview')
   const [metric, setMetric] = useState<'cpu' | 'memory'>('cpu')
+  const [configOpen, setConfigOpen] = useState(false)
+  const [addDiskOpen, setAddDiskOpen] = useState(false)
+  const [resizeDisk, setResizeDisk] = useState<VmDiskInfo | null>(null)
+  const [removeDisk, setRemoveDisk] = useState<VmDiskInfo | null>(null)
   const refKey = vmRef ? `${vmRef.node}/${vmRef.type}/${vmRef.vmid}` : ''
 
   useEffect(() => {
@@ -310,13 +316,6 @@ export function VmDetailSheet({
     return Object.entries(detail.config)
       .filter(([key]) => !HIDDEN_CONFIG_KEYS.has(key) && !/^net\d+$/.test(key) && !/^(scsi|sata|virtio|ide)\d+$/.test(key))
       .sort(([a], [b]) => a.localeCompare(b))
-  }, [detail])
-
-  const disks = useMemo(() => {
-    if (!detail) return []
-    return Object.entries(detail.config)
-      .filter(([key]) => /^(scsi|sata|virtio|ide)\d+$/.test(key))
-      .map(([key, value]) => ({ key, value: String(value), parsed: parseDisk(value) }))
   }, [detail])
 
   const networks = useMemo(() => {
@@ -556,30 +555,92 @@ export function VmDetailSheet({
                     </div>
                   </div>
 
+                  {detail.runtime.status === 'running' && (
+                    <div className="flex items-start gap-2 border border-warning/25 bg-warning/[0.05] px-3 py-2.5 text-[11px] leading-5 text-warning">
+                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      虚拟机关机后才能修改配置、添加或移除磁盘；磁盘扩容也受此限制。
+                    </div>
+                  )}
+
                   <div className="border border-border bg-card">
-                    <div className="flex items-center gap-2 border-b border-border px-3 py-2.5 text-[12px] font-medium">
+                    <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5 text-[12px] font-medium">
                       <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />
                       存储设备
+                      <div className="ml-auto flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setConfigOpen(true)}
+                          disabled={detail.runtime.status === 'running'}
+                        >
+                          <Settings2 className="h-3.5 w-3.5" />
+                          编辑配置
+                        </Button>
+                        {detail.ref.type === 'qemu' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAddDiskOpen(true)}
+                            disabled={detail.runtime.status === 'running'}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            添加磁盘
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div className="divide-y divide-border">
-                      {disks.length === 0 ? (
+                      {detail.disks.length === 0 ? (
                         <div className="px-3 py-4 text-[11px] text-muted-foreground">未找到磁盘配置。</div>
                       ) : (
-                        disks.map((disk) => (
-                          <div key={disk.key} className="px-3 py-2.5">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-[11px] text-brand">{disk.key}</span>
-                              <span className="font-mono text-[11px] text-foreground">{disk.parsed.volume}</span>
-                              {disk.parsed.size && <Badge variant="outline">{disk.parsed.size}</Badge>}
-                              {disk.value.includes('media=cdrom') && <Badge variant="info">CD-ROM</Badge>}
-                            </div>
-                            {disk.parsed.options.length > 0 && (
-                              <div className="mt-1 font-mono text-[8px] text-muted-foreground">
-                                {disk.parsed.options.join(' · ')}
+                        detail.disks.map((disk) => {
+                          const normalDisk = /^(scsi|virtio|sata|ide)\d+$/.test(disk.key)
+                          const canRemove = normalDisk || disk.isCdrom
+                          return (
+                            <div key={disk.key} className="px-3 py-2.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-[11px] text-brand">{disk.key}</span>
+                                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground" title={disk.volume}>
+                                  {disk.volume || '—'}
+                                </span>
+                                {disk.size !== undefined && <Badge variant="outline">{formatBytes(disk.size)}</Badge>}
+                                {disk.format && <Badge variant="outline">{disk.format}</Badge>}
+                                {disk.isCdrom && <Badge variant="info">CD-ROM</Badge>}
+                                <div className="flex items-center gap-1">
+                                  {normalDisk && !disk.isCdrom && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      aria-label={`调整 ${disk.key} 容量`}
+                                      title="调整容量"
+                                      onClick={() => setResizeDisk(disk)}
+                                      disabled={detail.runtime.status === 'running'}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                  {canRemove && !(detail.ref.type === 'lxc' && disk.key === 'rootfs') && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      aria-label={`移除 ${disk.key}`}
+                                      title="移除磁盘"
+                                      onClick={() => setRemoveDisk(disk)}
+                                      disabled={detail.runtime.status === 'running'}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                          </div>
-                        ))
+                              {disk.options.length > 0 && (
+                                <div className="mt-1 font-mono text-[8px] text-muted-foreground">
+                                  {disk.options.join(' · ')}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })
                       )}
                     </div>
                   </div>
@@ -715,6 +776,46 @@ export function VmDetailSheet({
             ) : null}
           </div>
         </Tabs>
+
+        {detail && (
+          <>
+            <VmConfigDialog
+              open={configOpen}
+              onOpenChange={setConfigOpen}
+              detail={detail}
+              onSaved={onRefresh}
+            />
+            <AddDiskDialog
+              open={addDiskOpen}
+              onOpenChange={setAddDiskOpen}
+              detail={detail}
+              storages={storages}
+              onSaved={onRefresh}
+            />
+            {resizeDisk && (
+              <ResizeDiskDialog
+                open={Boolean(resizeDisk)}
+                onOpenChange={(open) => {
+                  if (!open) setResizeDisk(null)
+                }}
+                detail={detail}
+                disk={resizeDisk}
+                onSaved={onRefresh}
+              />
+            )}
+            {removeDisk && (
+              <RemoveDiskDialog
+                open={Boolean(removeDisk)}
+                onOpenChange={(open) => {
+                  if (!open) setRemoveDisk(null)
+                }}
+                detail={detail}
+                disk={removeDisk}
+                onSaved={onRefresh}
+              />
+            )}
+          </>
+        )}
       </SheetContent>
     </Sheet>
   )

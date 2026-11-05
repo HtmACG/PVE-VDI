@@ -67,6 +67,20 @@ export interface AppSettings {
   accentColor: string
   networkView: NetworkView
   launchAtLogin: boolean
+  hasLoginBackground: boolean
+  hasAppBackground: boolean
+}
+
+export type BackgroundKind = 'login' | 'app'
+
+export interface BackgroundImages {
+  login?: string
+  app?: string
+}
+
+export interface BackgroundPickResult {
+  settings: AppSettings
+  backgrounds: BackgroundImages
 }
 
 export interface UpdateCheckResult {
@@ -90,6 +104,7 @@ export interface SessionProfile {
 export interface BootstrapData {
   settings: AppSettings
   session: SessionProfile | null
+  backgrounds: BackgroundImages
   autoLoginError?: ApiError
   appVersion: string
   platform: string
@@ -107,6 +122,7 @@ export interface LoginInput {
 export interface LoginResult {
   session: SessionProfile
   settings: AppSettings
+  backgrounds: BackgroundImages
 }
 
 export interface VmSummary {
@@ -270,6 +286,85 @@ export interface NodeDiskInfo {
   wearout?: number | string
   vendor?: string
   rpm?: number | string
+  temperature?: number
+  temperatureMax?: number
+  temperatureCritical?: number
+}
+
+export interface NodeTemperatureReading {
+  label: string
+  source?: string
+  value: number
+  max?: number
+  critical?: number
+}
+
+export interface NodeHardwareInfo {
+  node: string
+  manufacturer?: string
+  productName?: string
+  productVersion?: string
+  boardName?: string
+  cpuModel?: string
+  cpuTemperature?: number
+  cpuTemperatureMax?: number
+  cpuTemperatureCritical?: number
+  temperatures: NodeTemperatureReading[]
+  disks: NodeDiskInfo[]
+  warnings: string[]
+  collectedAt: number
+}
+
+export interface IsoStorageInfo {
+  node: string
+  storage: string
+  type: string
+  avail: number
+  total: number
+  active: boolean
+}
+
+export interface IsoImageInfo {
+  node: string
+  storage: string
+  volid: string
+  name: string
+  size: number
+  format?: string
+  ctime?: number
+}
+
+export interface IsoImageList {
+  node: string
+  storages: IsoStorageInfo[]
+  images: IsoImageInfo[]
+}
+
+export interface PickedIsoFile {
+  path: string
+  name: string
+  size: number
+}
+
+export interface IsoUploadInput {
+  node: string
+  storage: string
+  filePath: string
+}
+
+export interface IsoUrlInput {
+  node: string
+  storage: string
+  url: string
+  filename: string
+  checksum?: string
+  checksumAlgorithm?: 'md5' | 'sha1' | 'sha224' | 'sha256' | 'sha384' | 'sha512'
+  verifyCertificates: boolean
+}
+
+export interface IsoMutationResult {
+  message: string
+  upid?: string
 }
 
 export interface NodeLvmGroup {
@@ -314,7 +409,6 @@ export interface NodeSettingsData {
   certificates: NodeCertificateInfo[]
   repositories: NodeRepositorySummary | null
   firewallOptions: Record<string, unknown> | null
-  disks: NodeDiskInfo[]
   lvm: NodeLvmGroup[]
   lvmthin: NodeLvmThinPool[]
   directories: NodeDirectoryStorage[]
@@ -467,6 +561,54 @@ export interface VmSnapshot {
   running: boolean
 }
 
+export interface VmDiskInfo {
+  key: string
+  volume: string
+  storage?: string
+  size?: number
+  format?: string
+  isCdrom: boolean
+  options: string[]
+}
+
+export interface VmConfigPatchInput {
+  node: string
+  type: VmType
+  vmid: number
+  digest?: string
+  patch: Record<string, string | number>
+}
+
+export interface VmDiskAddInput {
+  node: string
+  vmid: number
+  storage: string
+  sizeGiB: number
+  bus: 'scsi' | 'virtio' | 'sata'
+}
+
+export interface VmDiskResizeInput {
+  node: string
+  type: VmType
+  vmid: number
+  disk: string
+  size: string
+}
+
+export interface VmDiskRemoveInput {
+  node: string
+  type: VmType
+  vmid: number
+  disk: string
+  destroy: boolean
+}
+
+export interface VmMutationResult {
+  message: string
+  upid?: string
+  disk?: string
+}
+
 export interface AgentIpAddress {
   address: string
   type: string
@@ -487,6 +629,7 @@ export interface VmDetail {
   os: VmOsInfo
   runtime: VmRuntime
   config: Record<string, string | number>
+  disks: VmDiskInfo[]
   snapshots: VmSnapshot[]
   tasks: TaskSummary[]
   metrics: VmMetricPoint[]
@@ -648,9 +791,17 @@ export interface DesktopApi {
   logout: (clearSaved?: boolean) => Promise<ApiResult<AppSettings>>
   updatePreferences: (patch: PreferencesPatch) => Promise<ApiResult<AppSettings>>
   forgetCredentials: () => Promise<ApiResult<AppSettings>>
+  pickBackground: (kind: BackgroundKind) => Promise<ApiResult<BackgroundPickResult | null>>
+  clearBackground: (kind: BackgroundKind) => Promise<ApiResult<BackgroundPickResult>>
   dashboard: () => Promise<ApiResult<DashboardData>>
   liveMetrics: () => Promise<ApiResult<LiveMetricsData>>
   nodeSettings: (node: string) => Promise<ApiResult<NodeSettingsData>>
+  nodeHardware: (node: string, refresh?: boolean) => Promise<ApiResult<NodeHardwareInfo>>
+  isoImages: (node: string) => Promise<ApiResult<IsoImageList>>
+  pickIsoFile: () => Promise<ApiResult<PickedIsoFile | null>>
+  uploadIso: (input: IsoUploadInput) => Promise<ApiResult<IsoMutationResult>>
+  importIsoUrl: (input: IsoUrlInput) => Promise<ApiResult<IsoMutationResult>>
+  deleteIso: (node: string, storage: string, volid: string) => Promise<ApiResult<void>>
   nodeNetworkSave: (input: NodeNetworkInput) => Promise<ApiResult<NodeNetworkActionResult>>
   nodeNetworkDelete: (node: string, iface: string) => Promise<ApiResult<void>>
   nodeNetworkApply: (node: string) => Promise<ApiResult<NodeNetworkActionResult>>
@@ -663,6 +814,10 @@ export interface DesktopApi {
   openExternal: (url: string) => Promise<ApiResult<void>>
   vmDetail: (ref: VmRef) => Promise<ApiResult<VmDetail>>
   vmAction: (ref: VmRef & { action: VmAction }) => Promise<ApiResult<ActionResult>>
+  vmConfigUpdate: (input: VmConfigPatchInput) => Promise<ApiResult<VmMutationResult>>
+  vmDiskAdd: (input: VmDiskAddInput) => Promise<ApiResult<VmMutationResult>>
+  vmDiskResize: (input: VmDiskResizeInput) => Promise<ApiResult<VmMutationResult>>
+  vmDiskRemove: (input: VmDiskRemoveInput) => Promise<ApiResult<VmMutationResult>>
   createOptions: (node: string) => Promise<ApiResult<CreateOptions>>
   createVm: (input: CreateVmInput) => Promise<ApiResult<MutationResult>>
   cloneVm: (input: CloneVmInput) => Promise<ApiResult<MutationResult>>

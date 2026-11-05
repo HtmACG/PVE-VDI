@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { ArrowRight, Eye, EyeOff, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, ShieldAlert, ShieldCheck, WifiOff } from 'lucide-react'
 import type { ApiError, AppSettings, LoginResult } from '@shared/types'
 import { BrandLockup } from '@renderer/components/brand'
-import { EmptyIllustration } from '@renderer/components/common'
 import { WindowButtons } from '@renderer/components/layout/window-buttons'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
@@ -15,10 +14,11 @@ interface LoginViewProps {
   settings: AppSettings
   appVersion?: string
   initialError?: ApiError
+  loginBackground?: string
   onAuthenticated: (result: LoginResult) => void
 }
 
-export function LoginView({ settings, appVersion, initialError, onAuthenticated }: LoginViewProps): React.JSX.Element {
+export function LoginView({ settings, appVersion, initialError, loginBackground, onAuthenticated }: LoginViewProps): React.JSX.Element {
   const [serverUrl, setServerUrl] = useState(settings.serverUrl)
   const [username, setUsername] = useState(settings.username)
   const [password, setPassword] = useState('')
@@ -78,32 +78,60 @@ export function LoginView({ settings, appVersion, initialError, onAuthenticated 
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
         <section className="relative hidden min-w-0 overflow-hidden border-r border-border bg-card lg:flex">
-          <div className="absolute left-0 top-0 h-full w-[3px] bg-brand" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[62%] overflow-hidden xl:block">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_62%_45%,rgba(115,158,255,0.13),transparent_66%)]" />
-            <img
-              src={loginIllustration}
-              alt=""
-              aria-hidden="true"
-              draggable={false}
-              className="absolute bottom-0 right-0 h-[94%] w-full object-contain object-bottom opacity-95 [mask-image:linear-gradient(to_right,transparent,black_22%,black_100%)]"
-            />
-            <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-card via-card/70 to-transparent" />
-          </div>
+          <div className="absolute left-0 top-0 z-10 h-full w-[3px] bg-brand" />
+          {loginBackground ? (
+            <>
+              <div
+                className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+                style={{ backgroundImage: `url("${loginBackground}")` }}
+              />
+              <div className="absolute inset-0 bg-black/45" />
+            </>
+          ) : (
+            <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[62%] overflow-hidden xl:block">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_62%_45%,rgba(115,158,255,0.13),transparent_66%)]" />
+              <img
+                src={loginIllustration}
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+                className="absolute bottom-0 right-0 h-[94%] w-full object-contain object-bottom opacity-95 [mask-image:linear-gradient(to_right,transparent,black_22%,black_100%)]"
+              />
+              <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-card via-card/70 to-transparent" />
+            </div>
+          )}
           <div className="relative z-10 flex w-full flex-col p-10 pl-14 xl:p-14 xl:pl-16">
             <div className="mt-auto max-w-[360px]">
-              <div className="text-[11px] text-muted-foreground">Proxmox VE</div>
-              <p className="mt-2 text-[20px] leading-7 tracking-[-0.02em] text-foreground">
+              <div className={loginBackground ? 'text-[11px] text-white/70' : 'text-[11px] text-muted-foreground'}>Proxmox VE</div>
+              <p
+                className={
+                  loginBackground
+                    ? 'mt-2 text-[20px] leading-7 tracking-[-0.02em] text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.45)]'
+                    : 'mt-2 text-[20px] leading-7 tracking-[-0.02em] text-foreground'
+                }
+              >
                 节点、虚拟机
                 <br />
                 与独立控制台。
               </p>
-              <p className="mt-3 max-w-[300px] text-[12px] leading-5 text-muted-foreground">
+              <p
+                className={
+                  loginBackground
+                    ? 'mt-3 max-w-[300px] text-[12px] leading-5 text-white/75 [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]'
+                    : 'mt-3 max-w-[300px] text-[12px] leading-5 text-muted-foreground'
+                }
+              >
                 连接集群后查看资源、管理虚拟机，并为每台虚拟机或节点打开独立控制台窗口。
               </p>
             </div>
-            <div className="mt-8 flex items-center justify-between border-t border-border pt-4 text-[11px] text-muted-foreground">
-              <span>PVE VDI {appVersion ?? '1.5.2'}</span>
+            <div
+              className={
+                loginBackground
+                  ? 'mt-8 flex items-center justify-between border-t border-white/20 pt-4 text-[11px] text-white/60'
+                  : 'mt-8 flex items-center justify-between border-t border-border pt-4 text-[11px] text-muted-foreground'
+              }
+            >
+              <span>PVE VDI {appVersion ?? '1.7.0'}</span>
             </div>
           </div>
         </section>
@@ -121,7 +149,7 @@ export function LoginView({ settings, appVersion, initialError, onAuthenticated 
             {error && (
               <div className="mb-5 border border-destructive/35 bg-destructive/[0.06] p-3">
                 <div className="flex items-start gap-2">
-                  <EmptyIllustration className="mt-0.5 h-5 w-5 shrink-0" />
+                  <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
                   <div className="min-w-0">
                     <div className="text-[12px] font-medium text-destructive">连接失败</div>
                     <div className="mt-1 break-words text-[12px] leading-5 text-destructive/90">{error}</div>

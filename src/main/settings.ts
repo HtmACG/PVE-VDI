@@ -7,7 +7,16 @@ import {
   MAX_REFRESH_INTERVAL,
   MIN_REFRESH_INTERVAL
 } from '@shared/ipc'
-import type { AppSettings, NetworkView, PreferencesPatch, SessionProfile, Theme, UiFont } from '@shared/types'
+import type {
+  AppSettings,
+  BackgroundImages,
+  BackgroundKind,
+  NetworkView,
+  PreferencesPatch,
+  SessionProfile,
+  Theme,
+  UiFont
+} from '@shared/types'
 import {
   DEFAULT_ACCENT_COLOR,
   DEFAULT_CUSTOM_FONT,
@@ -31,6 +40,8 @@ interface StoredSettings {
   networkView: NetworkView
   launchAtLogin: boolean
   appearanceVersion: 2
+  loginBackground?: string
+  appBackground?: string
   encryptedPassword?: string
 }
 
@@ -63,6 +74,7 @@ export class SettingsStore {
   private readonly filePath: string
   private data: StoredSettings
   private encryptionAvailable: boolean
+  private readonly backgroundCache = new Map<BackgroundKind, string>()
 
   constructor() {
     this.filePath = path.join(app.getPath('userData'), 'settings.json')
@@ -99,6 +111,8 @@ export class SettingsStore {
         networkView: raw.networkView === 'list' ? 'list' : 'cards',
         launchAtLogin: raw.launchAtLogin === true,
         appearanceVersion: 2,
+        loginBackground: typeof raw.loginBackground === 'string' ? raw.loginBackground : undefined,
+        appBackground: typeof raw.appBackground === 'string' ? raw.appBackground : undefined,
         encryptedPassword:
           typeof raw.encryptedPassword === 'string' && raw.encryptedPassword
             ? raw.encryptedPassword
@@ -134,8 +148,100 @@ export class SettingsStore {
       customFont: this.data.customFont,
       accentColor: this.data.accentColor,
       networkView: this.data.networkView,
-      launchAtLogin: this.data.launchAtLogin
+      launchAtLogin: this.data.launchAtLogin,
+      hasLoginBackground: Boolean(this.backgroundFilePath('login')),
+      hasAppBackground: Boolean(this.backgroundFilePath('app'))
     }
+  }
+
+  private backgroundDir(): string {
+    return path.join(app.getPath('userData'), 'backgrounds')
+  }
+
+  private backgroundName(kind: BackgroundKind): string | undefined {
+    return kind === 'login' ? this.data.loginBackground : this.data.appBackground
+  }
+
+  private backgroundFilePath(kind: BackgroundKind): string | null {
+    const name = this.backgroundName(kind)
+    if (!name || path.basename(name) !== name) return null
+    const full = path.join(this.backgroundDir(), name)
+    return fs.existsSync(full) ? full : null
+  }
+
+  private readBackground(kind: BackgroundKind): string | undefined {
+    const cached = this.backgroundCache.get(kind)
+    if (cached) return cached
+    const file = this.backgroundFilePath(kind)
+    if (!file) return undefined
+    try {
+      const ext = path.extname(file).toLowerCase()
+      const mime =
+        ext === '.png'
+          ? 'image/png'
+          : ext === '.webp'
+            ? 'image/webp'
+            : ext === '.gif'
+              ? 'image/gif'
+              : 'image/jpeg'
+      const data = `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`
+      this.backgroundCache.set(kind, data)
+      return data
+    } catch {
+      return undefined
+    }
+  }
+
+  getBackgrounds(): BackgroundImages {
+    return {
+      login: this.readBackground('login'),
+      app: this.readBackground('app')
+    }
+  }
+
+  private removeBackgroundFile(kind: BackgroundKind): void {
+    const name = this.backgroundName(kind)
+    if (!name) return
+    try {
+      fs.rmSync(path.join(this.backgroundDir(), name), { force: true })
+    } catch {
+      // A missing background file is equivalent to no background.
+    }
+  }
+
+  setBackground(kind: BackgroundKind, sourcePath: string): BackgroundImages {
+    const source = path.resolve(sourcePath)
+    let stat: fs.Stats
+    try {
+      stat = fs.statSync(source)
+    } catch {
+      throw new Error('无法读取所选图片。')
+    }
+    const ext = path.extname(source).toLowerCase()
+    if (!['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext)) {
+      throw new Error('背景图片仅支持 PNG、JPEG、WebP 或 GIF。')
+    }
+    if (!stat.isFile() || stat.size > 16 * 1024 * 1024) {
+      throw new Error('背景图片大小不能超过 16 MB。')
+    }
+    fs.mkdirSync(this.backgroundDir(), { recursive: true })
+    this.removeBackgroundFile(kind)
+    const filename = `${kind}${ext}`
+    fs.copyFileSync(source, path.join(this.backgroundDir(), filename))
+    if (kind === 'login') this.data.loginBackground = filename
+    else this.data.appBackground = filename
+    this.backgroundCache.delete(kind)
+    this.persist()
+    return this.getBackgrounds()
+  }
+
+  clearBackground(kind: BackgroundKind): BackgroundImages {
+    this.removeBackgroundFile(kind)
+    if (kind === 'login') this.data.loginBackground = undefined
+    else this.data.appBackground = undefined
+    this.backgroundCache.delete(kind)
+    this.persist()
+    return this.getBackgrounds()
   }
 
   syncLaunchAtLogin(): void {

@@ -1,4 +1,4 @@
-import { ArrowUpRight, Boxes, Cpu, HardDrive, MemoryStick, Plus, RefreshCw, Server, Settings2, Terminal } from 'lucide-react'
+import { ArrowUpRight, Boxes, Cpu, HardDrive, MemoryStick, Plus, RefreshCw, Server, Settings2, Terminal, Thermometer } from 'lucide-react'
 import type { DashboardData, NodeSummary } from '@shared/types'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
@@ -153,7 +153,17 @@ function NodeCard({
         </div>
 
         <div className="p-4 xl:col-span-4">
-          <div className="text-[12px] font-medium text-foreground">服务器信息</div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[12px] font-medium text-foreground">服务器信息</div>
+            <button
+              type="button"
+              onClick={() => onOpenSettings(node.node)}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Thermometer className="h-3 w-3" />
+              硬件与温度
+            </button>
+          </div>
           <dl className="mt-2 divide-y divide-border/70 text-[12px]">
             {[
               ['CPU 型号', node.cpuModel ?? '—'],

@@ -1,13 +1,9 @@
-import { useEffect, useState } from 'react'
-import type { LucideIcon } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   AlertTriangle,
   ArrowLeft,
-  Clock3,
   Database,
   EthernetPort,
-  Folder,
-  Globe2,
   HardDrive,
   KeyRound,
   Layers3,
@@ -16,30 +12,27 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  ScrollText,
-  Server,
-  Settings2,
   Shield,
+  Thermometer,
   Trash2,
   X
 } from 'lucide-react'
 import type {
   NodeCertificateInfo,
-  NodeDirectoryStorage,
-  NodeDiskInfo,
   NodeDnsSettings,
+  NodeHardwareInfo,
   NodeNetworkActionResult,
   NodeNetworkInput,
   NodeNetworkInterface,
   NodeNetworkType,
   NodeRepositorySummary,
   NodeSettingsData,
-  NodeZfsPool,
   NetworkView
 } from '@shared/types'
+import { PageHeader, PanelHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@renderer/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@renderer/components/ui/dialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,111 +48,11 @@ import { Label } from '@renderer/components/ui/label'
 import { Progress } from '@renderer/components/ui/primitives'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@renderer/components/ui/select'
 import { Switch } from '@renderer/components/ui/switch'
-import { EmptyIllustration, EmptyState } from '@renderer/components/common'
+import { EmptyState } from '@renderer/components/common'
 import { errorDetail, unwrap } from '@renderer/lib/api'
 import { formatBytes, formatDateTime, formatPercent } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
 import { toast } from 'sonner'
-
-type SectionId =
-  | 'network'
-  | 'certificates'
-  | 'dns'
-  | 'hostname'
-  | 'options'
-  | 'time'
-  | 'syslog'
-  | 'repositories'
-  | 'firewall-options'
-  | 'firewall-log'
-  | 'lvm'
-  | 'lvmthin'
-  | 'directory'
-  | 'zfs'
-
-interface SettingsGroup {
-  id: string
-  label: string
-  icon: LucideIcon
-  items: Array<{ id: SectionId; label: string; icon: LucideIcon }>
-}
-
-const SETTINGS_GROUPS: SettingsGroup[] = [
-  {
-    id: 'system',
-    label: '系统',
-    icon: Settings2,
-    items: [
-      { id: 'network', label: '网络', icon: Network },
-      { id: 'certificates', label: '凭据', icon: KeyRound },
-      { id: 'dns', label: 'DNS', icon: Globe2 },
-      { id: 'hostname', label: '主机', icon: Server },
-      { id: 'options', label: '选项', icon: Settings2 },
-      { id: 'time', label: '时间', icon: Clock3 },
-      { id: 'syslog', label: '系统日志', icon: ScrollText }
-    ]
-  },
-  {
-    id: 'updates',
-    label: '更新',
-    icon: RefreshCw,
-    items: [{ id: 'repositories', label: '存储库', icon: Database }]
-  },
-  {
-    id: 'firewall',
-    label: '防火墙',
-    icon: Shield,
-    items: [
-      { id: 'firewall-options', label: '选项', icon: Settings2 },
-      { id: 'firewall-log', label: '日志', icon: ScrollText }
-    ]
-  },
-  {
-    id: 'disks',
-    label: '磁盘',
-    icon: HardDrive,
-    items: [
-      { id: 'lvm', label: 'LVM', icon: Layers3 },
-      { id: 'lvmthin', label: 'LVM-Thin', icon: Layers3 },
-      { id: 'directory', label: '目录', icon: Folder },
-      { id: 'zfs', label: 'ZFS', icon: Database }
-    ]
-  }
-]
-
-const SECTION_TITLES: Record<SectionId, string> = {
-  network: '网络',
-  certificates: '凭据',
-  dns: 'DNS',
-  hostname: '主机',
-  options: '选项',
-  time: '时间',
-  syslog: '系统日志',
-  repositories: '存储库',
-  'firewall-options': '防火墙选项',
-  'firewall-log': '防火墙日志',
-  lvm: 'LVM',
-  lvmthin: 'LVM-Thin',
-  directory: '目录存储',
-  zfs: 'ZFS'
-}
-
-const SECTION_DESCRIPTIONS: Record<SectionId, string> = {
-  network: '查看和编辑节点网络接口。修改先写入待应用配置，应用后生效。',
-  certificates: '节点证书信息，不显示私钥或完整证书内容。',
-  dns: '配置节点的 DNS 搜索域与上游服务器。',
-  hostname: '节点主机名与网络身份。',
-  options: '节点描述与基础运行选项。',
-  time: '节点时区与当前时间。',
-  syslog: '节点系统日志。',
-  repositories: 'APT 软件源配置。',
-  'firewall-options': '节点防火墙运行参数。',
-  'firewall-log': '节点防火墙日志。',
-  lvm: 'LVM 卷组与剩余空间。',
-  lvmthin: 'LVM-Thin 池使用情况。',
-  directory: '目录类型存储。',
-  zfs: 'ZFS 池与使用情况。'
-}
 
 function typeLabel(type: string): string {
   return (
@@ -208,27 +101,23 @@ function formatDate(seconds: number | undefined): string {
 }
 
 function SectionShell({
+  id,
   title,
   description,
   actions,
   children
 }: {
+  id?: string
   title: string
   description: string
   actions?: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className="min-w-0">
-      <div className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-b border-border bg-background px-5 py-4">
-        <div>
-          <h2 className="text-[15px] font-medium text-foreground">{title}</h2>
-          <p className="mt-1 max-w-2xl text-[12px] leading-5 text-muted-foreground">{description}</p>
-        </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
-      </div>
-      <div className="p-5">{children}</div>
-    </div>
+    <Card data-section={id}>
+      <PanelHeader title={title} description={description} actions={actions} />
+      <div className="p-4">{children}</div>
+    </Card>
   )
 }
 
@@ -427,103 +316,123 @@ function NetworkEditorDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-        <DialogHeader>
+    <Dialog open={open} onOpenChange={(next) => { if (!saving) onOpenChange(next) }}>
+      <DialogContent className="flex max-h-[88vh] max-w-[720px] flex-col">
+        <DialogHeader className="shrink-0 pr-12">
           <DialogTitle>{existing ? `编辑网络接口 · ${initial?.iface}` : '添加网络接口'}</DialogTitle>
           <DialogDescription>
-            {existing ? '修改接口参数。保存后仍需在列表上方应用配置。' : '创建新的网桥、VLAN 或 Bond 接口。'}
+            {existing
+              ? '修改接口参数。保存后仍需在列表上方应用配置。'
+              : '创建新的网桥、VLAN 或 Bond 接口。保存后需要应用配置才会生效。'}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">
           {error && (
             <div className="border border-destructive/35 bg-destructive/[0.05] p-3 text-[12px] leading-5 text-destructive">
               {error}
             </div>
           )}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="接口名称">
-              <Input
-                value={form.iface}
-                onChange={(event) => set('iface', event.target.value)}
-                placeholder="例如 vmbr1"
-                className="font-mono text-[12px]"
-                disabled={existing}
-                autoFocus
-              />
-            </Field>
-            <Field label="类型">
-              <Select
-                value={form.type}
-                onValueChange={(value) => set('type', value as NodeNetworkType)}
-                disabled={existing}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="bridge">网桥</SelectItem>
-                  <SelectItem value="vlan">VLAN</SelectItem>
-                  <SelectItem value="bond">Bond</SelectItem>
-                  <SelectItem value="eth">物理网卡</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="IPv4 CIDR" hint="留空表示不配置地址，例如 192.0.2.10/24。">
-              <Input
-                value={form.cidr}
-                onChange={(event) => set('cidr', event.target.value)}
-                placeholder="192.0.2.10/24"
-                className="font-mono text-[12px]"
-              />
-            </Field>
-            <Field label="IPv4 网关">
-              <Input
-                value={form.gateway}
-                onChange={(event) => set('gateway', event.target.value)}
-                placeholder="192.0.2.1"
-                className="font-mono text-[12px]"
-              />
-            </Field>
-            <Field label="IPv6 CIDR">
-              <Input
-                value={form.cidr6}
-                onChange={(event) => set('cidr6', event.target.value)}
-                placeholder="2001:db8::10/64"
-                className="font-mono text-[12px]"
-              />
-            </Field>
-            <Field label="IPv6 网关">
-              <Input
-                value={form.gateway6}
-                onChange={(event) => set('gateway6', event.target.value)}
-                placeholder="2001:db8::1"
-                className="font-mono text-[12px]"
-              />
-            </Field>
-            <Field label="MTU" hint="留空使用系统默认值。">
-              <Input
-                value={form.mtu}
-                onChange={(event) => set('mtu', event.target.value)}
-                inputMode="numeric"
-                className="font-mono text-[12px]"
-              />
-            </Field>
-            <div className="flex items-end">
-              <div className="flex h-9 w-full items-center justify-between border border-border bg-panel/30 px-3">
-                <span className="text-[12px] text-muted-foreground">随节点自动启动</span>
-                <Switch checked={form.autostart} onCheckedChange={(value) => set('autostart', value)} />
+          <section className="space-y-3">
+            <div>
+              <h3 className="text-[12px] font-medium text-foreground">接口</h3>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">接口名称与类型创建后不可更改。</p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="接口名称">
+                <Input
+                  value={form.iface}
+                  onChange={(event) => set('iface', event.target.value)}
+                  placeholder="例如 vmbr1"
+                  className="font-mono text-[12px]"
+                  disabled={existing}
+                  autoFocus
+                />
+              </Field>
+              <Field label="类型">
+                <Select
+                  value={form.type}
+                  onValueChange={(value) => set('type', value as NodeNetworkType)}
+                  disabled={existing}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bridge">网桥</SelectItem>
+                    <SelectItem value="vlan">VLAN</SelectItem>
+                    <SelectItem value="bond">Bond</SelectItem>
+                    <SelectItem value="eth">物理网卡</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          </section>
+
+          <section className="space-y-3 border-t border-border pt-5">
+            <div>
+              <h3 className="text-[12px] font-medium text-foreground">IP 地址</h3>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">留空表示不配置该项地址。</p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="IPv4 CIDR" hint="例如 192.0.2.10/24">
+                <Input
+                  value={form.cidr}
+                  onChange={(event) => set('cidr', event.target.value)}
+                  placeholder="192.0.2.10/24"
+                  className="font-mono text-[12px]"
+                />
+              </Field>
+              <Field label="IPv4 网关">
+                <Input
+                  value={form.gateway}
+                  onChange={(event) => set('gateway', event.target.value)}
+                  placeholder="192.0.2.1"
+                  className="font-mono text-[12px]"
+                />
+              </Field>
+              <Field label="IPv6 CIDR" hint="例如 2001:db8::10/64">
+                <Input
+                  value={form.cidr6}
+                  onChange={(event) => set('cidr6', event.target.value)}
+                  placeholder="2001:db8::10/64"
+                  className="font-mono text-[12px]"
+                />
+              </Field>
+              <Field label="IPv6 网关">
+                <Input
+                  value={form.gateway6}
+                  onChange={(event) => set('gateway6', event.target.value)}
+                  placeholder="2001:db8::1"
+                  className="font-mono text-[12px]"
+                />
+              </Field>
+              <Field label="MTU" hint="留空使用系统默认值。">
+                <Input
+                  value={form.mtu}
+                  onChange={(event) => set('mtu', event.target.value)}
+                  inputMode="numeric"
+                  className="font-mono text-[12px]"
+                />
+              </Field>
+              <div className="flex items-end">
+                <div className="flex h-9 w-full items-center justify-between border border-border bg-panel/30 px-3">
+                  <span className="text-[12px] text-muted-foreground">随节点自动启动</span>
+                  <Switch checked={form.autostart} onCheckedChange={(value) => set('autostart', value)} />
+                </div>
               </div>
             </div>
-          </div>
+          </section>
 
           {form.type === 'bridge' && (
-            <div className="border-t border-border pt-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="桥接端口" hint="使用空格分隔多个接口，例如 enp1s0。">
+            <section className="space-y-3 border-t border-border pt-5">
+              <div>
+                <h3 className="text-[12px] font-medium text-foreground">桥接</h3>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">指定桥接端口与 VLAN 过滤参数。</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="桥接端口" hint="多个接口使用空格分隔，例如 enp1s0。">
                   <Input
                     value={form.bridgePorts}
                     onChange={(event) => set('bridgePorts', event.target.value)}
@@ -552,93 +461,109 @@ function NetworkEditorDialog({
                   />
                 </div>
               </div>
-            </div>
+            </section>
           )}
 
           {form.type === 'vlan' && (
-            <div className="grid grid-cols-1 gap-4 border-t border-border pt-4 sm:grid-cols-2">
-              <Field label="VLAN ID">
-                <Input
-                  value={form.vlanId}
-                  onChange={(event) => set('vlanId', event.target.value)}
-                  inputMode="numeric"
-                  placeholder="100"
-                  className="font-mono text-[12px]"
-                />
-              </Field>
-              <Field label="父接口">
-                <Input
-                  value={form.vlanRawDevice}
-                  onChange={(event) => set('vlanRawDevice', event.target.value)}
-                  placeholder="例如 enp1s0"
-                  className="font-mono text-[12px]"
-                />
-              </Field>
-            </div>
+            <section className="space-y-3 border-t border-border pt-5">
+              <div>
+                <h3 className="text-[12px] font-medium text-foreground">VLAN</h3>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">VLAN 接口依附于一个物理接口或网桥。</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="VLAN ID">
+                  <Input
+                    value={form.vlanId}
+                    onChange={(event) => set('vlanId', event.target.value)}
+                    inputMode="numeric"
+                    placeholder="100"
+                    className="font-mono text-[12px]"
+                  />
+                </Field>
+                <Field label="父接口">
+                  <Input
+                    value={form.vlanRawDevice}
+                    onChange={(event) => set('vlanRawDevice', event.target.value)}
+                    placeholder="例如 enp1s0"
+                    className="font-mono text-[12px]"
+                  />
+                </Field>
+              </div>
+            </section>
           )}
 
           {form.type === 'bond' && (
-            <div className="grid grid-cols-1 gap-4 border-t border-border pt-4 sm:grid-cols-2">
-              <Field label="Bond 成员">
-                <Input
-                  value={form.slaves}
-                  onChange={(event) => set('slaves', event.target.value)}
-                  placeholder="使用空格分隔接口"
-                  className="font-mono text-[12px]"
-                />
-              </Field>
-              <Field label="Bond 模式">
-                <Select value={form.bondMode} onValueChange={(value) => set('bondMode', value)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['balance-rr', 'active-backup', 'balance-xor', 'broadcast', '802.3ad', 'balance-tlb', 'balance-alb'].map(
-                      (mode) => (
-                        <SelectItem key={mode} value={mode}>
-                          {mode}
-                        </SelectItem>
-                      )
-                    )}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="哈希策略">
-                <Select
-                  value={form.bondXmitHashPolicy}
-                  onValueChange={(value) => set('bondXmitHashPolicy', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="layer2">layer2</SelectItem>
-                    <SelectItem value="layer2+3">layer2+3</SelectItem>
-                    <SelectItem value="layer3+4">layer3+4</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
+            <section className="space-y-3 border-t border-border pt-5">
+              <div>
+                <h3 className="text-[12px] font-medium text-foreground">Bond</h3>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">配置成员接口、绑定模式与哈希策略。</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Bond 成员">
+                  <Input
+                    value={form.slaves}
+                    onChange={(event) => set('slaves', event.target.value)}
+                    placeholder="使用空格分隔接口"
+                    className="font-mono text-[12px]"
+                  />
+                </Field>
+                <Field label="Bond 模式">
+                  <Select value={form.bondMode} onValueChange={(value) => set('bondMode', value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['balance-rr', 'active-backup', 'balance-xor', 'broadcast', '802.3ad', 'balance-tlb', 'balance-alb'].map(
+                        (mode) => (
+                          <SelectItem key={mode} value={mode}>
+                            {mode}
+                          </SelectItem>
+                        )
+                      )}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="哈希策略">
+                  <Select
+                    value={form.bondXmitHashPolicy}
+                    onValueChange={(value) => set('bondXmitHashPolicy', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="layer2">layer2</SelectItem>
+                      <SelectItem value="layer2+3">layer2+3</SelectItem>
+                      <SelectItem value="layer3+4">layer3+4</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+            </section>
           )}
 
-          <Field label="备注">
+          <section className="space-y-3 border-t border-border pt-5">
+            <div>
+              <h3 className="text-[12px] font-medium text-foreground">备注</h3>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">可选，填写接口用途或连接位置。</p>
+            </div>
             <Textarea
               value={form.comments}
               onChange={(event) => set('comments', event.target.value)}
               rows={3}
-              placeholder="可选，填写接口用途"
+              placeholder="例如：4号口，连接核心交换机"
             />
-          </Field>
-
-          <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              取消
-            </Button>
-            <Button onClick={() => void save()} loading={saving}>
-              保存
-            </Button>
-          </div>
+          </section>
         </div>
+
+        <DialogFooter className="shrink-0 bg-panel/30">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+            取消
+          </Button>
+          <Button onClick={() => void save()} loading={saving}>
+            保存
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -715,29 +640,27 @@ function NetworkSection({
   }
 
   return (
-    <div>
-      <div className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-b border-border bg-background px-5 py-4">
-        <div>
-          <h2 className="text-[15px] font-medium text-foreground">网络</h2>
-          <p className="mt-1 max-w-2xl text-[12px] leading-5 text-muted-foreground">
-            管理节点的物理网卡、网桥、VLAN 和 Bond。修改先写入待应用配置，应用后才会生效。
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setRevertOpen(true)}>
-            还原未应用
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setApplyOpen(true)}>
-            应用配置
-          </Button>
-          <Button size="sm" onClick={() => startEdit(null)}>
-            <Plus className="h-3.5 w-3.5" />
-            添加接口
-          </Button>
-        </div>
-      </div>
+    <Card data-section="network">
+      <PanelHeader
+        title="网络"
+        description="管理节点的物理网卡、网桥、VLAN 和 Bond。修改先写入待应用配置，应用后才会生效。"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setRevertOpen(true)}>
+              还原未应用
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setApplyOpen(true)}>
+              应用配置
+            </Button>
+            <Button size="sm" onClick={() => startEdit(null)}>
+              <Plus className="h-3.5 w-3.5" />
+              添加接口
+            </Button>
+          </div>
+        }
+      />
 
-      <div className="p-5">
+      <div className="p-4">
         <div className="mb-3 flex items-start gap-2 text-[11px] leading-5 text-warning">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <div className="text-muted-foreground">
@@ -746,8 +669,8 @@ function NetworkSection({
         </div>
 
         {networkView === 'cards' && data.network.length > 0 && (
-          <div className="mb-4 border border-border">
-            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <div className="mb-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
               <div className="text-[11px] font-medium text-foreground">接口概览</div>
               <div className="font-mono text-[10px] text-muted-foreground">{data.network.length}</div>
             </div>
@@ -761,12 +684,7 @@ function NetworkSection({
                     type="button"
                     data-network-card={iface.iface}
                     onClick={() => startEdit(iface)}
-                    className={cn(
-                      'flex w-[92px] flex-col items-center border px-2 py-2 text-center transition-colors',
-                      isUplink
-                        ? 'border-border bg-panel/30 hover:border-brand/50'
-                        : 'border-transparent hover:border-border hover:bg-panel/30'
-                    )}
+                    className="flex w-[92px] flex-col items-center px-2 py-2 text-center transition-colors hover:bg-panel/50"
                   >
                     <EthernetPort
                       className={cn(
@@ -797,13 +715,12 @@ function NetworkSection({
           </div>
         )}
         <div className="overflow-x-auto border border-border">
-          <table className="w-full min-w-[760px] text-left">
+          <table className="w-full min-w-[600px] text-left">
             <thead>
               <tr className="border-b border-border bg-panel/40 text-[11px] text-muted-foreground">
                 <th className="px-3 py-2.5 font-medium">接口</th>
                 <th className="px-3 py-2.5 font-medium">类型</th>
-                <th className="px-3 py-2.5 font-medium">地址</th>
-                <th className="px-3 py-2.5 font-medium">网关</th>
+                <th className="px-3 py-2.5 font-medium">地址 / 网关</th>
                 <th className="px-3 py-2.5 font-medium">端口 / 从属</th>
                 <th className="px-3 py-2.5 font-medium">备注</th>
                 <th className="px-3 py-2.5 text-right font-medium">操作</th>
@@ -812,17 +729,21 @@ function NetworkSection({
             <tbody>
               {data.network.map((iface) => (
                 <tr key={iface.iface} className="border-b border-border/60 last:border-b-0">
-                  <td className="px-3 py-3">
+                  <td className="whitespace-nowrap px-3 py-3">
                     <div className="font-mono text-[12px] text-foreground">{iface.iface}</div>
                     <div className="mt-0.5 text-[11px] text-muted-foreground">
                       {iface.active ? '已启用' : '未启用'} · {iface.autostart ? '自动启动' : '手动启动'}
                     </div>
                   </td>
-                  <td className="px-3 py-3 text-[12px] text-foreground">{typeLabel(iface.type)}</td>
-                  <td className="px-3 py-3 font-mono text-[11px] text-foreground">{interfaceAddress(iface)}</td>
-                  <td className="px-3 py-3 font-mono text-[11px] text-muted-foreground">{iface.gateway ?? '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-[12px] text-foreground">{typeLabel(iface.type)}</td>
+                  <td className="px-3 py-3">
+                    <div className="font-mono text-[11px] text-foreground">{interfaceAddress(iface)}</div>
+                    {iface.gateway && (
+                      <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">网关 {iface.gateway}</div>
+                    )}
+                  </td>
                   <td className="px-3 py-3 font-mono text-[11px] text-muted-foreground">{networkPorts(iface)}</td>
-                  <td className="max-w-[180px] truncate px-3 py-3 text-[11px] text-muted-foreground" title={iface.comments}>
+                  <td className="max-w-[150px] truncate px-3 py-3 text-[11px] text-muted-foreground" title={iface.comments}>
                     {iface.comments?.trim() || '—'}
                   </td>
                   <td className="px-3 py-3">
@@ -887,7 +808,7 @@ function NetworkSection({
         busy={busy}
         onConfirm={revert}
       />
-    </div>
+    </Card>
   )
 }
 
@@ -922,6 +843,7 @@ function DnsSection({
 
   return (
     <SectionShell
+      id="dns"
       title="DNS"
       description="配置节点的搜索域和 DNS 服务器。留空表示不设置该项。"
       actions={
@@ -999,6 +921,7 @@ function TimeSection({
 
   return (
     <SectionShell
+      id="time"
       title="时间"
       description="设置节点时区。PVE 会自动同步系统时间。"
       actions={
@@ -1061,6 +984,7 @@ function OptionsSection({
 
   return (
     <SectionShell
+      id="options"
       title="节点选项"
       description="节点描述和基础信息。网络相关选项请使用网络页面。"
       actions={
@@ -1102,7 +1026,7 @@ function HostnameSection({
     .map((item) => ({ iface: item.iface, address: interfaceAddress(item) }))
 
   return (
-    <SectionShell title="主机" description="节点主机名和网络身份。主机名由 PVE 系统管理。">
+    <SectionShell id="hostname" title="主机" description="节点主机名和网络身份。主机名由 PVE 系统管理。">
       <div className="max-w-3xl">
         <div className="border border-border">
           {[
@@ -1126,7 +1050,7 @@ function HostnameSection({
 
 function CertificatesSection({ certificates }: { certificates: NodeCertificateInfo[] }): React.JSX.Element {
   return (
-    <SectionShell title="凭据" description="节点证书的主体、签发者、有效期与指纹。不返回私钥或 PEM 内容。">
+    <SectionShell id="certificates" title="凭据" description="节点证书的主体、签发者、有效期与指纹。不返回私钥或 PEM 内容。">
       {certificates.length === 0 ? (
         <EmptyState icon={<KeyRound className="h-5 w-5" />} title="没有证书信息" description="节点未返回证书详情。" />
       ) : (
@@ -1166,7 +1090,7 @@ function CertificatesSection({ certificates }: { certificates: NodeCertificateIn
 
 function RepositoriesSection({ repositories }: { repositories: NodeRepositorySummary | null }): React.JSX.Element {
   return (
-    <SectionShell title="存储库" description="节点 APT 软件源。当前版本只展示，不直接修改存储库配置。">
+    <SectionShell id="repositories" title="存储库" description="节点 APT 软件源。当前版本只展示，不直接修改存储库配置。">
       {!repositories ? (
         <EmptyState icon={<Database className="h-5 w-5" />} title="无法读取存储库" />
       ) : (
@@ -1222,7 +1146,7 @@ function RepositoriesSection({ repositories }: { repositories: NodeRepositorySum
 function FirewallOptionsSection({ options }: { options: Record<string, unknown> | null }): React.JSX.Element {
   const entries = options ? Object.entries(options).filter(([key]) => key !== 'digest') : []
   return (
-    <SectionShell title="防火墙选项" description="节点防火墙运行参数。当前版本只展示，不直接修改防火墙规则。">
+    <SectionShell id="firewall-options" title="防火墙选项" description="节点防火墙运行参数。当前版本只展示，不直接修改防火墙规则。">
       {entries.length === 0 ? (
         <EmptyState icon={<Shield className="h-5 w-5" />} title="没有防火墙选项" />
       ) : (
@@ -1241,39 +1165,69 @@ function FirewallOptionsSection({ options }: { options: Record<string, unknown> 
   )
 }
 
-function LogsSection({ node, title, kind }: { node: string; title: string; kind: 'syslog' | 'firewall' }): React.JSX.Element {
+function LogsCard({ node }: { node: string }): React.JSX.Element {
+  const [kind, setKind] = useState<'syslog' | 'firewall'>('syslog')
   const [lines, setLines] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const load = async (): Promise<void> => {
+  const load = useCallback(async (nextKind: 'syslog' | 'firewall'): Promise<void> => {
     setLoading(true)
     setError(null)
     try {
-      const entries = await unwrap(window.pvevdi.nodeLogs(node, kind))
+      const entries = await unwrap(window.pvevdi.nodeLogs(node, nextKind))
       setLines(entries.map((entry) => entry.t))
     } catch (err) {
       setError(errorDetail(err))
     } finally {
       setLoading(false)
     }
-  }
+  }, [node])
 
   useEffect(() => {
+    setKind('syslog')
     setLines(null)
-    void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node, kind])
+    void load('syslog')
+  }, [load])
+
+  const select = (nextKind: 'syslog' | 'firewall'): void => {
+    if (nextKind === kind && lines !== null) return
+    setKind(nextKind)
+    setLines(null)
+    void load(nextKind)
+  }
 
   return (
     <SectionShell
-      title={title}
-      description={kind === 'syslog' ? '节点系统日志，最近 200 行。' : '节点防火墙日志，最近 200 行。'}
+      id="logs"
+      title="日志"
+      description="节点系统日志与防火墙日志，最近 200 行。"
       actions={
-        <Button variant="outline" size="sm" onClick={() => void load()} loading={loading}>
-          <RefreshCw className="h-3.5 w-3.5" />
-          刷新
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant={kind === 'syslog' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => select('syslog')}
+          >
+            系统
+          </Button>
+          <Button
+            variant={kind === 'firewall' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => select('firewall')}
+          >
+            防火墙
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => void load(kind)}
+            loading={loading}
+            aria-label="刷新日志"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       }
     >
       {error ? (
@@ -1284,7 +1238,7 @@ function LogsSection({ node, title, kind }: { node: string; title: string; kind:
           正在读取日志
         </div>
       ) : (
-        <pre className="max-h-[540px] overflow-auto border border-border bg-background p-3 font-mono text-[11px] leading-5 text-foreground">
+        <pre className="max-h-[420px] overflow-auto border border-border bg-background p-3 font-mono text-[11px] leading-5 text-foreground">
           {lines.length ? lines.join('\n') : '没有日志。'}
         </pre>
       )}
@@ -1292,101 +1246,332 @@ function LogsSection({ node, title, kind }: { node: string; title: string; kind:
   )
 }
 
-function LvmSection({ groups }: { groups: NodeSettingsData['lvm'] }): React.JSX.Element {
+function formatTemperature(value: number | undefined): string {
+  if (value === undefined) return '—'
+  return `${Number.isInteger(value) ? value : value.toFixed(1)} °C`
+}
+
+function temperatureTone(value: number | undefined): string {
+  if (value === undefined) return 'text-muted-foreground'
+  if (value >= 80) return 'text-destructive'
+  if (value >= 65) return 'text-warning'
+  return 'text-success'
+}
+
+function InfoTile({
+  label,
+  value,
+  detail,
+  tone,
+  mono = false
+}: {
+  label: string
+  value: string
+  detail?: string
+  tone?: string
+  mono?: boolean
+}): React.JSX.Element {
   return (
-    <SectionShell title="LVM" description="LVM 卷组容量与剩余空间。">
-      {groups.length === 0 ? (
-        <EmptyState icon={<Layers3 className="h-5 w-5" />} title="没有 LVM 卷组" />
-      ) : (
-        <div className="border border-border">
-          {groups.map((group) => (
-            <div key={group.name} className="border-b border-border/60 px-4 py-3 last:border-b-0">
-              <div className="flex items-center justify-between gap-4">
-                <span className="font-mono text-[12px] text-foreground">{group.name}</span>
-                <span className="text-[11px] text-muted-foreground">
-                  {formatBytes(group.free)} 可用 / {formatBytes(group.size)}
-                </span>
-              </div>
-              <Progress value={group.size > 0 ? ((group.size - group.free) / group.size) * 100 : 0} className="mt-2 h-1" />
-            </div>
-          ))}
-        </div>
-      )}
-    </SectionShell>
+    <div className="border border-border bg-panel/20 p-3">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className={cn('mt-1 text-[13px] font-medium text-foreground', mono && 'font-mono text-[12px]', tone)}>{value}</div>
+      {detail && <div className="mt-0.5 text-[10px] leading-4 text-muted-foreground">{detail}</div>}
+    </div>
   )
 }
 
-function LvmThinSection({ pools }: { pools: NodeSettingsData['lvmthin'] }): React.JSX.Element {
+function HardwareSection({
+  data,
+  loading,
+  error,
+  onRefresh
+}: {
+  data: NodeHardwareInfo | null
+  loading: boolean
+  error: string | null
+  onRefresh: () => void
+}): React.JSX.Element {
+  const readings = data?.temperatures ?? []
+  const serverModel = [data?.manufacturer, data?.productName].filter(Boolean).join(' ') || '—'
+  const cpuThreshold =
+    data?.cpuTemperatureMax !== undefined || data?.cpuTemperatureCritical !== undefined
+      ? `阈值 ${data?.cpuTemperatureMax !== undefined ? formatTemperature(data.cpuTemperatureMax) : '—'}${
+          data?.cpuTemperatureCritical !== undefined ? ` / 临界 ${formatTemperature(data.cpuTemperatureCritical)}` : ''
+        }`
+      : '未提供阈值'
+
   return (
-    <SectionShell title="LVM-Thin" description="LVM-Thin 池容量与元数据使用情况。">
-      {pools.length === 0 ? (
-        <EmptyState icon={<Layers3 className="h-5 w-5" />} title="没有 LVM-Thin 池" />
-      ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {pools.map((pool) => (
-            <div key={`${pool.vg}/${pool.lv}`} className="border border-border p-4">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-mono text-[12px] text-foreground">{pool.vg}/{pool.lv}</span>
-                <span className="text-[11px] text-muted-foreground">{formatPercent(pool.lvSize > 0 ? pool.used / pool.lvSize : 0, 1)}</span>
-              </div>
-              <Progress value={pool.lvSize > 0 ? (pool.used / pool.lvSize) * 100 : 0} className="mt-2 h-1" />
-              <div className="mt-2 text-[11px] text-muted-foreground">
-                {formatBytes(pool.used)} / {formatBytes(pool.lvSize)} · 元数据 {pool.metadataSize ? formatBytes(pool.metadataUsed ?? 0) : '—'}
+    <Card data-section="hardware">
+      <PanelHeader
+        title="硬件"
+        description="服务器型号、CPU 型号与温度，通过只读终端会话读取。"
+        actions={
+          <Button variant="ghost" size="sm" onClick={onRefresh} loading={loading}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            重新读取
+          </Button>
+        }
+      />
+      <div className="space-y-4 p-4">
+        {loading && !data ? (
+          <div className="flex items-center gap-2 py-6 text-[12px] text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 spin" />
+            正在读取服务器型号与温度
+          </div>
+        ) : error && !data ? (
+          <div className="border border-destructive/30 bg-destructive/[0.05] p-3 text-[12px] text-destructive">
+            {error}
+          </div>
+        ) : data ? (
+          <>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <InfoTile
+                label="服务器型号"
+                value={serverModel}
+                detail={data.productVersion}
+              />
+              <InfoTile label="主板" value={data.boardName ?? '—'} />
+              <InfoTile label="CPU 型号" value={data.cpuModel ?? '—'} mono />
+              <div className="border border-border bg-panel/20 p-3">
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <Thermometer className="h-3 w-3" />
+                  CPU 温度
+                </div>
+                <div className={cn('mt-1 font-mono text-[21px] leading-none', temperatureTone(data.cpuTemperature))}>
+                  {formatTemperature(data.cpuTemperature)}
+                </div>
+                <div className="mt-1 text-[10px] leading-4 text-muted-foreground">{cpuThreshold}</div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-    </SectionShell>
-  )
-}
 
-function DirectorySection({ directories }: { directories: NodeDirectoryStorage[] }): React.JSX.Element {
-  return (
-    <SectionShell title="目录存储" description="目录类型存储及其容量。">
-      {directories.length === 0 ? (
-        <EmptyState icon={<Folder className="h-5 w-5" />} title="没有目录存储" />
-      ) : (
-        <div className="border border-border">
-          {directories.map((entry) => (
-            <div key={entry.path} className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3 last:border-b-0">
+            {readings.length > 0 && (
               <div>
-                <div className="font-mono text-[12px] text-foreground">{entry.path}</div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground">
-                  {entry.storage ?? entry.type ?? '目录'}
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="text-[11px] font-medium text-foreground">温度传感器</div>
+                  <div className="font-mono text-[10px] text-muted-foreground">{readings.length}</div>
+                </div>
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {readings.slice(0, 24).map((reading) => (
+                    <div
+                      key={`${reading.source ?? ''}-${reading.label}-${reading.value}`}
+                      className="flex items-center justify-between gap-2 bg-panel/25 px-2.5 py-1.5"
+                    >
+                      <span
+                        className="min-w-0 truncate text-[11px] text-muted-foreground"
+                        title={`${reading.source ?? ''} ${reading.label}`.trim()}
+                      >
+                        {reading.label}
+                      </span>
+                      <span className={cn('shrink-0 font-mono text-[11px]', temperatureTone(reading.value))}>
+                        {formatTemperature(reading.value)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div className="text-right text-[11px] text-muted-foreground">
-                {entry.used !== undefined && entry.total !== undefined
-                  ? `${formatBytes(entry.used)} / ${formatBytes(entry.total)}`
-                  : '容量不可用'}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </SectionShell>
+            )}
+
+            {data.warnings.length > 0 && (
+              <div className="text-[11px] leading-5 text-warning">{data.warnings.join(' · ')}</div>
+            )}
+            {error && <div className="text-[11px] leading-5 text-destructive">{error}</div>}
+          </>
+        ) : null}
+      </div>
+    </Card>
   )
 }
 
-function ZfsSection({ pools }: { pools: NodeZfsPool[] }): React.JSX.Element {
+function DiskSection({
+  data,
+  loading,
+  error,
+  onRefresh
+}: {
+  data: NodeHardwareInfo | null
+  loading: boolean
+  error: string | null
+  onRefresh: () => void
+}): React.JSX.Element {
+  const disks = data?.disks ?? []
   return (
-    <SectionShell title="ZFS" description="ZFS 池容量与健康状态。">
-      {pools.length === 0 ? (
-        <EmptyState icon={<Database className="h-5 w-5" />} title="没有 ZFS 池" />
+    <Card data-section="disks">
+      <PanelHeader
+        title="磁盘"
+        description="物理磁盘型号、容量、健康状态与 SMART 温度。"
+        actions={
+          <Button variant="ghost" size="sm" onClick={onRefresh} loading={loading}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            刷新
+          </Button>
+        }
+      />
+      <div className="p-4">
+        {loading && !data ? (
+          <div className="flex items-center gap-2 py-4 text-[12px] text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 spin" />
+            正在读取磁盘与温度
+          </div>
+        ) : error && !data ? (
+          <div className="text-[12px] leading-5 text-destructive">{error}</div>
+        ) : disks.length === 0 ? (
+          <EmptyState icon={<HardDrive className="h-5 w-5" />} title="没有物理磁盘" description="节点未返回磁盘列表。" />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-border text-[11px] text-muted-foreground">
+                  <th className="px-2 py-2 font-medium">设备</th>
+                  <th className="px-2 py-2 font-medium">型号</th>
+                  <th className="px-2 py-2 font-medium">容量</th>
+                  <th className="px-2 py-2 font-medium">温度</th>
+                  <th className="px-2 py-2 font-medium">健康</th>
+                </tr>
+              </thead>
+              <tbody>
+                {disks.map((disk) => {
+                  const vendor = disk.vendor?.trim() ?? ''
+                  const modelName = disk.model?.trim() ?? ''
+                  const model = !vendor
+                    ? modelName || '—'
+                    : !modelName
+                      ? vendor
+                      : modelName.toLowerCase().startsWith(vendor.toLowerCase())
+                        ? modelName
+                        : `${vendor} ${modelName}`
+                  const health = disk.health?.trim() || '—'
+                  const healthy = /passed|ok|good|healthy/i.test(health)
+                  return (
+                    <tr key={disk.devpath} className="border-b border-border/60 last:border-b-0">
+                      <td className="px-2 py-2.5">
+                        <div className="font-mono text-[11px] text-foreground">{disk.devpath}</div>
+                        <div className="mt-0.5 text-[10px] text-muted-foreground">
+                          {[disk.type, disk.rpm ? `${disk.rpm} RPM` : ''].filter(Boolean).join(' · ') || '磁盘'}
+                        </div>
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <div className="max-w-[160px] truncate text-[11px] text-foreground" title={model}>
+                          {model}
+                        </div>
+                        {disk.serial && (
+                          <div className="mt-0.5 max-w-[160px] truncate font-mono text-[10px] text-muted-foreground">
+                            {disk.serial}
+                          </div>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2.5 font-mono text-[11px] text-muted-foreground">{formatBytes(disk.size)}</td>
+                      <td className="whitespace-nowrap px-2 py-2.5">
+                        <span className={cn('font-mono text-[11px]', temperatureTone(disk.temperature))}>
+                          {formatTemperature(disk.temperature)}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <span className={cn('text-[11px]', healthy ? 'text-success' : 'text-muted-foreground')}>{health}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function StorageCard({ data }: { data: NodeSettingsData }): React.JSX.Element {
+  const count = data.lvm.length + data.lvmthin.length + data.directories.length + data.zfs.length
+  return (
+    <SectionShell id="storage" title="存储" description="LVM、LVM-Thin、目录与 ZFS 容量。">
+      {count === 0 ? (
+        <EmptyState icon={<Layers3 className="h-5 w-5" />} title="没有存储信息" description="节点未返回本地存储详情。" />
       ) : (
-        <div className="border border-border">
-          {pools.map((pool) => (
-            <div key={pool.name} className="border-b border-border/60 px-4 py-3 last:border-b-0">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-mono text-[12px] text-foreground">{pool.name}</span>
-                <span className="text-[11px] text-muted-foreground">{pool.health ?? '—'}</span>
-              </div>
-              <div className="mt-1 text-[11px] text-muted-foreground">
-                {pool.size ? `${formatBytes(pool.alloc ?? (pool.size - (pool.free ?? 0)))} / ${formatBytes(pool.size)}` : '容量不可用'}
+        <div className="space-y-4">
+          {data.lvm.length > 0 && (
+            <div>
+              <div className="mb-2 text-[11px] font-medium text-foreground">LVM 卷组</div>
+              <div className="space-y-2">
+                {data.lvm.map((group) => (
+                  <div key={group.name}>
+                    <div className="flex items-center justify-between gap-3 text-[11px]">
+                      <span className="font-mono text-foreground">{group.name}</span>
+                      <span className="text-muted-foreground">
+                        {formatBytes(group.free)} 可用 / {formatBytes(group.size)}
+                      </span>
+                    </div>
+                    <Progress
+                      value={group.size > 0 ? ((group.size - group.free) / group.size) * 100 : 0}
+                      className="mt-1 h-1"
+                    />
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
+          )}
+
+          {data.lvmthin.length > 0 && (
+            <div>
+              <div className="mb-2 text-[11px] font-medium text-foreground">LVM-Thin</div>
+              <div className="space-y-2">
+                {data.lvmthin.map((pool) => (
+                  <div key={`${pool.vg}/${pool.lv}`}>
+                    <div className="flex items-center justify-between gap-3 text-[11px]">
+                      <span className="font-mono text-foreground">
+                        {pool.vg}/{pool.lv}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {formatPercent(pool.lvSize > 0 ? pool.used / pool.lvSize : 0, 1)}
+                      </span>
+                    </div>
+                    <Progress value={pool.lvSize > 0 ? (pool.used / pool.lvSize) * 100 : 0} className="mt-1 h-1" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {data.directories.length > 0 && (
+            <div>
+              <div className="mb-2 text-[11px] font-medium text-foreground">目录存储</div>
+              <div className="divide-y divide-border/60 border border-border">
+                {data.directories.map((entry) => (
+                  <div key={entry.path} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="truncate font-mono text-[11px] text-foreground">{entry.path}</div>
+                      <div className="mt-0.5 text-[10px] text-muted-foreground">{entry.storage ?? entry.type ?? '目录'}</div>
+                    </div>
+                    <div className="text-right font-mono text-[10px] text-muted-foreground">
+                      {entry.used !== undefined && entry.total !== undefined
+                        ? `${formatBytes(entry.used)} / ${formatBytes(entry.total)}`
+                        : '容量不可用'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {data.zfs.length > 0 && (
+            <div>
+              <div className="mb-2 text-[11px] font-medium text-foreground">ZFS</div>
+              <div className="divide-y divide-border/60 border border-border">
+                {data.zfs.map((pool) => (
+                  <div key={pool.name} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+                    <div>
+                      <div className="font-mono text-[11px] text-foreground">{pool.name}</div>
+                      <div className="mt-0.5 text-[10px] text-muted-foreground">{pool.health ?? '—'}</div>
+                    </div>
+                    <div className="text-right font-mono text-[10px] text-muted-foreground">
+                      {pool.size
+                        ? `${formatBytes(pool.alloc ?? pool.size - (pool.free ?? 0))} / ${formatBytes(pool.size)}`
+                        : '容量不可用'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </SectionShell>
@@ -1408,185 +1593,137 @@ export function NodeSettingsView({
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [active, setActive] = useState<SectionId>('network')
-  const [activeGroup, setActiveGroup] = useState('system')
+  const [hardware, setHardware] = useState<NodeHardwareInfo | null>(null)
+  const [hardwareLoading, setHardwareLoading] = useState(true)
+  const [hardwareError, setHardwareError] = useState<string | null>(null)
 
-  const load = async (): Promise<void> => {
-    setRefreshing(true)
-    setError(null)
+  const load = useCallback(
+    async (silent = false): Promise<void> => {
+      if (!silent) setLoading(true)
+      setRefreshing(true)
+      setError(null)
+      try {
+        const next = await unwrap(window.pvevdi.nodeSettings(node))
+        setData(next)
+      } catch (err) {
+        setError(errorDetail(err))
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [node]
+  )
+
+  const loadHardware = useCallback(async (refresh = false): Promise<void> => {
+    setHardwareLoading(true)
+    setHardwareError(null)
     try {
-      const next = await unwrap(window.pvevdi.nodeSettings(node))
-      setData(next)
+      const next = await unwrap(window.pvevdi.nodeHardware(node, refresh))
+      setHardware(next)
     } catch (err) {
-      setError(errorDetail(err))
+      setHardwareError(errorDetail(err))
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      setHardwareLoading(false)
     }
-  }
+  }, [node])
 
   useEffect(() => {
     setData(null)
+    setHardware(null)
     setLoading(true)
-    void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node])
+    setHardwareLoading(true)
+    void load(true)
+    void loadHardware()
+  }, [load, loadHardware])
 
-  const sectionContent = (): React.ReactNode => {
-    if (loading) {
-      return (
-        <div className="flex items-center gap-2 px-5 py-10 text-[12px] text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 spin" />
-          正在读取节点设置
-        </div>
-      )
-    }
-    if (error) {
-      return (
-        <div className="px-5 py-10">
-          <div className="border border-destructive/35 bg-destructive/[0.05] p-4">
-            <EmptyIllustration className="mb-3 h-10 w-10" />
-            <div className="text-[12px] text-destructive">{error}</div>
-          </div>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => void load()}>
-            重试
-          </Button>
-        </div>
-      )
-    }
-    if (!data) return null
-
-    switch (active) {
-      case 'network':
-        return <NetworkSection node={node} data={data} networkView={networkView} onChanged={load} />
-      case 'dns':
-        return <DnsSection node={node} dns={data.dns} onChanged={load} />
-      case 'time':
-        return <TimeSection node={node} time={data.time} onChanged={load} />
-      case 'options':
-        return (
-          <OptionsSection
-            node={node}
-            description={typeof data.config?.description === 'string' ? data.config.description : ''}
-            onChanged={load}
-          />
-        )
-      case 'hostname':
-        return <HostnameSection node={node} dns={data.dns} network={data.network} />
-      case 'certificates':
-        return <CertificatesSection certificates={data.certificates} />
-      case 'repositories':
-        return <RepositoriesSection repositories={data.repositories} />
-      case 'firewall-options':
-        return <FirewallOptionsSection options={data.firewallOptions} />
-      case 'firewall-log':
-        return <LogsSection node={node} title="防火墙日志" kind="firewall" />
-      case 'syslog':
-        return <LogsSection node={node} title="系统日志" kind="syslog" />
-      case 'lvm':
-        return <LvmSection groups={data.lvm} />
-      case 'lvmthin':
-        return <LvmThinSection pools={data.lvmthin} />
-      case 'directory':
-        return <DirectorySection directories={data.directories} />
-      case 'zfs':
-        return <ZfsSection pools={data.zfs} />
-      default:
-        return null
-    }
+  const refreshAll = (): void => {
+    void load(true)
+    void loadHardware(true)
   }
 
-  const currentGroup = SETTINGS_GROUPS.find((group) => group.id === activeGroup) ?? SETTINGS_GROUPS[0]
-
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button variant="outline" size="icon" onClick={onBack} title="返回节点" aria-label="返回节点">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center text-muted-foreground">
-            <Server className="h-5 w-5" />
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow={`${clusterName} 集群`}
+        title="节点设置"
+        description={`${node} 的硬件、网络、系统与存储配置。`}
+        actions={
+          <>
+            <Button variant="ghost" size="sm" onClick={onBack}>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              返回节点
+            </Button>
+            <Button variant="ghost" size="sm" onClick={refreshAll} loading={refreshing}>
+              <RefreshCw className="h-3.5 w-3.5" />
+              刷新
+            </Button>
+          </>
+        }
+      />
+
+      {loading && !data ? (
+        <Card>
+          <div className="flex items-center gap-2 px-4 py-12 text-[12px] text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 spin" />
+            正在读取节点设置
           </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <h1 className="text-[16px] font-semibold tracking-tight text-foreground">{node} 节点设置</h1>
-              <span className="text-[11px] text-muted-foreground">{clusterName} 集群</span>
-            </div>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => void load()} loading={refreshing}>
-          <RefreshCw className="h-3.5 w-3.5" />
-          刷新
-        </Button>
-      </div>
-
-      <div className="flex min-h-0 flex-1 border-t border-border">
-        <aside className="w-[168px] shrink-0 overflow-y-auto border-r border-border bg-card/30 py-2">
-          {SETTINGS_GROUPS.map((group) => {
-            const GroupIcon = group.icon
-            const selectedGroup = activeGroup === group.id
-            return (
-              <button
-                key={group.id}
-                type="button"
-                data-group={group.id}
-                onClick={() => {
-                  setActiveGroup(group.id)
-                  if (!group.items.some((item) => item.id === active)) setActive(group.items[0].id)
-                }}
-                className={cn(
-                  'relative flex h-12 w-full items-center gap-3 px-4 text-left text-[13px] transition-colors',
-                  selectedGroup
-                    ? 'bg-panel text-foreground'
-                    : 'text-muted-foreground hover:bg-panel/60 hover:text-foreground'
-                )}
-              >
-                {selectedGroup && <span className="absolute inset-y-0 left-0 w-[2px] bg-brand" />}
-                <GroupIcon className={cn('h-4 w-4', selectedGroup ? 'text-brand' : 'text-muted-foreground')} />
-                <span>{group.label}</span>
-              </button>
-            )
-          })}
-        </aside>
-
-        <aside className="w-[184px] shrink-0 overflow-y-auto border-r border-border bg-panel/15">
-          <nav className="py-2">
-            {currentGroup.items.map((item) => {
-              const Icon = item.icon
-              const selected = active === item.id
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  data-section={item.id}
-                  onClick={() => setActive(item.id)}
-                  className={cn(
-                    'relative flex h-10 w-full items-center gap-3 px-4 text-left text-[12px] transition-colors',
-                    selected
-                      ? 'bg-panel text-foreground'
-                      : 'text-muted-foreground hover:bg-panel/60 hover:text-foreground'
-                  )}
-                >
-                  {selected && <span className="absolute inset-y-0 left-0 w-[2px] bg-brand" />}
-                  <Icon className={cn('h-3.5 w-3.5', selected ? 'text-brand' : 'text-muted-foreground')} />
-                  <span>{item.label}</span>
-                </button>
-              )
-            })}
-          </nav>
-        </aside>
-
-        <div className="min-w-0 flex-1 overflow-y-auto">
-          {data && data.warnings.length > 0 && (
-            <div className="flex items-start gap-2 border-b border-warning/25 bg-warning/[0.035] px-5 py-2.5 text-[11px] leading-5 text-warning">
+        </Card>
+      ) : error && !data ? (
+        <Card>
+          <div className="p-4">
+            <div className="flex items-start gap-2 border border-destructive/35 bg-destructive/[0.05] p-3 text-[12px] leading-5 text-destructive">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              {data.warnings.join(' · ')}
+              <span className="min-w-0 break-words">{error}</span>
+            </div>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => void load()}>
+              重试
+            </Button>
+          </div>
+        </Card>
+      ) : data ? (
+        <>
+          {error && (
+            <div className="flex items-center gap-3 border border-warning/30 bg-warning/[0.05] px-3 py-2">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
+              <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">最近一次同步失败：{error}</span>
+              <Button variant="ghost" size="sm" onClick={() => void load()}>
+                <RefreshCw className="h-3 w-3" />
+                重试
+              </Button>
             </div>
           )}
-          {sectionContent()}
-        </div>
-      </div>
+          {data.warnings.length > 0 && (
+            <div className="flex items-start gap-2 border border-warning/25 bg-warning/[0.035] px-3 py-2 text-[11px] leading-5 text-warning">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0">{data.warnings.join(' · ')}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-12">
+            <div className="space-y-3 xl:col-span-7">
+              <HardwareSection data={hardware} loading={hardwareLoading} error={hardwareError} onRefresh={() => void loadHardware(true)} />
+              <NetworkSection node={node} data={data} networkView={networkView} onChanged={() => load()} />
+              <DnsSection node={node} dns={data.dns} onChanged={() => load()} />
+              <OptionsSection
+                node={node}
+                description={typeof data.config?.description === 'string' ? data.config.description : ''}
+                onChanged={() => load()}
+              />
+            </div>
+            <div className="space-y-3 xl:col-span-5">
+              <DiskSection data={hardware} loading={hardwareLoading} error={hardwareError} onRefresh={() => void loadHardware(true)} />
+              <StorageCard data={data} />
+              <TimeSection node={node} time={data.time} onChanged={() => load()} />
+              <HostnameSection node={node} dns={data.dns} network={data.network} />
+              <CertificatesSection certificates={data.certificates} />
+              <RepositoriesSection repositories={data.repositories} />
+              <FirewallOptionsSection options={data.firewallOptions} />
+              <LogsCard node={node} />
+            </div>
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }
