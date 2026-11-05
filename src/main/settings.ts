@@ -29,6 +29,7 @@ interface StoredSettings {
   customFont: string
   accentColor: string
   networkView: NetworkView
+  launchAtLogin: boolean
   appearanceVersion: 2
   encryptedPassword?: string
 }
@@ -44,6 +45,7 @@ const DEFAULTS: StoredSettings = {
   customFont: DEFAULT_CUSTOM_FONT,
   accentColor: DEFAULT_ACCENT_COLOR,
   networkView: 'cards',
+  launchAtLogin: false,
   appearanceVersion: 2
 }
 
@@ -95,6 +97,7 @@ export class SettingsStore {
         customFont: normalizeCustomFont(raw.customFont),
         accentColor: migratedAccent ?? DEFAULTS.accentColor,
         networkView: raw.networkView === 'list' ? 'list' : 'cards',
+        launchAtLogin: raw.launchAtLogin === true,
         appearanceVersion: 2,
         encryptedPassword:
           typeof raw.encryptedPassword === 'string' && raw.encryptedPassword
@@ -130,8 +133,19 @@ export class SettingsStore {
       uiFont: this.data.uiFont,
       customFont: this.data.customFont,
       accentColor: this.data.accentColor,
-      networkView: this.data.networkView
+      networkView: this.data.networkView,
+      launchAtLogin: this.data.launchAtLogin
     }
+  }
+
+  syncLaunchAtLogin(): void {
+    if (process.platform !== 'win32' || !app.isPackaged) return
+    const current = app.getLoginItemSettings().openAtLogin
+    if (current === this.data.launchAtLogin) return
+    app.setLoginItemSettings({
+      openAtLogin: this.data.launchAtLogin,
+      path: process.execPath
+    })
   }
 
   recordLogin(input: {
@@ -195,7 +209,12 @@ export class SettingsStore {
       }
       this.data.networkView = patch.networkView
     }
+    if (patch.launchAtLogin !== undefined) {
+      if (typeof patch.launchAtLogin !== 'boolean') throw new Error('开机自启设置无效。')
+      this.data.launchAtLogin = patch.launchAtLogin
+    }
     this.persist()
+    this.syncLaunchAtLogin()
     return this.get()
   }
 

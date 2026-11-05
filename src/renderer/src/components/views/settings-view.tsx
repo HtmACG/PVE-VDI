@@ -4,11 +4,11 @@ import {
   CheckCircle2,
   Download,
   EthernetPort,
-  ExternalLink,
   Globe2,
   History,
   Mail,
   Moon,
+  Power,
   RefreshCw,
   Server,
   Sun,
@@ -21,6 +21,7 @@ import {
   Palette,
   Type
 } from 'lucide-react'
+import { FaGithub } from 'react-icons/fa6'
 import type {
   AppSettings,
   DashboardData,
@@ -43,6 +44,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
 import { Input } from '@renderer/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@renderer/components/ui/select'
+import { Switch } from '@renderer/components/ui/switch'
 import { DataRow } from '@renderer/components/common'
 import {
   AlertDialog,
@@ -163,7 +165,6 @@ export function SettingsView({
       <PageHeader
         eyebrow={`${session.clusterName} 集群`}
         title="设置"
-        description="连接偏好、可视化设置、字体、强调色和本地凭据管理。"
       />
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
@@ -171,7 +172,6 @@ export function SettingsView({
           <Card>
             <PanelHeader
               title="可视化设置"
-              description="主题、字体、强调色与网络接口展示"
             />
             <div className="space-y-5 p-4">
               <div>
@@ -414,9 +414,27 @@ export function SettingsView({
           </Card>
 
           <Card>
+            <PanelHeader title="启动" />
+            <div className="flex items-center justify-between gap-4 p-4">
+              <div className="flex items-center gap-2.5">
+                <Power className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <div className="text-[12px] text-foreground">开机自启</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">登录 Windows 后自动启动 PVE VDI。</div>
+                </div>
+              </div>
+              <Switch
+                checked={settings.launchAtLogin}
+                disabled={saving}
+                onCheckedChange={(value) => void update({ launchAtLogin: value })}
+                aria-label="开机自启"
+              />
+            </div>
+          </Card>
+
+          <Card>
             <PanelHeader
               title="凭据与安全"
-              description="本地凭据管理"
               actions={
                 <span className={settings.credentialStorageAvailable ? 'text-[12px] text-success' : 'text-[12px] text-warning'}>
                   {settings.credentialStorageAvailable ? 'DPAPI 可用' : '加密存储不可用'}
@@ -474,7 +492,7 @@ export function SettingsView({
 
         <div className="space-y-3 xl:col-span-5">
           <Card>
-            <PanelHeader title="当前连接" description="当前会话" actions={<span className="text-[12px] text-success">已连接</span>} />
+            <PanelHeader title="当前连接" actions={<span className="text-[12px] text-success">已连接</span>} />
             <div className="px-4">
               <DataRow label="PVE 地址" mono>{session.serverUrl.replace(/^https?:\/\//, '')}</DataRow>
               <DataRow label="账户" mono>{session.username}</DataRow>
@@ -495,7 +513,7 @@ export function SettingsView({
           </Card>
 
           <Card>
-            <PanelHeader title="应用信息" description="构建与运行时" />
+            <PanelHeader title="应用信息" />
             <div className="px-4">
               <DataRow label="产品">PVE VDI</DataRow>
               <DataRow label="版本" mono>v{appVersion}</DataRow>
@@ -518,7 +536,6 @@ export function SettingsView({
           <Card>
             <PanelHeader
               title="开发者与更新"
-              description="北慕林奈 · GitHub 仓库"
               actions={
                 <Button variant="outline" size="sm" onClick={() => void checkUpdates()} loading={checkingUpdates}>
                   <RefreshCw className="h-3 w-3" />
@@ -539,7 +556,7 @@ export function SettingsView({
                     {APP_AUTHOR.websiteLabel}
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => openExternal(APP_AUTHOR.github)}>
-                    <ExternalLink className="h-3 w-3" />
+                    <FaGithub className="h-3 w-3" />
                     GitHub
                   </Button>
                 </div>

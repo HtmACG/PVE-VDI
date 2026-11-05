@@ -6,6 +6,17 @@ export interface ChangelogEntry {
 
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.5.1',
+    date: '2026-11-06',
+    items: [
+      '节点设置改为紧凑工具栏 + 全高三栏布局，内容区独立滚动',
+      '网络接口卡片改为 4 列，并增加 WAN / LAN / VNET 角色标识',
+      '修复 Alpine、GitHub 图标',
+      '新增 Windows 开机自启',
+      '精简设置和节点设置中的重复描述'
+    ]
+  },
+  {
     version: '1.5.0',
     date: '2026-11-06',
     items: [

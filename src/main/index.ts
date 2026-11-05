@@ -104,6 +104,7 @@ if (!gotLock) {
 
     manager = new PveManager()
     const store = new SettingsStore()
+    store.syncLaunchAtLogin()
     const consoleWindows = new ConsoleWindowManager({
       manager,
       store,

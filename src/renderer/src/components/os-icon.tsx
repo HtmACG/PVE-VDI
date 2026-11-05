@@ -2,6 +2,7 @@ import type { IconType } from 'react-icons'
 import { FaWindows } from 'react-icons/fa6'
 import {
   siAlmalinux,
+  siAlpinelinux,
   siArchlinux,
   siCentos,
   siDebian,
@@ -24,6 +25,7 @@ const BRAND_ICONS: Partial<Record<OsFamily, { path: string; hex: string }>> = {
   ubuntu: siUbuntu,
   debian: siDebian,
   arch: siArchlinux,
+  alpine: siAlpinelinux,
   fedora: siFedora,
   rocky: siRockylinux,
   alma: siAlmalinux,

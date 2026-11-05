@@ -58,6 +58,7 @@
 - “可视化设置”可切换网络接口卡片 / 列表展示
 - 空内容、无法连接等状态使用 Vue 3 生态 Element Plus 的官方空状态 SVG 插图；第三方图形来源见 [NOTICE](NOTICE)
 - 设置页提供 GitHub Release / Tag 更新检查、更新日志、开发者信息
+- **开机自启**：登录 Windows 后自动启动 PVE VDI，仅注册当前用户登录项，不保存密码
 
 ### 创建虚拟机
 
@@ -112,8 +113,8 @@ src/
 
 Windows 安装包与便携版位于 `release/`：
 
-- `PVE-VDI-1.5.0-x64.exe`：NSIS 安装包
-- `PVE-VDI-Portable-1.5.0-x64.exe`：便携版
+- `PVE-VDI-1.5.1-x64.exe`：NSIS 安装包
+- `PVE-VDI-Portable-1.5.1-x64.exe`：便携版
 
 两个产物均未使用商业代码签名证书，Windows SmartScreen 可能提示“未知发布者”。
 
@@ -253,6 +254,16 @@ pnpm test:appearance
 - 节点设置、网络卡片、Element Plus 空状态、GitHub 更新检查和更新日志验证通过
 - UI 冒烟、节点设置、外观、控制台与更新检查测试无 Renderer 控制台错误
 - 图表使用 Recharts，进度条使用 Radix Progress，网络图标使用 lucide，OS 图标使用 npm 图标库
+
+### 1.5.1 验证
+
+- 节点设置改为紧凑工具栏 + 全高三栏布局，内容区独立滚动
+- 网络卡片改为 4 列，并增加 WAN / LAN / VNET 角色标识
+- 修复 Alpine、GitHub 等图标来源
+- 新增 Windows 开机自启
+- 精简设置和节点设置中的重复描述
+- `pnpm typecheck`、`pnpm build`、节点设置、UI、控制台和更新检查通过
+- `win-unpacked` 中验证开机自启开关可写入并移除当前用户登录项
 
 ## License
 

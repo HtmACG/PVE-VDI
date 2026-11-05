@@ -66,6 +66,7 @@ export interface AppSettings {
   customFont: string
   accentColor: string
   networkView: NetworkView
+  launchAtLogin: boolean
 }
 
 export interface UpdateCheckResult {
@@ -604,6 +605,7 @@ export interface PreferencesPatch {
   customFont?: string
   accentColor?: string
   networkView?: NetworkView
+  launchAtLogin?: boolean
 }
 
 export interface WindowState {

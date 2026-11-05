@@ -3,7 +3,9 @@ import type { LucideIcon } from 'lucide-react'
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowUpRight,
   Clock3,
+  Cloud,
   Database,
   EthernetPort,
   Folder,
@@ -11,6 +13,7 @@ import {
   HardDrive,
   KeyRound,
   Layers3,
+  Link2,
   Loader2,
   Network,
   Pencil,
@@ -739,7 +742,6 @@ function NetworkSection({
           <div className="mb-4">
             <div className="mb-2 flex items-center justify-between gap-3">
               <div className="text-[11px] font-medium text-foreground">接口概览</div>
-              <div className="text-[11px] text-muted-foreground">点击卡片编辑参数</div>
             </div>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
               {data.network.map((iface) => {
@@ -758,13 +760,24 @@ function NetworkSection({
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <EthernetPort
-                        className={cn(
-                          'h-8 w-12',
-                          highlighted ? 'text-brand' : iface.active ? 'text-foreground/65' : 'text-muted-foreground/60'
+                      <div className="relative">
+                        <EthernetPort
+                          className={cn(
+                            'h-8 w-12',
+                            highlighted ? 'text-brand' : iface.active ? 'text-foreground/65' : 'text-muted-foreground/60'
+                          )}
+                          strokeWidth={1.3}
+                        />
+                        {iface.gateway && (
+                          <ArrowUpRight className="absolute -right-1 -top-1 h-3.5 w-3.5 text-brand" aria-hidden="true" />
                         )}
-                        strokeWidth={1.3}
-                      />
+                        {!iface.gateway && iface.bridge_ports && (
+                          <Link2 className="absolute -right-1 -top-1 h-3.5 w-3.5 text-brand" aria-hidden="true" />
+                        )}
+                        {!iface.gateway && !iface.bridge_ports && iface.iface.startsWith('vnet') && (
+                          <Cloud className="absolute -right-1 -top-1 h-3.5 w-3.5 text-brand" aria-hidden="true" />
+                        )}
+                      </div>
                       <span className="text-[10px] text-muted-foreground">
                         {iface.active ? '已启用' : '未启用'}
                       </span>
@@ -1502,7 +1515,6 @@ export function NodeSettingsView({
               <h1 className="text-[16px] font-semibold tracking-tight text-foreground">{node} 节点设置</h1>
               <span className="text-[11px] text-muted-foreground">{clusterName} 集群</span>
             </div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">网络、系统、防火墙与磁盘配置</div>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => void load()} loading={refreshing}>
