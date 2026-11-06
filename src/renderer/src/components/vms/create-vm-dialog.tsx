@@ -398,7 +398,7 @@ export function CreateVmDialog({
       }}
     >
       <DialogContent
-        className="flex max-h-[90vh] max-w-[880px] flex-col"
+        className="h-[86vh] max-w-[880px]"
         onInteractOutside={(event) => {
           if (submitting) event.preventDefault()
         }}
@@ -406,7 +406,7 @@ export function CreateVmDialog({
           if (submitting) event.preventDefault()
         }}
       >
-        <DialogHeader className="shrink-0 pr-12">
+        <DialogHeader>
           <DialogTitle>创建虚拟机</DialogTitle>
           <DialogDescription>
             通过 PVE API 创建新的 QEMU 虚拟机，或从现有模板克隆虚拟机。
@@ -879,7 +879,7 @@ export function CreateVmDialog({
           )}
         </div>
 
-        <DialogFooter className="shrink-0 bg-panel/30">
+        <DialogFooter>
           {submitting ? (
             <div className="mr-auto flex min-w-0 flex-1 items-center gap-3">
               <Loader2 className="h-4 w-4 shrink-0 spin text-brand" />

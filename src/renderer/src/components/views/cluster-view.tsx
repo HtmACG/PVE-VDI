@@ -5,8 +5,9 @@ import { PageHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
 import { Progress } from '@renderer/components/ui/primitives'
-import { NodeStatusBadge, QuorumBadge, TaskStatusBadge } from '@renderer/components/status-badges'
+import { NodeStatusBadge, TaskStatusBadge } from '@renderer/components/status-badges'
 import { EmptyState } from '@renderer/components/common'
+import { ClusterMembersCard } from './cluster-members-card'
 import { formatBytes, formatDateTime, formatPercent, formatUptimeShort, splitLicense } from '@renderer/lib/format'
 
 function SummaryCard({
@@ -89,13 +90,14 @@ export function ClusterView({
 
       <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-12">
         <div className="space-y-3 xl:col-span-8">
+          <ClusterMembersCard dashboard={dashboard} />
+
           <Card>
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3.5">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div>
-                <h2 className="text-[14px] font-medium text-foreground">集群成员</h2>
-                <div className="mt-1 text-[12px] text-muted-foreground">{cluster.name} · {nodes.length} 个节点</div>
+                <h2 className="text-[14px] font-medium text-foreground">节点负载</h2>
+                <div className="mt-1 text-[12px] text-muted-foreground">CPU、内存与根磁盘的实时占用</div>
               </div>
-              <QuorumBadge quorate={cluster.quorate} />
             </div>
             <div className="divide-y divide-border">
               {nodes.map((node) => (

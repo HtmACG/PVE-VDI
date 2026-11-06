@@ -3,24 +3,54 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { IPC } from '@shared/ipc'
 import type {
+  AccessAclInput,
+  AccessGroupInput,
+  AccessTokenInput,
+  AccessUserInput,
   ApiResult,
   AppSettings,
+  AptRepository,
+  BackupJobInput,
   BootstrapData,
   CloneVmInput,
+  CloudInitInput,
   ConsoleOpenRequest,
   CreateVmInput,
+  ClusterJoinInput,
+  DiskInitInput,
+  FirewallAliasInput,
+  FirewallOptionsInput,
+  FirewallRuleInput,
+  FirewallScope,
+  HaGroupInput,
+  HaResourceInput,
   IsoUploadInput,
   IsoUrlInput,
   LoginInput,
+  MigrateInput,
   NodeDnsSettings,
+  NodeAptAction,
+  NodeCertificateUpload,
   NodeNetworkInput,
+  PoolInput,
+  PoolMemberInput,
   PreferencesPatch,
+  RestoreBackupInput,
+  SdnSubnetInput,
+  SdnVnetInput,
+  SdnZoneInput,
+  SnapshotInput,
+  StartBackupInput,
+  StorageDefinitionInput,
+  TaskListQuery,
+  TemplateInput,
   VmAction,
   VmConfigPatchInput,
   VmDiskAddInput,
   VmDiskRemoveInput,
   VmDiskResizeInput,
-  VmRef
+  VmRef,
+  VmSendKeyInput
 } from '@shared/types'
 import { toApiError } from './pve/client'
 import { PveManager } from './pve/service'
@@ -42,6 +72,13 @@ function asObject<T>(value: unknown): T {
     throw new Error('请求参数无效。')
   }
   return value as T
+}
+
+function asString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`${label}参数无效。`)
+  }
+  return value
 }
 
 function asConsoleRequest(raw: unknown): ConsoleOpenRequest {
@@ -337,6 +374,252 @@ export function registerIpc(options: {
         throw new Error('任务参数无效。')
       }
       return manager.taskStatus(rawNode, rawUpid)
+    })
+  })
+
+  ipcMain.handle(IPC.taskList, async (_event, rawQuery: unknown) => {
+    return wrap(async () => manager.taskList(rawQuery === undefined ? undefined : asObject<TaskListQuery>(rawQuery)))
+  })
+
+  ipcMain.handle(IPC.taskStop, async (_event, rawNode: unknown, rawUpid: unknown) => {
+    return wrap(async () => {
+      if (typeof rawNode !== 'string' || typeof rawUpid !== 'string') {
+        throw new Error('任务参数无效。')
+      }
+      return manager.taskStop(rawNode, rawUpid)
+    })
+  })
+
+  ipcMain.handle(IPC.taskDelete, async (_event, rawNode: unknown, rawUpid: unknown) => {
+    return wrap(async () => {
+      if (typeof rawNode !== 'string' || typeof rawUpid !== 'string') {
+        throw new Error('任务参数无效。')
+      }
+      return manager.taskDelete(rawNode, rawUpid)
+    })
+  })
+
+  ipcMain.handle(IPC.subscriptionInfo, async (_event, rawNode: unknown) => {
+    return wrap(async () => manager.subscriptionInfo(asString(rawNode, '节点')))
+  })
+
+  ipcMain.handle(IPC.subscriptionUpdate, async (_event, rawNode: unknown, rawKey: unknown) => {
+    return wrap(async () => manager.subscriptionUpdate(asString(rawNode, '节点'), asString(rawKey, '订阅密钥')))
+  })
+
+  ipcMain.handle(IPC.subscriptionDelete, async (_event, rawNode: unknown) => {
+    return wrap(async () => manager.subscriptionDelete(asString(rawNode, '节点')))
+  })
+
+  ipcMain.handle(IPC.nodeApt, async (_event, rawNode: unknown) => {
+    return wrap(async () => manager.nodeApt(asString(rawNode, '节点')))
+  })
+
+  ipcMain.handle(IPC.nodeAptRefresh, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.nodeAptRefresh(asObject<NodeAptAction>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.nodeAptRepoSave, async (_event, rawNode: unknown, rawRepos: unknown) => {
+    return wrap(async () => {
+      if (!Array.isArray(rawRepos)) throw new Error('仓库配置格式无效。')
+      return manager.nodeAptRepoSave(asString(rawNode, '节点'), rawRepos as AptRepository[])
+    })
+  })
+
+  ipcMain.handle(IPC.nodeCertificate, async (_event, rawNode: unknown) => {
+    return wrap(async () => manager.nodeCertificate(asString(rawNode, '节点')))
+  })
+
+  ipcMain.handle(IPC.nodeCertificateUpload, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.nodeCertificateUpload(asObject<NodeCertificateUpload>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.nodeCertificateReset, async (_event, rawNode: unknown) => {
+    return wrap(async () => manager.nodeCertificateReset(asString(rawNode, '节点')))
+  })
+
+  ipcMain.handle(IPC.sdnOverview, async () => {
+    return wrap(async () => manager.getSdnOverview())
+  })
+
+  ipcMain.handle(IPC.sdnZoneSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveSdnZone(asObject<SdnZoneInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.sdnVnetSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveSdnVnet(asObject<SdnVnetInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.sdnSubnetSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveSdnSubnet(asObject<SdnSubnetInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.sdnApply, async (_event, rawRevert: unknown) => {
+    return wrap(async () => manager.applySdn(rawRevert === true))
+  })
+
+  ipcMain.handle(IPC.clusterJoinInfo, async () => {
+    return wrap(async () => manager.getClusterJoinInfo())
+  })
+
+  ipcMain.handle(IPC.clusterJoin, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.joinCluster(asObject<ClusterJoinInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.clusterNodeRemove, async (_event, rawNode: unknown) => {
+    return wrap(async () => manager.removeClusterNode(asString(rawNode, '节点')))
+  })
+
+  ipcMain.handle(IPC.diskInit, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.initDisk(asObject<DiskInitInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.accessOverview, async () => {
+    return wrap(async () => manager.getAccessOverview())
+  })
+
+  ipcMain.handle(IPC.accessUserSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveAccessUser(asObject<AccessUserInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.accessUserDelete, async (_event, rawUserid: unknown) => {
+    return wrap(async () => {
+      if (typeof rawUserid !== 'string') throw new Error('用户参数无效。')
+      await manager.deleteAccessUser(rawUserid)
+    })
+  })
+
+  ipcMain.handle(IPC.accessGroupSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveAccessGroup(asObject<AccessGroupInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.accessGroupDelete, async (_event, rawGroupid: unknown) => {
+    return wrap(async () => {
+      if (typeof rawGroupid !== 'string') throw new Error('用户组参数无效。')
+      await manager.deleteAccessGroup(rawGroupid)
+    })
+  })
+
+  ipcMain.handle(IPC.accessAclUpdate, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.updateAccessAcl(asObject<AccessAclInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.accessTokenSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveAccessToken(asObject<AccessTokenInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.accessTokenDelete, async (_event, rawUserid: unknown, rawTokenId: unknown) => {
+    return wrap(async () => {
+      if (typeof rawUserid !== 'string' || typeof rawTokenId !== 'string') {
+        throw new Error('令牌参数无效。')
+      }
+      await manager.deleteAccessToken(rawUserid, rawTokenId)
+    })
+  })
+
+  ipcMain.handle(IPC.storageOverview, async () => {
+    return wrap(async () => manager.getStorageOverview())
+  })
+
+  ipcMain.handle(
+    IPC.storageContents,
+    async (_event, rawNode: unknown, rawStorage: unknown, rawContent: unknown) => {
+      return wrap(async () => {
+        if (typeof rawNode !== 'string' || typeof rawStorage !== 'string') {
+          throw new Error('存储参数无效。')
+        }
+        return manager.getStorageContents(rawNode, rawStorage, typeof rawContent === 'string' && rawContent ? rawContent : undefined)
+      })
+    }
+  )
+
+  ipcMain.handle(IPC.storageDefinitionSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveStorageDefinition(asObject<StorageDefinitionInput>(rawInput)))
+  })
+
+  ipcMain.handle(
+    IPC.storageContentDelete,
+    async (_event, rawNode: unknown, rawStorage: unknown, rawVolid: unknown) => {
+      return wrap(async () => {
+        if (typeof rawNode !== 'string' || typeof rawStorage !== 'string' || typeof rawVolid !== 'string') {
+          throw new Error('存储卷参数无效。')
+        }
+        return manager.deleteStorageContent(rawNode, rawStorage, rawVolid)
+      })
+    }
+  )
+
+  ipcMain.handle(IPC.poolSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.savePool(asObject<PoolInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.poolMemberUpdate, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.updatePoolMembers(asObject<PoolMemberInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.backupOverview, async () => {
+    return wrap(async () => manager.getBackupOverview())
+  })
+
+  ipcMain.handle(IPC.backupStart, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.startBackup(asObject<StartBackupInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.backupJobSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveBackupJob(asObject<BackupJobInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.backupRestore, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.restoreBackup(asObject<RestoreBackupInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.firewallOverview, async (_event, rawScope: unknown) => {
+    return wrap(async () => manager.getFirewallOverview(asObject<FirewallScope>(rawScope)))
+  })
+
+  ipcMain.handle(IPC.firewallRuleSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveFirewallRule(asObject<FirewallRuleInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.firewallOptionsSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveFirewallOptions(asObject<FirewallOptionsInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.firewallAliasSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveFirewallAlias(asObject<FirewallAliasInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.haOverview, async () => {
+    return wrap(async () => manager.getHaOverview())
+  })
+
+  ipcMain.handle(IPC.haResourceSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveHaResource(asObject<HaResourceInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.haGroupSave, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.saveHaGroup(asObject<HaGroupInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.vmSnapshot, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.vmSnapshot(asObject<SnapshotInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.vmMigrate, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.vmMigrate(asObject<MigrateInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.vmTemplate, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.vmTemplate(asObject<TemplateInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.vmCloudInit, async (_event, rawInput: unknown) => {
+    return wrap(async () => manager.vmCloudInit(asObject<CloudInitInput>(rawInput)))
+  })
+
+  ipcMain.handle(IPC.vmSendKey, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      await manager.vmSendKey(asObject<VmSendKeyInput>(rawInput))
     })
   })
 

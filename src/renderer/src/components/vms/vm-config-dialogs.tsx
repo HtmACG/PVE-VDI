@@ -209,8 +209,8 @@ export function VmConfigDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next) }}>
-      <DialogContent className="flex max-h-[90vh] max-w-[720px] flex-col">
-        <DialogHeader className="shrink-0 pr-12">
+      <DialogContent className="max-w-[720px]">
+        <DialogHeader>
           <DialogTitle>编辑虚拟机配置 · {detail.name}</DialogTitle>
           <DialogDescription>
             {running ? '虚拟机正在运行。请先关机，配置修改才会生效。' : '修改关机状态下的 CPU、内存和启动选项。'}
@@ -323,7 +323,7 @@ export function VmConfigDialog({
           </Section>
         </div>
 
-        <DialogFooter className="shrink-0 bg-panel/30">
+        <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
             取消
           </Button>

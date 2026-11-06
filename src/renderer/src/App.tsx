@@ -29,6 +29,12 @@ import { NodesView } from '@renderer/components/views/nodes-view'
 import { NodeSettingsView } from '@renderer/components/views/node-settings-view'
 import { ClusterView } from '@renderer/components/views/cluster-view'
 import { ImagesView } from '@renderer/components/views/images-view'
+import { StorageView } from '@renderer/components/views/storage-view'
+import { BackupView } from '@renderer/components/views/backup-view'
+import { HaView } from '@renderer/components/views/ha-view'
+import { SdnView } from '@renderer/components/views/sdn-view'
+import { FirewallView } from '@renderer/components/views/firewall-view'
+import { AccessView } from '@renderer/components/views/access-view'
 import { TasksView } from '@renderer/components/views/tasks-view'
 import { SettingsView } from '@renderer/components/views/settings-view'
 import { CreateVmDialog } from '@renderer/components/vms/create-vm-dialog'
@@ -394,6 +400,18 @@ function ConnectedApp({
         )
       case 'images':
         return <ImagesView dashboard={dashboard} onRefresh={() => void refresh()} />
+      case 'storage':
+        return <StorageView dashboard={dashboard} onRefresh={() => void refresh()} />
+      case 'backup':
+        return <BackupView dashboard={dashboard} onRefresh={() => void refresh()} />
+      case 'sdn':
+        return <SdnView dashboard={dashboard} />
+      case 'ha':
+        return <HaView dashboard={dashboard} />
+      case 'firewall':
+        return <FirewallView dashboard={dashboard} />
+      case 'access':
+        return <AccessView dashboard={dashboard} />
       case 'tasks':
         return (
           <TasksView
@@ -519,6 +537,9 @@ function ConnectedApp({
         refreshToken={detailRefreshToken}
         actionBusy={detailBusy}
         storages={viewData?.storages ?? []}
+        nodes={(viewData?.nodes ?? [])
+          .filter((node) => node.status === 'online')
+          .map((node) => node.node)}
         onRefresh={() => {
           setDetailRefreshToken((value) => value + 1)
           void refresh()

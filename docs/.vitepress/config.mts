@@ -28,7 +28,10 @@ export default defineConfig({
           { text: '产品简介', link: '/guide/introduction' },
           { text: '安装与登录', link: '/guide/getting-started' },
           { text: '虚拟机管理', link: '/guide/virtual-machines' },
-          { text: '内置控制台', link: '/guide/console' }
+          { text: '内置控制台', link: '/guide/console' },
+          { text: '存储管理', link: '/guide/storage' },
+          { text: '备份与还原', link: '/guide/backup' },
+          { text: '访问控制', link: '/guide/access' }
         ]
       },
       {
@@ -62,8 +65,21 @@ export default defineConfig({
             { text: '内置控制台', link: '/guide/console' },
             { text: '节点设置', link: '/guide/node-settings' },
             { text: '镜像与磁盘', link: '/guide/images' },
+            { text: '存储管理', link: '/guide/storage' },
+            { text: '备份与还原', link: '/guide/backup' },
             { text: '创建虚拟机', link: '/guide/create-vm' },
             { text: '外观与设置', link: '/guide/appearance' }
+          ]
+        },
+        {
+          text: '集群运维',
+          collapsed: false,
+          items: [
+            { text: '防火墙与高可用', link: '/guide/firewall-ha' },
+            { text: 'SDN 网络', link: '/guide/sdn' },
+            { text: '集群成员与磁盘初始化', link: '/guide/cluster-members' },
+            { text: '访问控制', link: '/guide/access' },
+            { text: '任务与节点运维', link: '/guide/tasks-node-ops' }
           ]
         }
       ],

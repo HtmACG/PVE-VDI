@@ -68,8 +68,8 @@ export function TaskLogDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[76vh] max-w-3xl flex-col">
-        <DialogHeader className="pr-12">
+      <DialogContent className="h-[76vh] max-w-3xl">
+        <DialogHeader>
           <div className="flex items-center gap-2">
             <FileBox className="h-4 w-4 text-brand" />
             <DialogTitle>任务日志</DialogTitle>

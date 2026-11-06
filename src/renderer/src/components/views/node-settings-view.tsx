@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import type {
   NodeCertificateInfo,
+  NodeDiskInfo,
   NodeDnsSettings,
   NodeHardwareInfo,
   NodeNetworkActionResult,
@@ -31,6 +32,7 @@ import type {
 } from '@shared/types'
 import { PageHeader, PanelHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
+import { Badge } from '@renderer/components/ui/badge'
 import { Card } from '@renderer/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@renderer/components/ui/dialog'
 import {
@@ -46,6 +48,8 @@ import {
 import { Input, Textarea } from '@renderer/components/ui/input'
 import { Label } from '@renderer/components/ui/label'
 import { Progress } from '@renderer/components/ui/primitives'
+import { DiskInitDialog } from './disk-init-dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@renderer/components/ui/select'
 import { Switch } from '@renderer/components/ui/switch'
 import { EmptyState } from '@renderer/components/common'
@@ -318,7 +322,7 @@ function NetworkEditorDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!saving) onOpenChange(next) }}>
       <DialogContent className="flex max-h-[88vh] max-w-[720px] flex-col">
-        <DialogHeader className="shrink-0 pr-12">
+        <DialogHeader>
           <DialogTitle>{existing ? `编辑网络接口 · ${initial?.iface}` : '添加网络接口'}</DialogTitle>
           <DialogDescription>
             {existing
@@ -556,7 +560,7 @@ function NetworkEditorDialog({
           </section>
         </div>
 
-        <DialogFooter className="shrink-0 bg-panel/30">
+        <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
             取消
           </Button>
@@ -1383,30 +1387,32 @@ function HardwareSection({
 }
 
 function DiskSection({
+  node,
   data,
   loading,
   error,
   onRefresh
 }: {
+  node: string
   data: NodeHardwareInfo | null
   loading: boolean
   error: string | null
   onRefresh: () => void
 }): React.JSX.Element {
+  const [target, setTarget] = useState<NodeDiskInfo | null>(null)
   const disks = data?.disks ?? []
   return (
     <Card data-section="disks">
       <PanelHeader
         title="磁盘"
-        description="物理磁盘型号、容量、健康状态与 SMART 温度。"
+        description="物理磁盘的用途与健康状态。"
         actions={
-          <Button variant="surface" size="sm" onClick={onRefresh} loading={loading}>
+          <Button variant="ghost" size="sm" onClick={onRefresh} loading={loading} aria-label="刷新磁盘列表">
             <RefreshCw className="h-3.5 w-3.5" />
-            刷新
           </Button>
         }
       />
-      <div className="p-4">
+      <div className="px-4 pb-4 pt-1">
         {loading && !data ? (
           <div className="flex items-center gap-2 py-4 text-[12px] text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 spin" />
@@ -1425,7 +1431,8 @@ function DiskSection({
                   <th className="px-2 py-2 font-medium">型号</th>
                   <th className="px-2 py-2 font-medium">容量</th>
                   <th className="px-2 py-2 font-medium">温度</th>
-                  <th className="px-2 py-2 font-medium">健康</th>
+                  <th className="px-2 py-2 font-medium">用途</th>
+                  <th className="px-2 py-2 text-right font-medium">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -1443,30 +1450,52 @@ function DiskSection({
                   const healthy = /passed|ok|good|healthy/i.test(health)
                   return (
                     <tr key={disk.devpath} className="border-b border-border/60 last:border-b-0">
-                      <td className="px-2 py-2.5">
-                        <div className="font-mono text-[11px] text-foreground">{disk.devpath}</div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">
-                          {[disk.type, disk.rpm ? `${disk.rpm} RPM` : ''].filter(Boolean).join(' · ') || '磁盘'}
+                      <td className="px-1.5 py-2.5">
+                        <div className="whitespace-nowrap font-mono text-[11px] text-foreground">{disk.devpath}</div>
+                        <div className="mt-0.5 whitespace-nowrap text-[10px] text-muted-foreground">
+                          {disk.type || '磁盘'}
+                          {disk.rpm ? ` · ${disk.rpm}RPM` : ''}
                         </div>
                       </td>
-                      <td className="px-2 py-2.5">
-                        <div className="max-w-[160px] truncate text-[11px] text-foreground" title={model}>
+                      <td className="px-1.5 py-2.5">
+                        <div
+                          className="max-w-[80px] truncate text-[11px] text-foreground"
+                          title={`${model}${disk.serial ? ` · ${disk.serial}` : ''}`}
+                        >
                           {model}
                         </div>
-                        {disk.serial && (
-                          <div className="mt-0.5 max-w-[160px] truncate font-mono text-[10px] text-muted-foreground">
-                            {disk.serial}
-                          </div>
-                        )}
+                        <div className={cn('mt-0.5 text-[10px]', healthy ? 'text-success' : 'text-destructive')}>
+                          {healthy ? '正常' : health}
+                        </div>
                       </td>
-                      <td className="whitespace-nowrap px-2 py-2.5 font-mono text-[11px] text-muted-foreground">{formatBytes(disk.size)}</td>
-                      <td className="whitespace-nowrap px-2 py-2.5">
+                      <td className="whitespace-nowrap px-1.5 py-2.5 font-mono text-[11px] text-muted-foreground">{formatBytes(disk.size)}</td>
+                      <td className="whitespace-nowrap px-1.5 py-2.5">
                         <span className={cn('font-mono text-[11px]', temperatureTone(disk.temperature))}>
                           {formatTemperature(disk.temperature)}
                         </span>
                       </td>
-                      <td className="px-2 py-2.5">
-                        <span className={cn('text-[11px]', healthy ? 'text-success' : 'text-muted-foreground')}>{health}</span>
+                      <td className="px-1.5 py-2.5">
+                        {disk.used ? (
+                          <Badge variant="warning">{disk.used}</Badge>
+                        ) : (
+                          <span className="whitespace-nowrap text-[11px] text-muted-foreground">空闲</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap py-2 pl-1 pr-0 text-right">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 px-0"
+                              onClick={() => setTarget(disk)}
+                              aria-label={`初始化磁盘 ${disk.devpath}`}
+                            >
+                              <HardDrive className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>初始化磁盘</TooltipContent>
+                        </Tooltip>
                       </td>
                     </tr>
                   )
@@ -1476,6 +1505,7 @@ function DiskSection({
           </div>
         )}
       </div>
+      <DiskInitDialog open={Boolean(target)} onOpenChange={(next) => !next && setTarget(null)} node={node} disk={target} onDone={onRefresh} />
     </Card>
   )
 }
@@ -1712,7 +1742,13 @@ export function NodeSettingsView({
               />
             </div>
             <div className="space-y-3 xl:col-span-5">
-              <DiskSection data={hardware} loading={hardwareLoading} error={hardwareError} onRefresh={() => void loadHardware(true)} />
+              <DiskSection
+                node={node}
+                data={hardware}
+                loading={hardwareLoading}
+                error={hardwareError}
+                onRefresh={() => void loadHardware(true)}
+              />
               <StorageCard data={data} />
               <TimeSection node={node} time={data.time} onChanged={() => load()} />
               <HostnameSection node={node} dns={data.dns} network={data.network} />

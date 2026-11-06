@@ -1,4 +1,5 @@
-import { ArrowUpRight, Boxes, Cpu, HardDrive, MemoryStick, Plus, RefreshCw, Server, Settings2, Terminal, Thermometer } from 'lucide-react'
+import { ArrowUpRight, Boxes, Cpu, HardDrive, MemoryStick, Plus, RefreshCw, Server, Settings2, SlidersHorizontal, Terminal, Thermometer } from 'lucide-react'
+import { useState } from 'react'
 import type { DashboardData, NodeSummary } from '@shared/types'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
@@ -7,6 +8,7 @@ import { Progress } from '@renderer/components/ui/primitives'
 import { AreaChart } from '@renderer/components/charts/area-chart'
 import { NodeStatusBadge } from '@renderer/components/status-badges'
 import { EmptyState } from '@renderer/components/common'
+import { NodeOpsDialog } from '@renderer/components/views/node-ops-dialog'
 import { formatBytes, formatDateTime, formatPercent, formatUptimeShort, splitLicense } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
 import type { ViewKey } from '@renderer/components/layout/sidebar'
@@ -51,6 +53,7 @@ function NodeCard({
   onNavigate,
   onOpenShell,
   onOpenSettings,
+  onOpenOps,
   liveAt,
   liveError
 }: {
@@ -59,6 +62,7 @@ function NodeCard({
   onNavigate: (view: ViewKey) => void
   onOpenShell: (node: string) => void
   onOpenSettings: (node: string) => void
+  onOpenOps: (node: string) => void
   liveAt?: number
   liveError?: string | null
 }): React.JSX.Element {
@@ -103,6 +107,15 @@ function NodeCard({
           <Button variant="outline" size="sm" onClick={() => onOpenSettings(node.node)}>
             <Settings2 className="h-3.5 w-3.5" />
             设置
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenOps(node.node)}
+            disabled={node.status !== 'online'}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            运维
           </Button>
           <Button variant="outline" size="sm" onClick={() => onOpenShell(node.node)} disabled={node.status !== 'online'}>
             <Terminal className="h-3.5 w-3.5" />
@@ -237,6 +250,7 @@ export function NodesView({
   onOpenShell,
   onOpenSettings
 }: NodesViewProps): React.JSX.Element {
+  const [opsNode, setOpsNode] = useState<string | null>(null)
   const online = dashboard.nodes.filter((node) => node.status === 'online').length
   const totalThreads = dashboard.nodes.reduce((sum, node) => sum + node.maxcpu, 0)
   const totalMemory = dashboard.nodes.reduce((sum, node) => sum + node.maxmem, 0)
@@ -325,12 +339,21 @@ export function NodesView({
               onNavigate={onNavigate}
               onOpenShell={onOpenShell}
               onOpenSettings={onOpenSettings}
+              onOpenOps={setOpsNode}
               liveAt={liveAt}
               liveError={liveError}
             />
           ))}
         </div>
       )}
+
+      <NodeOpsDialog
+        open={Boolean(opsNode)}
+        onOpenChange={(open) => {
+          if (!open) setOpsNode(null)
+        }}
+        node={opsNode}
+      />
 
       {dashboard.nodes.length > 1 && (
         <Card>

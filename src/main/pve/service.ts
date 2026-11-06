@@ -6,10 +6,24 @@ import {
   MIN_REFRESH_INTERVAL
 } from '@shared/ipc'
 import type {
+  AccessAclInput,
+  AccessGroupInput,
+  AccessOverviewData,
+  AccessTokenCreated,
+  AccessTokenInput,
+  AccessUserInput,
   ActionResult,
   AgentInterface,
+  AptPackageUpdate,
+  AptRepository,
+  AptUpdateResult,
+  BackupFile,
+  BackupJob,
+  BackupJobInput,
+  BackupOverviewData,
   BridgeOption,
   CloneVmInput,
+  CloudInitInput,
   ClusterInfo,
   ConsoleOpenRequest,
   ConsoleSessionInfo,
@@ -17,6 +31,19 @@ import type {
   CreateVmInput,
   DashboardData,
   DiskStorageOption,
+  FirewallAliasInput,
+  FirewallGroupSummary,
+  FirewallOptions,
+  FirewallOptionsInput,
+  FirewallOverviewData,
+  FirewallRule,
+  FirewallRuleInput,
+  FirewallScope,
+  HaGroup,
+  HaGroupInput,
+  HaOverviewData,
+  HaResource,
+  HaResourceInput,
   HaStatus,
   IsoImageInfo,
   IsoImageList,
@@ -29,7 +56,9 @@ import type {
   LiveNodeMetrics,
   MutationResult,
   NodeMetricPoint,
+  NodeCertificateData,
   NodeCertificateInfo,
+  NodeCertificateUpload,
   NodeDirectoryStorage,
   NodeDiskInfo,
   NodeDnsSettings,
@@ -37,21 +66,56 @@ import type {
   NodeLogEntry,
   NodeLvmGroup,
   NodeLvmThinPool,
+  ClusterJoinInfo,
+  ClusterJoinInput,
+  ClusterMember,
+  DiskInitInput,
   NodeNetworkActionResult,
   NodeNetworkInput,
   NodeNetworkInterface,
+  NodeAptAction,
+  NodeAptData,
   NodeOption,
   NodeRepositorySummary,
   NodeSettingsData,
   NodeSummary,
   NodeTimeSettings,
   NodeZfsPool,
+  PoolInput,
+  PoolMemberInput,
+  PveAclEntry,
+  PveGroup,
+  PvePoolSummary,
+  PveRole,
+  PveUser,
+  PveUserToken,
   PveVersionInfo,
+  MigrateInput,
+  RestoreBackupInput,
   SessionProfile,
+  SdnOverviewData,
+  SdnSubnet,
+  SdnSubnetInput,
+  SdnVnet,
+  SdnVnetInput,
+  SdnZone,
+  SdnZoneInput,
+  SnapshotInput,
+  SnapshotMutationResult,
+  StartBackupInput,
+  StorageContentData,
+  StorageContentEntry,
+  StorageDefinition,
+  StorageDefinitionInput,
+  StorageOverviewData,
   StorageSummary,
+  SubscriptionInfo,
+  TaskListData,
+  TaskListQuery,
   TaskLogLine,
   TaskStatusResult,
   TaskSummary,
+  TemplateInput,
   TemplateOption,
   VmAction,
   VmConfigPatchInput,
@@ -65,6 +129,7 @@ import type {
   VmOsInfo,
   VmRef,
   VmRuntime,
+  VmSendKeyInput,
   VmSnapshot,
   VmSummary,
   VmType
@@ -214,6 +279,102 @@ function mapTaskStatus(raw: { status?: string; exitstatus?: string }): TaskStatu
   if (raw.status === 'running') return 'running'
   if (raw.status === 'stopped') return 'stopped'
   return 'unknown'
+}
+
+function mapAptRepository(raw: unknown, path: string, index: number): AptRepository {
+  const repo = object(raw)
+  const split = (value: unknown): string[] =>
+    text(value)
+      .split(/[\s,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  return {
+    path,
+    fileType: text(repo.fileType) || text(repo.filetype) || 'list',
+    index: repo.index === undefined ? index : number(repo.index),
+    enabled: boolean(repo.enabled),
+    components: split(repo.components),
+    uris: split(repo.uris),
+    suites: split(repo.suites),
+    types: split(repo.types),
+    comment: text(repo.comment) || undefined,
+    warning: text(repo.warning) || undefined
+  }
+}
+
+/** SDN 的列表端点会把字符串按空白或逗号拆成数组，这里统一归一化。 */
+function sdnList(value: unknown): string[] | undefined {
+  if (value === undefined || value === null) return undefined
+  const list = Array.isArray(value)
+    ? value.map((item) => text(item).trim())
+    : text(value)
+        .split(/[\s,;]+/)
+        .map((item) => item.trim())
+  const filtered = list.filter(Boolean)
+  return filtered.length > 0 ? filtered : undefined
+}
+
+function mapSdnZone(raw: unknown): SdnZone {
+  const item = object(raw)
+  const type = text(item.type, 'simple') as SdnZone['type']
+  return {
+    zone: text(item.zone),
+    type,
+    bridge: optionalText(item.bridge) || undefined,
+    mtu: optionalNumber(item.mtu),
+    nodes: sdnList(item.nodes),
+    vlan: optionalNumber(item.vlan),
+    vlanProtocol: optionalText(item['vlan-protocol']) || undefined,
+    vxlanId: optionalNumber(item['vxlan-id']),
+    peers: sdnList(item.peers),
+    controller: optionalText(item.controller) || undefined,
+    vrfVxlan: optionalNumber(item['vrf-vxlan']),
+    asn: optionalNumber(item.asn),
+    exitNodes: sdnList(item['exit-nodes']),
+    exitNodesLocalRouting: optionalBoolean(item['exitnodes-local-routing']),
+    ipam: optionalText(item.ipam) || undefined,
+    dns: optionalText(item.dns) || undefined,
+    dnsZone: optionalText(item['dnszone']) || undefined,
+    reversedns: optionalText(item.reversedns) || undefined,
+    dhcp: optionalText(item.dhcp) || undefined,
+    pending: optionalBoolean(item.pending),
+    state: optionalText(item.state) || undefined,
+    raw: item
+  }
+}
+
+function mapSdnVnet(raw: unknown): SdnVnet {
+  const item = object(raw)
+  return {
+    vnet: text(item.vnet),
+    zone: text(item.zone),
+    alias: optionalText(item.alias) || undefined,
+    tag: optionalNumber(item.tag),
+    vlanaware: optionalBoolean(item.vlanaware),
+    pending: optionalBoolean(item.pending),
+    state: optionalText(item.state) || undefined,
+    raw: item
+  }
+}
+
+function mapSdnSubnet(raw: unknown): SdnSubnet {
+  const item = object(raw)
+  return {
+    subnet: text(item.subnet),
+    zone: text(item.zone),
+    vnet: text(item.vnet),
+    gateway: optionalText(item.gateway) || undefined,
+    dnsZonePrefix: optionalText(item['dnszoneprefix']) || undefined,
+    snat: optionalBoolean(item.snat),
+    dhcpRange: {
+      start: text(object(item['dhcp-range']).start) || undefined,
+      end: text(object(item['dhcp-range']).end) || undefined
+    },
+    dnsServers: sdnList(item.dns) ?? undefined,
+    pending: optionalBoolean(item.pending),
+    state: optionalText(item.state) || undefined,
+    raw: item
+  }
 }
 
 function mapHa(raw: unknown[]): HaStatus[] {
@@ -382,6 +543,7 @@ function mapRuntime(raw: Raw, config: Raw): VmRuntime {
     maxdisk: number(raw.maxdisk),
     agentEnabled: boolean(configAgent) || text(configAgent) === 'enabled',
     haManaged: boolean(ha.managed),
+    template: boolean(raw.template) || boolean(config.template),
     runningMachine: text(raw['running-machine']) || undefined,
     runningQemu: text(raw['running-qemu']) || undefined,
     tags: tagList(raw.tags ?? config.tags),
@@ -730,6 +892,20 @@ function validateStorageName(value: string): string {
 function validateIsoVolume(value: string): string {
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*:iso\/[^\\/\r\n\u0000-\u001f]+$/.test(value)) {
     throw new PveError('VALIDATION', 'ISO 卷标识格式无效。')
+  }
+  return value
+}
+
+/**
+ * 接受任意存储卷标识（`local-lvm:vm-204-disk-0`、`nas:backup/vzdump-qemu-204-...vma.zst` 等）。
+ * 卷名允许包含点、下划线、短横线与字母数字，禁止路径穿越与控制字符。
+ */
+function validateStorageVolume(value: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*:(?:[A-Za-z0-9][A-Za-z0-9_.-]*\/)*[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(value)) {
+    throw new PveError('VALIDATION', '存储卷标识格式无效。')
+  }
+  if (value.includes('..')) {
+    throw new PveError('VALIDATION', '存储卷标识不合法。')
   }
   return value
 }
@@ -2034,6 +2210,301 @@ export class PveManager {
     return this.taskLog(node, upid)
   }
 
+  /** 跨节点拉取任务历史，供任务页做筛选与归档清理。 */
+  async taskList(query?: TaskListQuery): Promise<TaskListData> {
+    const client = this.requireClient()
+    const warnings: string[] = []
+    const limit = Math.min(Math.max(query?.limit ?? 200, 1), 1000)
+
+    let nodeNames: string[]
+    if (query?.node) {
+      nodeNames = [validateNode(query.node)]
+    } else {
+      try {
+        nodeNames = await this.listNodeNames()
+      } catch (error) {
+        throw new PveError('PVE_ERROR', `无法读取节点列表：${describeError(error)}`)
+      }
+    }
+
+    const results = await mapWithConcurrency(nodeNames, 4, async (nodeName) => {
+      try {
+        const params = new URLSearchParams({ limit: String(limit) })
+        if (query?.errorsOnly) params.set('errors', '1')
+        if (query?.typeFilter) params.set('typefilter', query.typeFilter)
+        if (query?.since) params.set('start', String(Math.max(0, query.since)))
+        const raw = await client.request<unknown[]>(
+          `/nodes/${encodeURIComponent(nodeName)}/tasks?${params.toString()}`
+        )
+        return array(raw).map(object).map(mapTask)
+      } catch (error) {
+        warnings.push(`${nodeName}：${describeError(error)}`)
+        return [] as TaskSummary[]
+      }
+    })
+
+    const tasks = results.flat().sort((a, b) => b.startTime - a.startTime).slice(0, limit)
+    return { tasks, warnings }
+  }
+
+  async taskStop(nodeInput: string, upidInput: string): Promise<void> {
+    const client = this.requireClient()
+    const node = validateNode(nodeInput)
+    validateUpid(upidInput)
+    await client.request(`/nodes/${encodeURIComponent(node)}/tasks/${encodeURIComponent(upidInput)}/status`, {
+      method: 'DELETE',
+      timeoutMs: 20_000
+    })
+  }
+
+  async taskDelete(nodeInput: string, upidInput: string): Promise<void> {
+    const client = this.requireClient()
+    const node = validateNode(nodeInput)
+    validateUpid(upidInput)
+    // 先尝试停掉，PVE 不允许删除正在运行的任务，已结束的会直接 4xx，忽略即可。
+    await client
+      .request(`/nodes/${encodeURIComponent(node)}/tasks/${encodeURIComponent(upidInput)}/status`, {
+        method: 'DELETE',
+        timeoutMs: 15_000
+      })
+      .catch(() => undefined)
+    await client.request(`/nodes/${encodeURIComponent(node)}/tasks/${encodeURIComponent(upidInput)}`, {
+      method: 'DELETE',
+      timeoutMs: 20_000
+    })
+  }
+
+  async subscriptionInfo(nodeInput: string): Promise<SubscriptionInfo> {
+    const client = this.requireClient()
+    const node = validateNode(nodeInput)
+    const raw = await client.request<Raw>(`/nodes/${encodeURIComponent(node)}/subscription`)
+    const status = text(object(raw).status, 'unknown')
+    const normalized: SubscriptionInfo['status'] =
+      status === 'active' || status === 'expired' || status === 'notfound' || status === 'new' || status === 'invalid'
+        ? status
+        : 'unknown'
+    const data = object(raw)
+    return {
+      status: normalized,
+      level: text(data.level) || undefined,
+      key: text(data.key) || undefined,
+      message: text(data.message) || undefined,
+      serverid: text(data.serverid) || undefined,
+      sockets: data.sockets === undefined ? undefined : number(data.sockets),
+      checkTime: data.checktime === undefined ? undefined : number(data.checktime),
+      nextDueDate: data.nextduedate === undefined ? undefined : number(data.nextduedate),
+      productName: text(data.productname) || undefined,
+      regDate: text(data.regdate) || undefined
+    }
+  }
+
+  async subscriptionUpdate(nodeInput: string, keyInput: string): Promise<void> {
+    const client = this.requireClient()
+    const node = validateNode(nodeInput)
+    const key = keyInput.trim()
+    if (!key) throw new PveError('VALIDATION', '订阅密钥不能为空。')
+    await client.request(`/nodes/${encodeURIComponent(node)}/subscription`, {
+      method: 'PUT',
+      form: { key },
+      timeoutMs: 20_000
+    })
+  }
+
+  async subscriptionDelete(nodeInput: string): Promise<void> {
+    const client = this.requireClient()
+    const node = validateNode(nodeInput)
+    await client.request(`/nodes/${encodeURIComponent(node)}/subscription`, {
+      method: 'DELETE',
+      timeoutMs: 20_000
+    })
+  }
+
+  async nodeApt(nodeInput: string): Promise<NodeAptData> {
+    const client = this.requireClient()
+    const node = validateNode(nodeInput)
+    const base = `/nodes/${encodeURIComponent(node)}`
+    const warnings: string[] = []
+
+    const [repoResult, updateResult] = await Promise.all([
+      client.request<unknown[]>(`${base}/apt/repositories`).catch((error: unknown) => {
+        warnings.push(`仓库列表：${describeError(error)}`)
+        return []
+      }),
+      client.request<unknown[]>(`${base}/apt/update`).catch((error: unknown) => {
+        warnings.push(`可升级列表：${describeError(error)}`)
+        return []
+      })
+    ])
+
+    const repoRaw = object(repoResult)
+    const repositories = array(repoRaw.files).flatMap((file) => {
+      const fileObj = object(file)
+      const path = text(fileObj.path)
+      return array(fileObj.repositories).map((repo, index) => mapAptRepository(repo, path, index))
+    })
+
+    const updates = array(updateResult).map(object).map((entry) => ({
+      package: text(entry.Package) || text(entry.package),
+      title: text(entry.Title) || undefined,
+      oldVersion: text(entry.OldVersion) || undefined,
+      version: text(entry.Version) || '',
+      section: text(entry.Section) || undefined,
+      priority: text(entry.Priority) || undefined,
+      origin: text(entry.Origin) || undefined,
+      description: text(entry.Description) || undefined
+    })).filter((entry) => entry.package)
+
+    return {
+      node,
+      repositories,
+      updates,
+      standardRepo: boolean(repoRaw['standard-repos']),
+      enterpriseRepo: repositories.some(
+        (repo) => repo.enabled && repo.uris.some((uri) => uri.includes('enterprise.proxmox.com'))
+      ),
+      warnings
+    }
+  }
+
+  async nodeAptRefresh(input: NodeAptAction): Promise<AptUpdateResult> {
+    const client = this.requireClient()
+    const node = validateNode(input.node)
+    const base = `/nodes/${encodeURIComponent(node)}/apt`
+
+    if (!input.upgrade) {
+      const upid = await client.request<string | null>(`${base}/update`, { method: 'POST', timeoutMs: 120_000 })
+      return {
+        node,
+        upid: upid ?? undefined,
+        message: upid ? '软件包索引刷新任务已提交。' : '软件包索引已刷新。'
+      }
+    }
+
+    const form: Record<string, string | boolean> = {}
+    if (input.distUpgrade) form['dist-upgrade'] = true
+    if (input.exclude && input.exclude.length > 0) form.exclude = input.exclude.join(' ')
+    const upid = await client.request<string | null>(`${base}/upgrade`, {
+      method: 'POST',
+      form,
+      timeoutMs: 60_000
+    })
+    return {
+      node,
+      upid: upid ?? undefined,
+      message: upid ? '升级任务已提交，执行结果会出现在任务列表中。' : '升级任务已提交。'
+    }
+  }
+
+  async nodeAptRepoSave(nodeInput: string, repos: AptRepository[]): Promise<void> {
+    const client = this.requireClient()
+    const node = validateNode(nodeInput)
+    if (!Array.isArray(repos) || repos.length === 0) {
+      throw new PveError('VALIDATION', '没有需要保存的仓库配置。')
+    }
+    // PVE 按文件整体写回，因此先按 path 分组。
+    const byPath = new Map<string, AptRepository[]>()
+    for (const repo of repos) {
+      if (!repo.path) throw new PveError('VALIDATION', '仓库配置缺少文件路径。')
+      const list = byPath.get(repo.path) ?? []
+      list.push(repo)
+      byPath.set(repo.path, list)
+    }
+
+    for (const [path, entries] of byPath) {
+      const payload = entries.map((repo, index) => ({
+        index,
+        enabled: repo.enabled ? 1 : 0,
+        types: (repo.types && repo.types.length > 0 ? repo.types : ['deb']).join(' '),
+        uris: repo.uris.join(' '),
+        suites: (repo.suites ?? []).join(' '),
+        components: repo.components.join(' '),
+        ...(repo.comment ? { comment: repo.comment } : {})
+      }))
+      await client.request(`/nodes/${encodeURIComponent(node)}/apt/repositories`, {
+        method: 'POST',
+        form: { path, 'digest': '', repos: JSON.stringify(payload) },
+        timeoutMs: 30_000
+      })
+    }
+  }
+
+  async nodeCertificate(nodeInput: string): Promise<NodeCertificateData> {
+    const client = this.requireClient()
+    const node = validateNode(nodeInput)
+    const base = `/nodes/${encodeURIComponent(node)}/certificates`
+    const warnings: string[] = []
+
+    const infoRaw = await client
+      .request<unknown[]>(`${base}/info`)
+      .catch((error: unknown) => {
+        warnings.push(`证书信息：${describeError(error)}`)
+        return []
+      })
+
+    const infoList = array(infoRaw).map(object)
+    const custom = infoList.some((entry) => text(entry.filename).startsWith('pveproxy-custom'))
+    const entry = infoList.find((item) => text(item.filename) === 'pveproxy-ssl.pem') ?? infoList[0]
+    if (!entry) return { node, custom: false, warnings }
+
+    const info = object(entry)
+    const filename = text(info.filename)
+    // 只有自定义证书才会出现在 custom 端点上，自签证书读不到 PEM，属正常情况。
+    const pemText =
+      custom && filename
+        ? await client
+            .request<string>(`${base}/custom`, { params: { filename } })
+            .catch(() => '')
+        : ''
+
+    return {
+      node,
+      custom,
+      warnings,
+      pem: pemText || undefined,
+      info: {
+        filename,
+        subject: text(info.subject) || undefined,
+        issuer: text(info.issuer) || undefined,
+        fingerprint: text(info.fingerprint) || undefined,
+        notbefore: info.notbefore === undefined ? undefined : number(info.notbefore),
+        notafter: info.notafter === undefined ? undefined : number(info.notafter),
+        publicKeyBits: info['public-key-bits'] === undefined ? undefined : number(info['public-key-bits']),
+        publicKeyType: text(info['public-key-type']) || undefined,
+        san: array(info.san).map((item) => text(item)).filter(Boolean)
+      }
+    }
+  }
+
+  async nodeCertificateUpload(input: NodeCertificateUpload): Promise<void> {
+    const client = this.requireClient()
+    const node = validateNode(input.node)
+    const certificates = input.certificates.trim()
+    const key = input.key.trim()
+    if (!certificates.includes('BEGIN CERTIFICATE')) {
+      throw new PveError('VALIDATION', '证书内容看起来不是 PEM 格式。')
+    }
+    if (!key.includes('PRIVATE KEY')) {
+      throw new PveError('VALIDATION', '私钥内容看起来不是 PEM 格式。')
+    }
+    const form: Record<string, string | boolean> = { certificates, key }
+    if (input.force) form.force = true
+    if (input.restart) form.restart = true
+    await client.request(`/nodes/${encodeURIComponent(node)}/certificates/custom`, {
+      method: 'POST',
+      form,
+      timeoutMs: 40_000
+    })
+  }
+
+  async nodeCertificateReset(nodeInput: string): Promise<void> {
+    const client = this.requireClient()
+    const node = validateNode(nodeInput)
+    await client.request(`/nodes/${encodeURIComponent(node)}/certificates/custom`, {
+      method: 'DELETE',
+      timeoutMs: 30_000
+    })
+  }
+
   async openConsole(input: ConsoleOpenRequest): Promise<ConsoleSessionInfo> {
     const client = this.requireClient()
     const node = validateNode(input.node)
@@ -2188,6 +2659,1626 @@ export class PveManager {
 
   get lastDashboardTimestamp(): number {
     return this.lastDashboardAt
+  }
+
+  /* ---------------------------------------------------------------- *
+   * 访问控制
+   * ---------------------------------------------------------------- */
+
+  async getAccessOverview(): Promise<AccessOverviewData> {
+    const client = this.requireClient()
+    const warnings: string[] = []
+
+    const [rawUsers, rawGroups, rawRoles, rawAcl, rawDomains] = await Promise.all([
+      client.request<unknown[]>('/access/users?full=1'),
+      client.request<unknown[]>('/access/groups').catch((error) => {
+        warnings.push(`读取用户组失败：${describeError(error)}`)
+        return []
+      }),
+      client.request<unknown[]>('/access/roles').catch((error) => {
+        warnings.push(`读取角色失败：${describeError(error)}`)
+        return []
+      }),
+      client.request<unknown[]>('/access/acl').catch((error) => {
+        warnings.push(`读取 ACL 失败：${describeError(error)}`)
+        return []
+      }),
+      client.request<unknown[]>('/access/domains').catch(() => [])
+    ])
+
+    const userEntries = array(rawUsers).map(object)
+    const tokensByUser = new Map<string, PveUserToken[]>()
+    await mapWithConcurrency(userEntries, 4, async (entry) => {
+      const userid = text(entry.userid)
+      if (!userid) return
+      try {
+        const rawTokens = await client.request<unknown[]>(`/access/users/${encodeURIComponent(userid)}/token`)
+        tokensByUser.set(
+          userid,
+          array(rawTokens).map((token) => mapUserToken(userid, object(token)))
+        )
+      } catch {
+        tokensByUser.set(userid, [])
+      }
+    })
+
+    const usersByGroup = new Map<string, string[]>()
+    for (const entry of userEntries) {
+      const userid = text(entry.userid)
+      if (!userid) continue
+      for (const groupid of tagListList(entry.groups)) {
+        const list = usersByGroup.get(groupid) ?? []
+        list.push(userid)
+        usersByGroup.set(groupid, list)
+      }
+    }
+
+    const groups = array(rawGroups).map((entry) => mapGroup(object(entry), usersByGroup))
+    const groupOf = new Map<string, string[]>()
+    for (const group of groups) {
+      for (const userid of group.users) {
+        const list = groupOf.get(userid) ?? []
+        list.push(group.groupid)
+        groupOf.set(userid, list)
+      }
+    }
+
+    const users = userEntries.map((entry) => {
+      const userid = text(entry.userid)
+      const realm = userid.includes('@') ? userid.slice(userid.lastIndexOf('@') + 1) : 'pam'
+      return {
+        userid,
+        comment: text(entry.comment) || undefined,
+        email: text(entry.email) || undefined,
+        firstName: text(entry.firstname) || undefined,
+        lastName: text(entry.lastname) || undefined,
+        groups: groupOf.get(userid) ?? tagListList(entry.groups),
+        keys: text(entry.keys) || undefined,
+        enabled: entry.enable === undefined ? true : boolean(entry.enable),
+        expire: entry.expire === undefined ? undefined : number(entry.expire),
+        domain: realm,
+        realmType: text(entry.type) || (realm === 'pam' ? 'pam' : 'pve'),
+        tokens: tokensByUser.get(userid) ?? []
+      }
+    })
+
+    const roles = array(rawRoles).map((entry) => mapRole(object(entry)))
+
+    const acl = array(rawAcl)
+      .map((entry) => mapAcl(object(entry)))
+      .filter((entry): entry is PveAclEntry => entry !== null)
+
+    const realms = array(rawDomains)
+      .map((entry) => text(object(entry).realm))
+      .filter(Boolean)
+
+    return { users, groups, roles, acl, realms, warnings }
+  }
+
+  async saveAccessUser(input: AccessUserInput): Promise<void> {
+    const client = this.requireClient()
+    const userid = validateUserid(input.userid)
+    const create = input.create !== false
+    const form: Record<string, string | number | boolean> = {}
+    if (input.password !== undefined && input.password !== '') form.password = input.password
+    if (input.comment !== undefined) form.comment = input.comment
+    if (input.email !== undefined) form.email = input.email.trim()
+    if (input.firstName !== undefined) form.firstname = input.firstName
+    if (input.lastName !== undefined) form.lastname = input.lastName
+    if (input.groups !== undefined) form.groups = input.groups.filter(Boolean).join(',')
+    if (input.expire !== undefined) form.expire = input.expire
+    if (input.enabled !== undefined) form.enable = input.enabled
+
+    if (create) {
+      const realm = userid.includes('@') ? userid.slice(userid.lastIndexOf('@') + 1) : 'pam'
+      if (input.password === undefined && realm === 'pve') {
+        throw new PveError('VALIDATION', 'PVE 内置域（pve）新建用户必须设置密码。')
+      }
+      await client.request('/access/users', { method: 'POST', form, timeoutMs: 20_000 })
+    } else {
+      await client.request(`/access/users/${encodeURIComponent(userid)}`, {
+        method: 'PUT',
+        form,
+        timeoutMs: 20_000
+      })
+    }
+  }
+
+  async deleteAccessUser(useridInput: string): Promise<void> {
+    const userid = validateUserid(useridInput)
+    const client = this.requireClient()
+    await client.request(`/access/users/${encodeURIComponent(userid)}`, {
+      method: 'DELETE',
+      timeoutMs: 20_000
+    })
+  }
+
+  async saveAccessGroup(input: AccessGroupInput): Promise<void> {
+    const groupid = validateGroupId(input.groupid)
+    const client = this.requireClient()
+    const form: Record<string, string> = {}
+    if (input.comment !== undefined) form.comment = input.comment
+    if (input.create === false) {
+      await client.request(`/access/groups/${encodeURIComponent(groupid)}`, {
+        method: 'PUT',
+        form,
+        timeoutMs: 20_000
+      })
+    } else {
+      await client.request('/access/groups', { method: 'POST', form, timeoutMs: 20_000 })
+    }
+  }
+
+  async deleteAccessGroup(groupidInput: string): Promise<void> {
+    const groupid = validateGroupId(groupidInput)
+    const client = this.requireClient()
+    await client.request(`/access/groups/${encodeURIComponent(groupid)}`, {
+      method: 'DELETE',
+      timeoutMs: 20_000
+    })
+  }
+
+  async updateAccessAcl(input: AccessAclInput): Promise<void> {
+    const client = this.requireClient()
+    const path = validateAclPath(input.path)
+    const ugid = input.ugid.trim()
+    if (!ugid) throw new PveError('VALIDATION', '请选择用户、组或 API 令牌。')
+    const roleid = input.roleid.trim()
+    if (!roleid) throw new PveError('VALIDATION', '请选择角色。')
+    const form: Record<string, string | boolean> = {
+      path,
+      users: ugid,
+      roles: roleid,
+      propagate: input.propagate !== false
+    }
+    if (input.delete) form.delete = true
+    await client.request('/access/acl', { method: 'PUT', form, timeoutMs: 20_000 })
+  }
+
+  async saveAccessToken(input: AccessTokenInput): Promise<AccessTokenCreated | null> {
+    const client = this.requireClient()
+    const userid = validateUserid(input.userid)
+    const tokenId = input.tokenId.trim().toLowerCase()
+    if (!/^[a-z][a-z0-9.-]*$/.test(tokenId)) {
+      throw new PveError('VALIDATION', '令牌标识只能包含小写字母、数字、点与短横线，且以字母开头。')
+    }
+    const base = `/access/users/${encodeURIComponent(userid)}/token/${encodeURIComponent(tokenId)}`
+    if (input.create === false) {
+      await client.request(base, {
+        method: 'PUT',
+        form: {
+          comment: input.comment ?? '',
+          expire: input.expire ?? 0,
+          privsep: input.privsep ?? false
+        },
+        timeoutMs: 20_000
+      })
+      return null
+    }
+    const raw = await client.request<Raw>(base, {
+      method: 'POST',
+      form: {
+        comment: input.comment ?? '',
+        expire: input.expire ?? 0,
+        privsep: input.privsep ?? false
+      },
+      timeoutMs: 20_000
+    })
+    const value = text(object(raw).value)
+    const fullTokenId = text(object(raw)['full-tokenid']) || `${userid}!${tokenId}`
+    return {
+      tokenId,
+      fullTokenId,
+      value,
+      message: value
+        ? '令牌已创建。密钥只显示这一次，请立即保存。'
+        : '令牌已创建，但 PVE 未返回密钥内容。'
+    }
+  }
+
+  async deleteAccessToken(useridInput: string, tokenIdInput: string): Promise<void> {
+    const userid = validateUserid(useridInput)
+    const tokenId = tokenIdInput.trim()
+    if (!tokenId) throw new PveError('VALIDATION', '令牌标识不能为空。')
+    const client = this.requireClient()
+    await client.request(
+      `/access/users/${encodeURIComponent(userid)}/token/${encodeURIComponent(tokenId)}`,
+      { method: 'DELETE', timeoutMs: 20_000 }
+    )
+  }
+
+  /* ---------------------------------------------------------------- *
+   * 存储与资源池
+   * ---------------------------------------------------------------- */
+
+  async getStorageOverview(): Promise<StorageOverviewData> {
+    const client = this.requireClient()
+    const warnings: string[] = []
+
+    const [rawDefinitions, rawPools] = await Promise.all([
+      client.request<unknown[]>('/storage'),
+      client.request<unknown[]>('/pools').catch((error) => {
+        warnings.push(`读取资源池失败：${describeError(error)}`)
+        return []
+      })
+    ])
+
+    const definitions = array(rawDefinitions).map((entry) => mapStorageDefinition(object(entry)))
+
+    const pools = await mapWithConcurrency(array(rawPools).map(object), 4, async (entry) => {
+      const poolid = text(entry.poolid)
+      const base: PvePoolSummary = {
+        poolid,
+        comment: text(entry.comment) || undefined,
+        members: []
+      }
+      if (!poolid) return base
+      try {
+        const raw = await client.request<Raw>(`/pools/${encodeURIComponent(poolid)}`)
+        const members = array(object(raw).members).map((member) => {
+          const item = object(member)
+          return {
+            id: text(item.id),
+            type: text(item.type),
+            vmid: item.vmid === undefined ? undefined : number(item.vmid),
+            node: text(item.node) || undefined,
+            storage: text(item.storage) || undefined
+          }
+        })
+        return { ...base, members }
+      } catch (error) {
+        warnings.push(`读取资源池 ${poolid} 成员失败：${describeError(error)}`)
+        return base
+      }
+    })
+
+    return { definitions, pools, warnings }
+  }
+
+  async getStorageContents(
+    nodeInput: string,
+    storageInput: string,
+    contentType?: string
+  ): Promise<StorageContentData> {
+    const node = validateNode(nodeInput)
+    const storage = validateStorageName(storageInput)
+    const client = this.requireClient()
+    const params = contentType ? `?content=${encodeURIComponent(contentType)}` : ''
+    const raw = await client.request<unknown[]>(
+      `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content${params}`,
+      { timeoutMs: 25_000 }
+    )
+
+    const base = `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content`
+    const entries: StorageContentEntry[] = array(raw).map((item) => {
+      const entry = object(item)
+      const volid = text(entry.volid)
+      return {
+        volid,
+        name: storageVolumeName(volid),
+        format: text(entry.format),
+        contentType: text(entry.content),
+        size: number(entry.size),
+        used: number(entry.size),
+        vmid: entry.vmid === undefined ? undefined : number(entry.vmid),
+        ctime: entry.ctime === undefined ? undefined : number(entry.ctime),
+        node,
+        storage,
+        protected: boolean(entry.protected),
+        notes: text(entry.notes) || undefined
+      }
+    })
+
+    return {
+      node,
+      storage,
+      contentType: contentType ?? '',
+      entries,
+      totalSize: entries.reduce((sum, entry) => sum + entry.size, 0),
+      totalUsed: entries.reduce((sum, entry) => sum + entry.used, 0)
+    }
+  }
+
+  async saveStorageDefinition(input: StorageDefinitionInput): Promise<void> {
+    const storage = validateStorageName(input.storage)
+    const client = this.requireClient()
+
+    if (input.delete) {
+      await client.request(`/storage/${encodeURIComponent(storage)}`, {
+        method: 'DELETE',
+        timeoutMs: 25_000
+      })
+      return
+    }
+
+    const type = input.type.trim()
+    if (!type) throw new PveError('VALIDATION', '请选择存储类型。')
+
+    const form: Record<string, string | boolean> = {
+      storage,
+      type,
+      content: input.content.filter(Boolean).join(',')
+    }
+    if (input.path !== undefined) form.path = input.path.trim()
+    if (input.nodes !== undefined) form.nodes = input.nodes.trim()
+    if (input.shared !== undefined) form.shared = input.shared
+    if (input.disable !== undefined) form.disable = input.disable
+    for (const [key, value] of Object.entries(input.options ?? {})) {
+      if (!key.trim() || value === '') continue
+      form[key.trim()] = value
+    }
+
+    if (input.create === false) {
+      await client.request(`/storage/${encodeURIComponent(storage)}`, {
+        method: 'PUT',
+        form,
+        timeoutMs: 25_000
+      })
+    } else {
+      await client.request('/storage', { method: 'POST', form, timeoutMs: 25_000 })
+    }
+  }
+
+  async deleteStorageContent(
+    nodeInput: string,
+    storageInput: string,
+    volidInput: string
+  ): Promise<ActionResult> {
+    const node = validateNode(nodeInput)
+    const storage = validateStorageName(storageInput)
+    const volid = validateStorageVolume(volidInput)
+    const client = this.requireClient()
+    const upid = await client.request<string | null>(
+      `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content/${encodeURIComponent(volid)}`,
+      { method: 'DELETE', timeoutMs: 60_000 }
+    )
+    return {
+      upid: upid ?? undefined,
+      message: upid ? '删除任务已提交，卷会在后台释放。' : '卷已删除。'
+    }
+  }
+
+  async savePool(input: PoolInput): Promise<void> {
+    const poolid = validatePoolId(input.poolid)
+    const client = this.requireClient()
+    if (input.delete) {
+      await client.request(`/pools/${encodeURIComponent(poolid)}`, {
+        method: 'DELETE',
+        timeoutMs: 20_000
+      })
+      return
+    }
+    const form: Record<string, string> = {}
+    if (input.comment !== undefined) form.comment = input.comment
+    if (input.create === false) {
+      await client.request(`/pools/${encodeURIComponent(poolid)}`, {
+        method: 'PUT',
+        form,
+        timeoutMs: 20_000
+      })
+    } else {
+      await client.request('/pools', { method: 'POST', form: { poolid, ...form }, timeoutMs: 20_000 })
+    }
+  }
+
+  async updatePoolMembers(input: PoolMemberInput): Promise<void> {
+    const poolid = validatePoolId(input.poolid)
+    const client = this.requireClient()
+    const form: Record<string, string | boolean> = {}
+    if (input.vms && input.vms.length > 0) form.vms = input.vms.join(',')
+    if (input.storages && input.storages.length > 0) form.storages = input.storages.join(',')
+    if (input.delete) form.delete = true
+    if (!form.vms && !form.storages) {
+      throw new PveError('VALIDATION', '请至少选择一台虚拟机或一个存储。')
+    }
+    await client.request(`/pools/${encodeURIComponent(poolid)}`, {
+      method: 'PUT',
+      form,
+      timeoutMs: 25_000
+    })
+  }
+
+  /* ---------------------------------------------------------------- *
+   * 备份与还原
+   * ---------------------------------------------------------------- */
+
+  async getBackupOverview(): Promise<BackupOverviewData> {
+    const client = this.requireClient()
+    const warnings: string[] = []
+
+    const nodes = await this.listNodeNames()
+
+    const filesByNode = await Promise.all(
+      nodes.map(async (node) => {
+        const base = `/nodes/${encodeURIComponent(node)}`
+        const storages = await client
+          .request<unknown[]>(`${base}/storage?content=backup`)
+          .catch(() => [])
+        const activeStorages = array(storages)
+          .map(object)
+          .filter((entry) => boolean(entry.active) !== false)
+          .map((entry) => text(entry.storage))
+          .filter(Boolean)
+
+        const perStorage = await mapWithConcurrency(activeStorages, 3, async (storage) => {
+          try {
+            const raw = await client.request<unknown[]>(
+              `${base}/storage/${encodeURIComponent(storage)}/content?content=backup`,
+              { timeoutMs: 30_000 }
+            )
+            return array(raw).map((item) => mapBackupFile(object(item), node, storage))
+          } catch (error) {
+            warnings.push(`${node}/${storage} 读取备份失败：${describeError(error)}`)
+            return [] as BackupFile[]
+          }
+        })
+        return perStorage.flat()
+      })
+    )
+
+    const files = filesByNode.flat().sort((a, b) => (b.ctime ?? 0) - (a.ctime ?? 0))
+
+    const jobs = await this.getBackupJobs().catch((error) => {
+      warnings.push(`读取备份计划失败：${describeError(error)}`)
+      return [] as BackupJob[]
+    })
+
+    return {
+      files,
+      jobs,
+      totals: {
+        count: files.length,
+        size: files.reduce((sum, file) => sum + file.size, 0)
+      },
+      warnings
+    }
+  }
+
+  async getBackupJobs(): Promise<BackupJob[]> {
+    const client = this.requireClient()
+    const raw = await client.request<unknown[]>('/cluster/backup')
+    return array(raw).map((entry) => mapBackupJob(object(entry)))
+  }
+
+  async startBackup(input: StartBackupInput): Promise<ActionResult> {
+    const node = validateNode(input.node)
+    const storage = validateStorageName(input.storage)
+    const client = this.requireClient()
+
+    const form: Record<string, string | number | boolean> = {
+      storage,
+      mode: input.mode ?? 'snapshot',
+      compress: input.compress ?? 'zstd',
+      stdout: false
+    }
+    if (input.vmid !== undefined) {
+      form.vmid = validateVmid(input.vmid)
+    } else {
+      form.all = true
+    }
+    if (input.notesTemplate) form.notesTemplate = input.notesTemplate
+    if (input.protected) form.protected = true
+    if (input.removeOlder !== undefined && input.removeOlder > 0) {
+      form['remove'] = Math.min(365, Math.round(input.removeOlder))
+    }
+
+    const upid = await client.request<string | null>(`/nodes/${encodeURIComponent(node)}/vzdump`, {
+      method: 'POST',
+      form,
+      timeoutMs: 30_000
+    })
+    return {
+      upid: upid ?? undefined,
+      message: upid ? '备份任务已提交，可在「任务」页查看进度。' : '备份任务已提交。'
+    }
+  }
+
+  async saveBackupJob(input: BackupJobInput): Promise<void> {
+    const client = this.requireClient()
+    if (input.delete) {
+      if (!input.id) throw new PveError('VALIDATION', '缺少备份计划 ID。')
+      await client.request(`/cluster/backup/${encodeURIComponent(input.id)}`, {
+        method: 'DELETE',
+        timeoutMs: 20_000
+      })
+      return
+    }
+
+    const storage = validateStorageName(input.storage)
+    const schedule = input.schedule?.trim()
+    if (!schedule) throw new PveError('VALIDATION', '请填写备份计划（cron 或 calendar 表达式）。')
+
+    const form: Record<string, string | boolean> = {
+      storage,
+      schedule,
+      mode: input.mode ?? 'snapshot',
+      compress: input.compress ?? 'zstd',
+      enabled: input.enabled !== false
+    }
+    if (input.vmid) form.vmid = input.vmid
+    else if (input.node) form.node = validateNode(input.node)
+    else form.all = true
+    if (input.comment !== undefined) form.comment = input.comment
+
+    if (input.id) {
+      await client.request(`/cluster/backup/${encodeURIComponent(input.id)}`, {
+        method: 'PUT',
+        form,
+        timeoutMs: 25_000
+      })
+    } else {
+      await client.request('/cluster/backup', { method: 'POST', form, timeoutMs: 25_000 })
+    }
+  }
+
+  async restoreBackup(input: RestoreBackupInput): Promise<ActionResult> {
+    const node = validateNode(input.node)
+    const storage = validateStorageName(input.storage)
+    const volid = validateStorageVolume(input.volid)
+    const vmid = validateVmid(input.vmid)
+    const type = validateVmType(input.guestType)
+    const client = this.requireClient()
+
+    const form: Record<string, string | number | boolean> = { archive: volid, unique: input.unique !== false }
+    if (input.start) form.start = true
+    if (input.name) form.name = input.name
+    if (input.pool) form.pool = input.pool
+
+    if (type === 'qemu') {
+      form.storage = storage
+      const upid = await client.request<string | null>(
+        `/nodes/${encodeURIComponent(node)}/qemu`,
+        { method: 'POST', form: { ...form, vmid }, timeoutMs: 30_000 }
+      )
+      return {
+        upid: upid ?? undefined,
+        message: upid ? '还原任务已提交。' : '还原任务已提交。'
+      }
+    }
+
+    form.ostemplate = volid
+    const upid = await client.request<string | null>(`/nodes/${encodeURIComponent(node)}/lxc`, {
+      method: 'POST',
+      form: { ...form, vmid, restore: true },
+      timeoutMs: 30_000
+    })
+    return {
+      upid: upid ?? undefined,
+      message: upid ? '容器还原任务已提交。' : '容器还原任务已提交。'
+    }
+  }
+
+  /* ---------------------------------------------------------------- *
+   * 防火墙
+   * ---------------------------------------------------------------- */
+
+  async getFirewallOverview(scope: FirewallScope): Promise<FirewallOverviewData> {
+    const client = this.requireClient()
+    const base = firewallBase(scope)
+    const warnings: string[] = []
+
+    const [rawOptions, rawRules, rawGroups, rawIpsets] = await Promise.all([
+      client.request<Raw>(`${base}/options`).catch(() => ({})),
+      client.request<unknown[]>(`${base}/rules`).catch((error) => {
+        warnings.push(`读取防火墙规则失败：${describeError(error)}`)
+        return []
+      }),
+      client.request<unknown[]>('/cluster/firewall/groups').catch(() => []),
+      client.request<unknown[]>(`${base}/ipset`).catch(() => [])
+    ])
+
+    const rules = array(rawRules).map((entry) => mapFirewallRule(object(entry)))
+
+    const groups = await mapWithConcurrency(
+      array(rawGroups).map(object),
+      4,
+      async (entry): Promise<FirewallGroupSummary> => {
+        const group = text(entry.group)
+        const count = await client
+          .request<unknown[]>(`/cluster/firewall/groups/${encodeURIComponent(group)}`)
+          .then((raw) => array(raw).length)
+          .catch(() => 0)
+        return { group, comment: text(entry.comment) || undefined, ruleCount: count }
+      }
+    )
+
+    return {
+      scope,
+      options: mapFirewallOptions(object(rawOptions)),
+      rules,
+      groups,
+      ipsets: array(rawIpsets).map((entry) => {
+        const item = object(entry)
+        return { name: text(item.name), comment: text(item.comment) || undefined }
+      }),
+      warnings
+    }
+  }
+
+  async saveFirewallRule(input: FirewallRuleInput): Promise<void> {
+    const client = this.requireClient()
+    const base = firewallBase(input.scope)
+    const rule = input.rule
+    const type = rule.type
+    if (type !== 'in' && type !== 'out' && type !== 'group') {
+      throw new PveError('VALIDATION', '规则方向无效。')
+    }
+    const action = (rule.action ?? '').trim()
+    if (!action) throw new PveError('VALIDATION', '请选择规则动作。')
+
+    const form: Record<string, string | number | boolean> = {
+      type,
+      action,
+      enable: rule.enabled !== false
+    }
+    if (rule.proto) form.proto = rule.proto
+    if (rule.source) form.source = rule.source.trim()
+    if (rule.dest) form.dest = rule.dest.trim()
+    if (rule.sport) form.sport = rule.sport.trim()
+    if (rule.dport) form.dport = rule.dport.trim()
+    if (rule.iface) form.iface = rule.iface.trim()
+    if (rule.comment) form.comment = rule.comment
+    if (rule.log) form.log = rule.log
+    if (rule.macro) form.macro = rule.macro
+    if (rule.icmpType) form['icmp-type'] = rule.icmpType
+
+    if (input.delete) {
+      const pos = rule.pos
+      if (!Number.isInteger(pos)) throw new PveError('VALIDATION', '缺少规则序号。')
+      await client.request(`${base}/rules/${pos}`, { method: 'DELETE', timeoutMs: 20_000 })
+      return
+    }
+
+    if (Number.isInteger(rule.pos) && (rule.pos ?? 0) > 0) {
+      await client.request(`${base}/rules/${rule.pos}`, {
+        method: 'PUT',
+        form,
+        timeoutMs: 20_000
+      })
+    } else {
+      await client.request(`${base}/rules`, { method: 'POST', form, timeoutMs: 20_000 })
+    }
+  }
+
+  async saveFirewallOptions(input: FirewallOptionsInput): Promise<void> {
+    const client = this.requireClient()
+    const base = firewallBase(input.scope)
+    const options = input.options
+    const form: Record<string, string | boolean> = {}
+    if (options.enable !== undefined) form.enable = options.enable
+    if (options.policyIn !== undefined) form.policy_in = options.policyIn
+    if (options.policyOut !== undefined) form.policy_out = options.policyOut
+    if (options.logLevelIn !== undefined) form.log_level_in = options.logLevelIn
+    if (options.logLevelOut !== undefined) form.log_level_out = options.logLevelOut
+    if (options.ebtables !== undefined) form.ebtables = options.ebtables
+    for (const [key, value] of Object.entries(options.extra ?? {})) {
+      if (!key.trim()) continue
+      form[key] = value
+    }
+    if (Object.keys(form).length === 0) {
+      throw new PveError('VALIDATION', '没有需要更新的防火墙选项。')
+    }
+    await client.request(`${base}/options`, { method: 'PUT', form, timeoutMs: 20_000 })
+  }
+
+  async saveFirewallAlias(input: FirewallAliasInput): Promise<void> {
+    const client = this.requireClient()
+    const base = firewallBase(input.scope)
+    const name = input.name.trim()
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) {
+      throw new PveError('VALIDATION', '别名只能包含字母、数字与下划线，且以字母开头。')
+    }
+    if (input.delete) {
+      await client.request(`${base}/ipset/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+        timeoutMs: 20_000
+      })
+      return
+    }
+    const cidr = input.cidr.trim()
+    if (!cidr) throw new PveError('VALIDATION', '请填写 CIDR，例如 10.0.0.0/24。')
+    const form: Record<string, string> = { cidr }
+    if (input.comment !== undefined) form.comment = input.comment
+    await client.request(`${base}/ipset`, { method: 'POST', form: { name, ...form }, timeoutMs: 20_000 })
+  }
+
+  /* ---------------------------------------------------------------- *
+   * 集群成员管理
+   * ---------------------------------------------------------------- */
+
+  async getClusterJoinInfo(): Promise<ClusterJoinInfo> {
+    const client = this.requireClient()
+    const warnings: string[] = []
+
+    const [rawNodes, rawStatus, rawConfig] = await Promise.all([
+      client.request<unknown[]>('/cluster/config/nodes').catch((error) => {
+        warnings.push(`读取集群成员失败：${describeError(error)}`)
+        return []
+      }),
+      client.request<Raw>('/cluster/status').catch((error) => {
+        warnings.push(`读取集群状态失败：${describeError(error)}`)
+        return null
+      }),
+      client.request<Raw>('/cluster/config/join', {
+        params: { join: 1 },
+        timeoutMs: 15_000
+      }).catch(() => null)
+    ])
+
+    // /cluster/status 里带 name 的那条就是本节点自身
+    const statusEntries = array(rawStatus).map((entry) => object(entry))
+    const selfEntry = statusEntries.find((entry) => text(entry.type) === 'node' && boolean(entry.local))
+    const nodeEntries = statusEntries.filter((entry) => text(entry.type) === 'node')
+
+    const nodes: ClusterMember[] = array(rawNodes).map((entry) => {
+      const item = object(entry)
+      const name = text(item.name) || text(item.nodeid)
+      const online = nodeEntries.find((node) => text(node.name) === name)
+      return {
+        name,
+        nodeid: optionalNumber(item.nodeid),
+        ring0: optionalText(item.ring0_addr) || undefined,
+        votes: optionalNumber(item.quorum_votes),
+        online: online ? boolean(online.online) : undefined
+      }
+    })
+
+    // 兜底：/cluster/config/nodes 为空时用 status 里的节点列表
+    if (nodes.length === 0) {
+      for (const entry of nodeEntries) {
+        nodes.push({
+          name: text(entry.name),
+          nodeid: optionalNumber(entry.nodeid),
+          votes: optionalNumber(entry.quorum_votes),
+          online: boolean(entry.online)
+        })
+      }
+    }
+
+    const config = object(rawConfig)
+    return {
+      selfNode: selfEntry ? text(selfEntry.name) || undefined : undefined,
+      clusterName: text(config.clustername) || undefined,
+      configDigest: text(config.config_digest) || undefined,
+      nodes,
+      warnings
+    }
+  }
+
+  /**
+   * 把本节点加入对端集群。
+   * PVE 的 `/cluster/config/join` 走 ssh 连到对端，整个过程可能几十秒，超时给足。
+   */
+  async joinCluster(input: ClusterJoinInput): Promise<void> {
+    const hostname = input.hostname.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '')
+    if (!hostname) throw new PveError('VALIDATION', '请填写对端节点地址。')
+    if (!/^[A-Za-z0-9._-]+(:\d+)?$/.test(hostname)) {
+      throw new PveError('VALIDATION', '对端地址格式无效：只填主机名或 IP，不要带协议或路径。')
+    }
+    if (!input.password) throw new PveError('VALIDATION', '请填写对端节点的 root 密码。')
+    if (input.votes !== undefined && (input.votes < 0 || !Number.isInteger(input.votes))) {
+      throw new PveError('VALIDATION', '节点票数必须是 0 或正整数。')
+    }
+
+    const client = this.requireClient()
+    await client.request('/cluster/config/join', {
+      method: 'POST',
+      form: {
+        hostname,
+        password: input.password,
+        ...(input.fingerprint ? { fingerprint: input.fingerprint } : {}),
+        ...(input.nodeid ? { nodeid: input.nodeid } : {}),
+        ...(input.usePeerAddress !== undefined ? { 'use_peer_address': input.usePeerAddress } : {}),
+        ...(input.votes !== undefined ? { votes: input.votes } : {})
+      },
+      timeoutMs: 180_000
+    })
+  }
+
+  async removeClusterNode(nodeInput: string): Promise<void> {
+    const node = validateNode(nodeInput)
+    const client = this.requireClient()
+    await client.request<unknown>('/cluster/status').then((raw) => {
+      const local = array(raw)
+        .map((entry) => object(entry))
+        .find((entry) => text(entry.type) === 'node' && boolean(entry.local))
+      if (local && text(local.name) === node) {
+        throw new PveError('VALIDATION', '不能移出当前连接的这个节点，请在其它节点上操作。')
+      }
+      return raw
+    })
+    await client.request(`/cluster/config/nodes/${encodeURIComponent(node)}`, {
+      method: 'DELETE',
+      timeoutMs: 60_000
+    })
+  }
+
+  /* ---------------------------------------------------------------- *
+   * 节点磁盘初始化
+   * ---------------------------------------------------------------- */
+
+  async initDisk(input: DiskInitInput): Promise<void> {
+    const node = validateNode(input.node)
+    const devpath = input.devpath.trim()
+    if (!devpath) throw new PveError('VALIDATION', '请选择要操作的磁盘。')
+    // PVE 的 disks/create 只接受 /dev/xxx 形式
+    if (!/^\/dev\/[A-Za-z0-9_./-]+$/.test(devpath)) {
+      throw new PveError('VALIDATION', `磁盘路径无效：${devpath}。应为 /dev/sdX 或 /dev/nvmeXn1。`)
+    }
+    const client = this.requireClient()
+    const base = `/nodes/${encodeURIComponent(node)}/disks`
+
+    if (input.mode === 'wipe') {
+      await client.request(`${base}/wipe`, {
+        method: 'POST',
+        form: { dev: devpath },
+        timeoutMs: 600_000
+      })
+      return
+    }
+
+    const name = input.name?.trim() ?? ''
+    if (!/^[A-Za-z][A-Za-z0-9._-]*$/.test(name)) {
+      throw new PveError('VALIDATION', '存储 ID 必须以字母开头，只能包含字母、数字、点、下划线和连字符。')
+    }
+
+    const form: Record<string, string | number | boolean> = { dev: devpath }
+    if (input.force) form.force = true
+
+    switch (input.mode) {
+      case 'gpt':
+        await client.request(`${base}/initgpt`, {
+          method: 'POST',
+          form: { disk: devpath, ...(input.force ? { force: true } : {}) },
+          timeoutMs: 120_000
+        })
+        return
+      case 'lvm':
+        form.name = name
+        form.vgname = input.vgname?.trim() || name
+        break
+      case 'lvmthin':
+        form.name = name
+        form.vgname = input.vgname?.trim() || name
+        form.thinpool = input.thinpool?.trim() || 'data'
+        break
+      case 'zfs':
+        form.name = name
+        if (input.zfsThin) form.add_storage = true
+        if (input.raidlevel) form.raidlevel = input.raidlevel
+        break
+      case 'directory':
+        form.name = name
+        form.path = input.path?.trim() || `/mnt/${name}`
+        break
+    }
+
+    await client.request(`${base}/create`, {
+      method: 'POST',
+      form: { ...form, type: input.mode },
+      timeoutMs: 300_000
+    })
+  }
+
+  /* ---------------------------------------------------------------- *
+   * SDN（软件定义网络）
+   * ---------------------------------------------------------------- */
+
+  async getSdnOverview(): Promise<SdnOverviewData> {
+    const client = this.requireClient()
+    const warnings: string[] = []
+
+    const [rawRoot, rawZones, rawVnets, rawSubnets] = await Promise.all([
+      client.request<unknown>('/cluster/sdn').catch((error) => {
+        warnings.push(`读取 SDN 配置状态失败：${describeError(error)}`)
+        return null
+      }),
+      client.request<unknown[]>('/cluster/sdn/zones').catch((error) => {
+        warnings.push(`读取 SDN 区域失败：${describeError(error)}`)
+        return []
+      }),
+      client.request<unknown[]>('/cluster/sdn/vnets').catch((error) => {
+        warnings.push(`读取 SDN VNet 失败：${describeError(error)}`)
+        return []
+      }),
+      client.request<unknown[]>('/cluster/sdn/subnets').catch((error) => {
+        warnings.push(`读取 SDN 子网失败：${describeError(error)}`)
+        return []
+      })
+    ])
+
+    const root = object(rawRoot)
+    const vnets = array(rawVnets).map(mapSdnVnet).filter((item) => item.vnet)
+    const zones = array(rawZones).map(mapSdnZone).filter((item) => item.zone)
+    const subnets = array(rawSubnets).map(mapSdnSubnet).filter((item) => item.subnet)
+
+    return {
+      zones,
+      vnets,
+      subnets,
+      enabled: Boolean(root.sdn) || object(root.sdn).enabled !== undefined,
+      pending:
+        boolean(root.pending) ||
+        zones.some((item) => item.pending) ||
+        vnets.some((item) => item.pending) ||
+        subnets.some((item) => item.pending),
+      warnings
+    }
+  }
+
+  async saveSdnZone(input: SdnZoneInput): Promise<void> {
+    const zone = input.zone.trim()
+    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(zone)) {
+      throw new PveError('VALIDATION', 'SDN 区域名格式无效：只能包含字母、数字、下划线和连字符，且以字母开头。')
+    }
+    const client = this.requireClient()
+
+    if (input.delete) {
+      await client.request(`/cluster/sdn/zones/${encodeURIComponent(zone)}`, {
+        method: 'DELETE',
+        timeoutMs: 20_000
+      })
+      return
+    }
+
+    const form: Record<string, string | number | boolean> = { type: input.type }
+    if (input.type === 'simple' || input.type === 'vlan' || input.type === 'qinq') {
+      if (input.bridge) form.bridge = input.bridge
+    }
+    if (input.type === 'vlan' && input.vlan !== undefined) form.vlan = input.vlan
+    if (input.type === 'qinq' && input.vlanProtocol) form['vlan-protocol'] = input.vlanProtocol
+    if (input.type === 'vxlan' || input.type === 'evpn') {
+      if (input.vxlanId !== undefined) form['vxlan-id'] = input.vxlanId
+      if (input.peers) form.peers = input.peers
+    }
+    if (input.type === 'evpn') {
+      if (input.controller) form.controller = input.controller
+      if (input.vrfVxlan !== undefined) form['vrf-vxlan'] = input.vrfVxlan
+      if (input.asn !== undefined) form.asn = input.asn
+      if (input.exitNodes) form['exit-nodes'] = input.exitNodes
+    }
+    if (input.mtu !== undefined) form.mtu = input.mtu
+    if (input.nodes) form.nodes = input.nodes
+    for (const key of ['ipam', 'dns', 'dnsZone', 'reversedns', 'dhcp'] as const) {
+      const value = input[key]
+      if (!value) continue
+      form[key === 'dnsZone' ? 'dnszone' : key.toLowerCase()] = value
+    }
+
+    await client.request(`/cluster/sdn/zones/${encodeURIComponent(zone)}`, {
+      method: 'PUT',
+      form,
+      timeoutMs: 20_000
+    })
+  }
+
+  async saveSdnVnet(input: SdnVnetInput): Promise<void> {
+    const vnet = input.vnet.trim()
+    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(vnet)) {
+      throw new PveError('VALIDATION', 'VNet 名称格式无效：只能包含字母、数字、下划线和连字符，且以字母开头。')
+    }
+    const client = this.requireClient()
+
+    if (input.delete) {
+      await client.request(`/cluster/sdn/vnets/${encodeURIComponent(vnet)}`, {
+        method: 'DELETE',
+        timeoutMs: 20_000
+      })
+      return
+    }
+
+    const zone = input.zone.trim()
+    if (!zone) throw new PveError('VALIDATION', '请选择 VNet 所属的 SDN 区域。')
+    await client.request(`/cluster/sdn/vnets/${encodeURIComponent(vnet)}`, {
+      method: 'PUT',
+      form: {
+        zone,
+        ...(input.alias ? { alias: input.alias } : {}),
+        ...(input.tag !== undefined ? { tag: input.tag } : {}),
+        ...(input.vlanaware !== undefined ? { vlanaware: input.vlanaware } : {})
+      },
+      timeoutMs: 20_000
+    })
+  }
+
+  async saveSdnSubnet(input: SdnSubnetInput): Promise<void> {
+    const subnet = input.subnet.trim()
+    if (!/^[0-9a-fA-F.:]+\/\d{1,3}$/.test(subnet)) {
+      throw new PveError('VALIDATION', '子网格式无效，应为 CIDR 形式，例如 10.0.0.0/24。')
+    }
+    const client = this.requireClient()
+    const base = `/cluster/sdn/subnets/${encodeURIComponent(subnet)}`
+
+    if (input.delete) {
+      await client.request(base, { method: 'DELETE', timeoutMs: 20_000 })
+      return
+    }
+
+    const vnet = input.vnet.trim()
+    if (!vnet) throw new PveError('VALIDATION', '请选择子网所属的 VNet。')
+    const form: Record<string, string | number | boolean> = { vnet }
+    if (input.gateway) form.gateway = input.gateway
+    if (input.snat !== undefined) form.snat = input.snat
+    if (input.dnsZonePrefix) form['dnszoneprefix'] = input.dnsZonePrefix
+    if (input.dnsServers) form.dns = input.dnsServers
+    if (input.dhcpRangeStart && input.dhcpRangeEnd) {
+      form['dhcp-range'] = JSON.stringify({ start: input.dhcpRangeStart, end: input.dhcpRangeEnd })
+    }
+
+    await client.request(base, { method: 'PUT', form, timeoutMs: 20_000 })
+  }
+
+  /** 把 pending 的 SDN 变更下发到各节点；revert=true 时丢弃未下发的变更。 */
+  async applySdn(revert = false): Promise<void> {
+    const client = this.requireClient()
+    // PVE 要求先拿到 /cluster/sdn 的锁再提交，否则返回 423 Locked；
+    // lock-token 由 PVE 直接回写 cookie 维度，这里只需先 GET 一次拿锁。
+    await client.request<unknown>('/cluster/sdn', { timeoutMs: 15_000 })
+    await client.request('/cluster/sdn', {
+      method: 'PUT',
+      form: revert ? { revert: 1, release_lock: 1 } : { release_lock: 1 },
+      timeoutMs: 180_000
+    })
+  }
+
+  /* ---------------------------------------------------------------- *
+   * 高可用（HA）
+   * ---------------------------------------------------------------- */
+
+  async getHaOverview(): Promise<HaOverviewData> {
+    const client = this.requireClient()
+    const warnings: string[] = []
+
+    const [rawResources, rawGroups, rawStatus, rawManager] = await Promise.all([
+      client.request<unknown[]>('/cluster/ha/resources').catch((error) => {
+        warnings.push(`读取 HA 资源失败：${describeError(error)}`)
+        return []
+      }),
+      client.request<unknown[]>('/cluster/ha/groups').catch(() => []),
+      client.request<unknown[]>('/cluster/ha/status/current').catch(() => []),
+      client.request<Raw>('/cluster/ha/status/manager_status').catch(() => null)
+    ])
+
+    return {
+      resources: array(rawResources).map((entry) => mapHaResource(object(entry))),
+      groups: array(rawGroups).map((entry) => mapHaGroup(object(entry))),
+      statuses: array(rawStatus).map((entry) => {
+        const item = object(entry)
+        return {
+          id: text(item.id),
+          node: text(item.node) || undefined,
+          status: text(item.status) || undefined,
+          type: text(item.type) || undefined
+        }
+      }),
+      manager: rawManager ? object(rawManager) : null,
+      warnings
+    }
+  }
+
+  async saveHaResource(input: HaResourceInput): Promise<void> {
+    const sid = validateHaSid(input.sid)
+    const client = this.requireClient()
+    if (input.delete) {
+      await client.request(`/cluster/ha/resources/${encodeURIComponent(sid)}`, {
+        method: 'DELETE',
+        timeoutMs: 20_000
+      })
+      return
+    }
+    if (input.state) {
+      await client.request(`/cluster/ha/resources/${encodeURIComponent(sid)}/state`, {
+        method: 'POST',
+        form: { request_state: input.state },
+        timeoutMs: 20_000
+      })
+      return
+    }
+    await client.request('/cluster/ha/resources', {
+      method: 'POST',
+      form: {
+        sid,
+        ...(input.group ? { group: input.group } : {}),
+        ...(input.maxRestart !== undefined ? { max_restart: input.maxRestart } : {}),
+        ...(input.maxRelocate !== undefined ? { max_relocate: input.maxRelocate } : {}),
+        ...(input.comment !== undefined ? { comment: input.comment } : {})
+      },
+      timeoutMs: 20_000
+    })
+  }
+  async saveHaGroup(input: HaGroupInput): Promise<void> {
+    const group = input.group.trim()
+    if (!/^[A-Za-z][A-Za-z0-9._-]*$/.test(group)) {
+      throw new PveError('VALIDATION', 'HA 组名格式无效。')
+    }
+    const client = this.requireClient()
+    if (input.delete) {
+      await client.request(`/cluster/ha/groups/${encodeURIComponent(group)}`, {
+        method: 'DELETE',
+        timeoutMs: 20_000
+      })
+      return
+    }
+    const nodes = input.nodes.trim()
+    if (!nodes) throw new PveError('VALIDATION', '请填写组成员节点。')
+    await client.request('/cluster/ha/groups', {
+      method: 'POST',
+      form: {
+        group,
+        nodes,
+        ...(input.comment !== undefined ? { comment: input.comment } : {}),
+        ...(input.restricted !== undefined ? { restricted: input.restricted } : {}),
+        ...(input.noFailback !== undefined ? { nofailback: input.noFailback } : {})
+      },
+      timeoutMs: 20_000
+    })
+  }
+
+  private async listNodeNames(): Promise<string[]> {
+    const client = this.requireClient()
+    const raw = await client.request<unknown[]>('/nodes')
+    return array(raw)
+      .map((entry) => text(object(entry).node))
+      .filter(Boolean)
+  }
+
+  /* ---------------------------------------------------------------- *
+   * 虚拟机增强：快照 / 迁移 / 模板 / cloud-init
+   * ---------------------------------------------------------------- */
+
+  async vmSnapshot(input: SnapshotInput): Promise<SnapshotMutationResult> {
+    const base = vmBase(input.ref)
+    const client = this.requireClient()
+
+    if (input.delete) {
+      const name = validateSnapshotName(input.delete)
+      const upid = await client.request<string | null>(
+        `${base}/snapshot/${encodeURIComponent(name)}`,
+        { method: 'DELETE', timeoutMs: 30_000 }
+      )
+      return {
+        name,
+        upid: upid ?? undefined,
+        message: upid ? `快照「${name}」删除任务已提交。` : `快照「${name}」已删除。`
+      }
+    }
+
+    if (input.rollback) {
+      const name = validateSnapshotName(input.rollback)
+      const upid = await client.request<string | null>(
+        `${base}/snapshot/${encodeURIComponent(name)}/rollback`,
+        { method: 'POST', timeoutMs: 30_000 }
+      )
+      return {
+        name,
+        upid: upid ?? undefined,
+        message: upid ? `回滚到「${name}」的任务已提交。` : `已回滚到「${name}」。`
+      }
+    }
+
+    const name = validateSnapshotName(input.name ?? '')
+    const form: Record<string, string | boolean> = { snapname: name }
+    if (input.description) form.description = input.description
+    if (input.vmstate) form.vmstate = true
+    const upid = await client.request<string | null>(`${base}/snapshot`, {
+      method: 'POST',
+      form,
+      timeoutMs: 30_000
+    })
+    return {
+      name,
+      upid: upid ?? undefined,
+      message: upid ? `快照「${name}」创建任务已提交。` : `快照「${name}」已创建。`
+    }
+  }
+
+  async vmMigrate(input: MigrateInput): Promise<ActionResult> {
+    const base = vmBase(input.ref)
+    const target = validateNode(input.target)
+    const client = this.requireClient()
+    if (target === input.ref.node) {
+      throw new PveError('VALIDATION', '目标节点与当前节点相同。')
+    }
+    const upid = await client.request<string | null>(`${base}/migrate`, {
+      method: 'POST',
+      form: {
+        target,
+        online: input.online !== false,
+        'with-local-disks': input.withLocalDisks !== false,
+        ...(input.targetStorage ? { targetstorage: validateStorageName(input.targetStorage) } : {}),
+        ...(input.force ? { force: true } : {})
+      },
+      timeoutMs: 30_000
+    })
+    return {
+      upid: upid ?? undefined,
+      message: upid ? `迁移任务已提交，目标节点 ${target}。` : '迁移任务已提交。'
+    }
+  }
+
+  async vmTemplate(input: TemplateInput): Promise<ActionResult> {
+    const base = vmBase(input.ref)
+    const client = this.requireClient()
+    if (input.template) {
+      await this.requireVmStopped(client, input.ref)
+    }
+    const upid = await client.request<string | null>(`${base}/template`, {
+      method: 'POST',
+      timeoutMs: 30_000
+    })
+    return {
+      upid: upid ?? undefined,
+      message: input.template ? '已提交转为模板，模板不可再直接启动。' : '已提交取消模板标记。'
+    }
+  }
+
+  async vmCloudInit(input: CloudInitInput): Promise<VmMutationResult> {
+    if (input.ref.type !== 'qemu') {
+      throw new PveError('VALIDATION', 'cloud-init 仅适用于 KVM 虚拟机。')
+    }
+    const base = vmBase(input.ref)
+    const client = this.requireClient()
+
+    const patch: Record<string, string> = {}
+    if (input.addDrive) patch.ide2 = input.addDrive
+    if (input.user) patch.ciuser = input.user
+    if (input.ciuser) patch.ciuser = input.ciuser
+    if (input.password) patch.cipassword = input.password
+    if (input.sshKeys !== undefined) patch.sshkeys = encodeURIComponent(input.sshKeys)
+    if (input.ipconfig0) patch.ipconfig0 = input.ipconfig0
+    if (input.nameserver) patch.nameserver = input.nameserver
+    if (input.searchdomain) patch.searchdomain = input.searchdomain
+    if (input.citype) patch.citype = input.citype
+    if (input.cicustom) patch.cicustom = input.cicustom
+
+    if (Object.keys(patch).length === 0) {
+      throw new PveError('VALIDATION', '没有需要写入的 cloud-init 配置。')
+    }
+
+    const upid = await client.request<string | null>(`${base}/config`, {
+      method: 'PUT',
+      form: patch,
+      timeoutMs: 25_000
+    })
+
+    const warnings: string[] = []
+    if (upid) {
+      const exit = await this.waitForTask(input.ref.node, upid, 30_000).catch(() => '')
+      if (exit && exit !== 'OK') warnings.push(`配置任务返回：${exit}`)
+    }
+
+    return {
+      message: 'cloud-init 配置已写入。',
+      upid: upid ?? undefined,
+      warnings
+    }
+  }
+
+  async vmSendKey(input: VmSendKeyInput): Promise<void> {
+    if (input.ref.type !== 'qemu') {
+      throw new PveError('VALIDATION', '发送组合键仅适用于 KVM 虚拟机。')
+    }
+    const keys = input.keys.filter(Boolean)
+    if (keys.length === 0) throw new PveError('VALIDATION', '请至少指定一个按键。')
+    const base = vmBase(input.ref)
+    const client = this.requireClient()
+    await client.request(`${base}/sendkey`, {
+      method: 'PUT',
+      form: { key: keys.join(' ') },
+      timeoutMs: 15_000
+    })
+  }
+}
+
+function describeError(error: unknown): string {
+  if (error instanceof PveError) return error.message
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
+function tagListList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => text(item)).filter(Boolean)
+  return text(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function mapUserToken(userid: string, raw: Raw): PveUserToken {
+  const tokenId = text(raw.tokenid)
+  return {
+    tokenId,
+    fullTokenId: `${userid}!${tokenId}`,
+    comment: text(raw.comment) || undefined,
+    expire: raw.expire === undefined ? undefined : number(raw.expire),
+    privsep: boolean(raw.privsep),
+    createdAt: raw['ctime'] === undefined ? undefined : number(raw['ctime'])
+  }
+}
+
+function mapGroup(raw: Raw, usersByGroup: Map<string, string[]>): PveGroup {
+  const groupid = text(raw.groupid)
+  return {
+    groupid,
+    comment: text(raw.comment) || undefined,
+    users: usersByGroup.get(groupid) ?? []
+  }
+}
+
+function mapRole(raw: Raw): PveRole {
+  return {
+    roleid: text(raw.roleid),
+    privs: tagListList(raw.privs),
+    special: boolean(raw.special)
+  }
+}
+
+function mapAcl(raw: Raw): PveAclEntry | null {
+  const ugid = text(raw.ugid) || text(raw.user) || text(raw.group)
+  if (!ugid) return null
+  const type: PveAclEntry['type'] = ugid.includes('!')
+    ? 'token'
+    : text(raw.type) === 'group' || text(raw.group)
+      ? 'group'
+      : 'user'
+  return {
+    path: text(raw.path, '/'),
+    ugid,
+    type,
+    roleid: text(raw.roleid),
+    propagate: boolean(raw.propagate),
+    comment: text(raw.comment) || undefined
+  }
+}
+
+function validateUserid(input: string): string {
+  const userid = input.trim()
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*(@[A-Za-z0-9][A-Za-z0-9._-]*)?$/.test(userid)) {
+    throw new PveError('VALIDATION', '用户标识格式无效，应形如 root@pam 或 user@realm。')
+  }
+  return userid
+}
+
+function validateGroupId(input: string): string {
+  const groupid = input.trim()
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(groupid)) {
+    throw new PveError('VALIDATION', '用户组标识格式无效。')
+  }
+  return groupid
+}
+
+function validateAclPath(input: string): string {
+  const path = input.trim()
+  if (!path.startsWith('/')) {
+    throw new PveError('VALIDATION', 'ACL 路径必须以 / 开头。')
+  }
+  return path
+}
+
+function validatePoolId(input: string): string {
+  const poolid = input.trim()
+  if (!/^[A-Za-z][A-Za-z0-9._-]*$/.test(poolid)) {
+    throw new PveError('VALIDATION', '资源池标识必须以字母开头，只能包含字母、数字、点、下划线与短横线。')
+  }
+  return poolid
+}
+
+function storageVolumeName(volid: string): string {
+  if (!volid) return ''
+  if (volid.includes(':iso/')) {
+    return volid.slice(volid.indexOf(':iso/') + 5)
+  }
+  if (volid.includes(':vztmpl/')) {
+    return volid.slice(volid.indexOf(':vztmpl/') + 8)
+  }
+  if (volid.includes(':backup/')) {
+    return volid.slice(volid.indexOf(':backup/') + 8)
+  }
+  if (volid.includes(':snippets/')) {
+    return volid.slice(volid.indexOf(':snippets/') + 10)
+  }
+  const tail = volid.split('/').pop() ?? volid
+  return tail
+}
+
+const STORAGE_CONTENT_TYPES = [
+  'images',
+  'rootdir',
+  'vztmpl',
+  'iso',
+  'backup',
+  'snippets'
+] as const
+
+/* ---------------- 备份映射 ---------------- */
+
+function mapBackupFile(raw: Raw, node: string, storage: string): BackupFile {
+  const volid = text(raw.volid)
+  const filename = volid.includes(':backup/')
+    ? volid.slice(volid.indexOf(':backup/') + 8)
+    : volid.split('/').pop() ?? volid
+  const guestType: VmType | undefined = filename.includes('vzdump-qemu')
+    ? 'qemu'
+    : filename.includes('vzdump-lxc')
+      ? 'lxc'
+      : undefined
+  const vmidMatch = /vzdump-(?:qemu|lxc)-(\d+)-/.exec(filename)
+  return {
+    volid,
+    filename,
+    storage,
+    node,
+    format: text(raw.format) || guessBackupFormat(filename),
+    size: number(raw.size),
+    ctime: raw.ctime === undefined ? undefined : number(raw.ctime),
+    vmid: raw.vmid === undefined ? (vmidMatch ? Number(vmidMatch[1]) : undefined) : number(raw.vmid),
+    guestType,
+    notes: text(raw.notes) || undefined,
+    encrypted: text(raw.format).includes('enc') || filename.includes('enc')
+  }
+}
+
+function guessBackupFormat(filename: string): string {
+  if (filename.endsWith('.vma.zst')) return 'zst'
+  if (filename.endsWith('.vma.gz')) return 'gz'
+  if (filename.endsWith('.vma.lzo')) return 'lzo'
+  if (filename.endsWith('.tar.zst')) return 'zst'
+  if (filename.endsWith('.tar.gz')) return 'gz'
+  if (filename.endsWith('.vma')) return 'vma'
+  if (filename.endsWith('.tar')) return 'tar'
+  return ''
+}
+
+function mapBackupJob(raw: Raw): BackupJob {
+  const vmid = raw.vmid === undefined ? '' : text(raw.vmid)
+  return {
+    id: text(raw.id),
+    enabled: raw.enabled === undefined ? true : boolean(raw.enabled),
+    mode: text(raw.mode, 'snapshot'),
+    storage: text(raw.storage),
+    schedule: text(raw.schedule),
+    vmid: vmid || undefined,
+    node: text(raw.node) || undefined,
+    all: boolean(raw.all),
+    compress: text(raw.compress, 'zstd'),
+    comment: text(raw.comment) || undefined,
+    nextRun: raw.nextrun === undefined ? undefined : number(raw.nextrun),
+    lastRun: raw.lastrun === undefined ? undefined : number(raw.lastrun)
+  }
+}
+
+/* ---------------- 防火墙映射 ---------------- */
+
+function firewallBase(scope: FirewallScope): string {
+  if (scope.level === 'cluster') return '/cluster/firewall'
+  const node = validateNode(scope.node)
+  if (scope.level === 'node') return `/nodes/${encodeURIComponent(node)}/firewall`
+  const type = validateVmType(scope.type)
+  const vmid = validateVmid(scope.vmid)
+  return `/nodes/${encodeURIComponent(node)}/${type}/${vmid}/firewall`
+}
+
+function mapFirewallRule(raw: Raw): FirewallRule {
+  const typeRaw = text(raw.type, 'in')
+  const type: FirewallRule['type'] = typeRaw === 'out' ? 'out' : typeRaw === 'group' ? 'group' : 'in'
+  return {
+    pos: number(raw.pos),
+    type,
+    action: text(raw.action, 'ACCEPT').toUpperCase(),
+    proto: text(raw.proto) || undefined,
+    source: text(raw.source) || undefined,
+    dest: text(raw.dest) || undefined,
+    sport: text(raw.sport) || undefined,
+    dport: text(raw.dport) || undefined,
+    iface: text(raw.iface) || undefined,
+    comment: text(raw.comment) || undefined,
+    enabled: raw.enable === undefined ? true : boolean(raw.enable),
+    log: text(raw.log) || undefined,
+    macro: text(raw.macro) || undefined,
+    icmpType: text(raw['icmp-type']) || undefined,
+    digest: text(raw.digest) || undefined
+  }
+}
+
+function mapFirewallOptions(raw: Raw): FirewallOptions {
+  const known = new Set([
+    'enable',
+    'policy_in',
+    'policy_out',
+    'log_level_in',
+    'log_level_out',
+    'ebtables',
+    'digest'
+  ])
+  const extra: Record<string, string> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (known.has(key)) continue
+    if (value === null || value === undefined) continue
+    extra[key] = String(value)
+  }
+  return {
+    enable: boolean(raw.enable),
+    policyIn: text(raw.policy_in) || undefined,
+    policyOut: text(raw.policy_out) || undefined,
+    logLevelIn: text(raw.log_level_in) || undefined,
+    logLevelOut: text(raw.log_level_out) || undefined,
+    ebtables: raw.ebtables === undefined ? undefined : boolean(raw.ebtables),
+    digest: text(raw.digest) || undefined,
+    extra
+  }
+}
+
+/* ---------------- HA 映射 ---------------- */
+
+function mapHaResource(raw: Raw): HaResource {
+  return {
+    sid: text(raw.sid),
+    type: text(raw.type),
+    state: text(raw.state) || undefined,
+    group: text(raw.group) || undefined,
+    maxRestart: raw['max_restart'] === undefined ? undefined : number(raw['max_restart']),
+    maxRelocate: raw['max_relocate'] === undefined ? undefined : number(raw['max_relocate']),
+    comment: text(raw.comment) || undefined,
+    node: text(raw.node) || undefined,
+    status: text(raw.status) || undefined
+  }
+}
+
+function mapHaGroup(raw: Raw): HaGroup {
+  return {
+    group: text(raw.group),
+    nodes: text(raw.nodes),
+    comment: text(raw.comment) || undefined,
+    restricted: raw.restricted === undefined ? undefined : boolean(raw.restricted),
+    noFailback: raw.nofailback === undefined ? undefined : boolean(raw.nofailback)
+  }
+}
+
+function validateHaSid(input: string): string {
+  const sid = input.trim()
+  if (!/^(vm|ct):\d{3,}$/.test(sid)) {
+    throw new PveError('VALIDATION', 'HA 资源标识应形如 vm:100 或 ct:101。')
+  }
+  return sid
+}
+
+function validateSnapshotName(input: string): string {
+  const name = input.trim()
+  if (!name) throw new PveError('VALIDATION', '快照名称不能为空。')
+  if (name.length > 40) throw new PveError('VALIDATION', '快照名称不能超过 40 个字符。')
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(name)) {
+    throw new PveError('VALIDATION', '快照名称只能包含字母、数字、点、下划线与短横线。')
+  }
+  return name
+}
+
+function mapStorageDefinition(raw: Raw): StorageDefinition {
+  const known = new Set([
+    'storage',
+    'type',
+    'content',
+    'path',
+    'nodes',
+    'shared',
+    'disable'
+  ])
+  const options: Record<string, string> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (known.has(key)) continue
+    if (value === null || value === undefined) continue
+    options[key] = String(value)
+  }
+  return {
+    storage: text(raw.storage),
+    type: text(raw.type),
+    content: tagListList(raw.content).filter((item) =>
+      (STORAGE_CONTENT_TYPES as readonly string[]).includes(item)
+    ),
+    path: text(raw.path) || undefined,
+    nodes: text(raw.nodes) || undefined,
+    shared: boolean(raw.shared),
+    disable: boolean(raw.disable),
+    options
   }
 }
 

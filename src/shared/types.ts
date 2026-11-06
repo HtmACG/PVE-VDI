@@ -532,6 +532,7 @@ export interface VmRuntime {
   maxdisk: number
   agentEnabled: boolean
   haManaged: boolean
+  template: boolean
   runningMachine?: string
   runningQemu?: string
   tags: string[]
@@ -607,6 +608,7 @@ export interface VmMutationResult {
   message: string
   upid?: string
   disk?: string
+  warnings?: string[]
 }
 
 export interface AgentIpAddress {
@@ -785,6 +787,735 @@ export interface ConsoleWindowBootstrap {
   settings: AppSettings
 }
 
+/* ------------------------------------------------------------------ *
+ * 访问控制（Access Control）
+ * ------------------------------------------------------------------ */
+
+export interface PveUserToken {
+  tokenId: string
+  fullTokenId: string
+  comment?: string
+  expire?: number
+  privsep: boolean
+  createdAt?: number
+}
+
+export interface PveUser {
+  userid: string
+  comment?: string
+  email?: string
+  firstName?: string
+  lastName?: string
+  groups: string[]
+  keys?: string
+  enabled: boolean
+  expire?: number
+  domain: string
+  realmType: string
+  tokens: PveUserToken[]
+}
+
+export interface PveGroup {
+  groupid: string
+  comment?: string
+  users: string[]
+}
+
+export interface PveRole {
+  roleid: string
+  privs: string[]
+  special: boolean
+}
+
+export interface PveAclEntry {
+  path: string
+  ugid: string
+  type: 'user' | 'group' | 'token'
+  roleid: string
+  propagate: boolean
+  comment?: string
+}
+
+export interface AccessOverviewData {
+  users: PveUser[]
+  groups: PveGroup[]
+  roles: PveRole[]
+  acl: PveAclEntry[]
+  realms: string[]
+  warnings: string[]
+}
+
+export interface AccessUserInput {
+  userid: string
+  password?: string
+  comment?: string
+  email?: string
+  firstName?: string
+  lastName?: string
+  groups?: string[]
+  expire?: number
+  enabled?: boolean
+  create?: boolean
+}
+
+export interface AccessGroupInput {
+  groupid: string
+  comment?: string
+  create?: boolean
+}
+
+export interface AccessAclInput {
+  path: string
+  ugid: string
+  roleid: string
+  propagate?: boolean
+  delete?: boolean
+}
+
+export interface AccessTokenInput {
+  userid: string
+  tokenId: string
+  comment?: string
+  expire?: number
+  privsep?: boolean
+  create?: boolean
+}
+
+export interface AccessTokenCreated {
+  tokenId: string
+  fullTokenId: string
+  value: string
+  message: string
+}
+
+/* ------------------------------------------------------------------ *
+ * 存储与资源池
+ * ------------------------------------------------------------------ */
+
+export interface StorageDefinition {
+  storage: string
+  type: string
+  content: string[]
+  path?: string
+  nodes?: string
+  shared: boolean
+  disable: boolean
+  options: Record<string, string>
+}
+
+export interface StorageContentEntry {
+  volid: string
+  name: string
+  format: string
+  contentType: string
+  size: number
+  used: number
+  vmid?: number
+  ctime?: number
+  node: string
+  storage: string
+  protected: boolean
+  notes?: string
+}
+
+export interface StorageContentData {
+  node: string
+  storage: string
+  contentType: string
+  entries: StorageContentEntry[]
+  totalSize: number
+  totalUsed: number
+}
+
+export interface StorageOverviewData {
+  definitions: StorageDefinition[]
+  pools: PvePoolSummary[]
+  warnings: string[]
+}
+
+export interface PvePoolSummary {
+  poolid: string
+  comment?: string
+  members: Array<{ id: string; type: string; vmid?: number; node?: string; storage?: string }>
+}
+
+export interface StorageDefinitionInput {
+  storage: string
+  type: string
+  content: string[]
+  path?: string
+  nodes?: string
+  shared?: boolean
+  disable?: boolean
+  options?: Record<string, string>
+  create?: boolean
+  delete?: boolean
+}
+
+export interface PoolInput {
+  poolid: string
+  comment?: string
+  create?: boolean
+  delete?: boolean
+}
+
+export interface PoolMemberInput {
+  poolid: string
+  vms?: Array<string | number>
+  storages?: string[]
+  delete?: boolean
+}
+
+/* ------------------------------------------------------------------ *
+ * 备份与还原
+ * ------------------------------------------------------------------ */
+
+export interface BackupFile {
+  volid: string
+  filename: string
+  storage: string
+  node: string
+  format: string
+  size: number
+  ctime?: number
+  vmid?: number
+  guestType?: VmType
+  notes?: string
+  encrypted: boolean
+}
+
+export interface BackupOverviewData {
+  files: BackupFile[]
+  jobs: BackupJob[]
+  totals: { count: number; size: number }
+  warnings: string[]
+}
+
+export interface BackupJob {
+  id: string
+  enabled: boolean
+  mode: string
+  storage: string
+  schedule: string
+  vmid?: string
+  node?: string
+  all: boolean
+  compress: string
+  comment?: string
+  nextRun?: number
+  lastRun?: number
+}
+
+export interface BackupJobInput {
+  id?: string
+  storage: string
+  schedule: string
+  mode?: string
+  compress?: string
+  vmid?: string
+  node?: string
+  comment?: string
+  enabled?: boolean
+  delete?: boolean
+}
+
+export interface StartBackupInput {
+  node: string
+  storage: string
+  vmid?: number
+  mode?: 'snapshot' | 'suspend' | 'stop'
+  compress?: 'zstd' | 'gzip' | 'lzo' | 'none'
+  notesTemplate?: string
+  protected?: boolean
+  removeOlder?: number
+}
+
+export interface RestoreBackupInput {
+  node: string
+  storage: string
+  volid: string
+  vmid: number
+  guestType: VmType
+  unique?: boolean
+  start?: boolean
+  name?: string
+  pool?: string
+}
+
+/* ------------------------------------------------------------------ *
+ * 防火墙
+ * ------------------------------------------------------------------ */
+
+export type FirewallScope =
+  | { level: 'cluster' }
+  | { level: 'node'; node: string }
+  | { level: 'vm'; node: string; type: VmType; vmid: number }
+
+export interface FirewallRule {
+  pos: number
+  type: 'in' | 'out' | 'group'
+  action: string
+  proto?: string
+  source?: string
+  dest?: string
+  sport?: string
+  dport?: string
+  iface?: string
+  comment?: string
+  enabled: boolean
+  log?: string
+  macro?: string
+  icmpType?: string
+  digest?: string
+}
+
+export interface FirewallRuleInput {
+  scope: FirewallScope
+  rule: Omit<FirewallRule, 'pos' | 'digest'> & { pos?: number }
+  /** true 时按 pos 删除已有规则 */
+  delete?: boolean
+}
+
+export interface FirewallOptions {
+  enable: boolean
+  policyIn?: string
+  policyOut?: string
+  logLevelIn?: string
+  logLevelOut?: string
+  ebtables?: boolean
+  digest?: string
+  extra?: Record<string, string>
+}
+
+export interface FirewallGroupSummary {
+  group: string
+  comment?: string
+  ruleCount: number
+}
+
+export interface FirewallOverviewData {
+  scope: FirewallScope
+  options: FirewallOptions
+  rules: FirewallRule[]
+  groups: FirewallGroupSummary[]
+  ipsets: Array<{ name: string; comment?: string }>
+  warnings: string[]
+}
+
+export interface FirewallOptionsInput {
+  scope: FirewallScope
+  options: Partial<FirewallOptions>
+}
+
+export interface FirewallAliasInput {
+  scope: FirewallScope
+  name: string
+  cidr: string
+  comment?: string
+  delete?: boolean
+}
+
+/* ------------------------------------------------------------------ *
+ * 高可用（HA）
+ * ------------------------------------------------------------------ */
+
+export interface HaResource {
+  sid: string
+  type: string
+  state?: string
+  group?: string
+  maxRestart?: number
+  maxRelocate?: number
+  comment?: string
+  node?: string
+  status?: string
+}
+
+export interface HaGroup {
+  group: string
+  nodes: string
+  comment?: string
+  restricted?: boolean
+  noFailback?: boolean
+}
+
+export interface HaOverviewData {
+  resources: HaResource[]
+  groups: HaGroup[]
+  statuses: Array<{ id: string; node?: string; status?: string; type?: string }>
+  manager: Record<string, unknown> | null
+  warnings: string[]
+}
+
+export interface HaResourceInput {
+  sid: string
+  group?: string
+  maxRestart?: number
+  maxRelocate?: number
+  comment?: string
+  state?: 'started' | 'stopped' | 'disabled' | 'enabled'
+  delete?: boolean
+}
+
+export interface HaGroupInput {
+  group: string
+  nodes: string
+  comment?: string
+  restricted?: boolean
+  noFailback?: boolean
+  delete?: boolean
+}
+
+/* ------------------------------------------------------------------ *
+ * SDN（软件定义网络）
+ * ------------------------------------------------------------------ */
+
+export type SdnZoneType = 'simple' | 'vlan' | 'qinq' | 'vxlan' | 'evpn'
+
+export interface SdnZone {
+  zone: string
+  type: SdnZoneType
+  /** 出口节点，仅 simple / vlan / qinq 可用 */
+  bridge?: string
+  mtu?: number
+  nodes?: string[]
+  /** VLAN 区域的主 VLAN 标签 */
+  vlan?: number
+  /** QinQ 区域的额外 VLAN 范围 */
+  vlanProtocol?: string
+  /** VXLAN / EVPN 的 VNI 与对端列表 */
+  vxlanId?: number
+  peers?: string[]
+  /** EVPN 控制器 */
+  controller?: string
+  /** EVPN 的 VRF VXLAN 号 */
+  vrfVxlan?: number
+  /** EVPN 的 BGP 自治系统号 */
+  asn?: number
+  /** EVPN 的出口节点 */
+  exitNodes?: string[]
+  /** EVPN 对等端口与 MTU（供对端 FW 侧参考） */
+  exitNodesLocalRouting?: boolean
+  ipam?: string
+  dns?: string
+  dnsZone?: string
+  reversedns?: string
+  dhcp?: string
+  pending?: boolean
+  state?: string
+  /** 区域配置在 pending 时保存的原始键值，供编辑回填 */
+  raw?: Record<string, unknown>
+}
+
+export interface SdnVnet {
+  vnet: string
+  zone: string
+  alias?: string
+  /** VLAN 标签，未设置时由 SDN 自动分配 */
+  tag?: number
+  vlanaware?: boolean
+  pending?: boolean
+  state?: string
+  raw?: Record<string, unknown>
+}
+
+export interface SdnSubnet {
+  subnet: string
+  zone: string
+  vnet: string
+  gateway?: string
+  dnsZonePrefix?: string
+  snat?: boolean
+  dhcpRange?: { start?: string; end?: string }
+  dnsServers?: string[]
+  pending?: boolean
+  state?: string
+  raw?: Record<string, unknown>
+}
+
+export interface SdnOverviewData {
+  zones: SdnZone[]
+  vnets: SdnVnet[]
+  subnets: SdnSubnet[]
+  /** `/cluster/sdn` 返回的 SDN 是否已启用、是否有待应用变更 */
+  enabled: boolean
+  pending: boolean
+  /** 读取 `pending` 阶段失败的端点说明 */
+  warnings: string[]
+}
+
+export interface SdnZoneInput {
+  zone: string
+  type: SdnZoneType
+  bridge?: string
+  mtu?: number
+  nodes?: string
+  vlan?: number
+  vlanProtocol?: string
+  vxlanId?: number
+  peers?: string
+  controller?: string
+  vrfVxlan?: number
+  asn?: number
+  exitNodes?: string
+  ipam?: string
+  dns?: string
+  dnsZone?: string
+  reversedns?: string
+  dhcp?: string
+  delete?: boolean
+}
+
+export interface SdnVnetInput {
+  vnet: string
+  zone: string
+  alias?: string
+  tag?: number
+  vlanaware?: boolean
+  delete?: boolean
+}
+
+export interface SdnSubnetInput {
+  subnet: string
+  vnet: string
+  gateway?: string
+  snat?: boolean
+  dnsZonePrefix?: string
+  dhcpRangeStart?: string
+  dhcpRangeEnd?: string
+  dnsServers?: string
+  delete?: boolean
+}
+
+/* ------------------------------------------------------------------ *
+ * 集群成员管理
+ * ------------------------------------------------------------------ */
+
+export interface ClusterJoinInfo {
+  /** 本节点在 /cluster/config/nodes 中的条目名（用于移出） */
+  selfNode?: string
+  /** 本节点视角的集群名称；单机模式下 PVE 仍会返回一个名称 */
+  clusterName?: string
+  /** 已加入集群时的成员列表 */
+  nodes: ClusterMember[]
+  /** 集群配置的汇总指纹，用于提示配置是否一致 */
+  configDigest?: string
+  warnings: string[]
+}
+
+export interface ClusterMember {
+  name: string
+  nodeid?: number
+  /** 该节点的 ring0 地址，PEER 加入时就是填这个 */
+  ring0?: string
+  votes?: number
+  online?: boolean
+}
+
+export interface ClusterJoinInput {
+  /** 对端节点地址（IP 或主机名），不要带协议前缀 */
+  hostname: string
+  /** 对端 root 密码，用于建立 ssh 信任 */
+  password: string
+  /** 对端集群指纹，必须与服务端返回的一致 */
+  fingerprint?: string
+  /** 建议的主机名，留空沿用对端 */
+  nodeid?: string
+  /** 是否用该节点 IP 作为集群通信地址 */
+  usePeerAddress?: boolean
+  /** VOTE 会带入对端 votedquorum */
+  votes?: number
+}
+
+/* ------------------------------------------------------------------ *
+ * 节点磁盘初始化
+ * ------------------------------------------------------------------ */
+
+export type DiskInitMode = 'gpt' | 'lvm' | 'lvmthin' | 'zfs' | 'directory' | 'wipe'
+
+export interface DiskInitInput {
+  node: string
+  devpath: string
+  mode: DiskInitMode
+  /** 生成的存储 ID，wipe 时忽略 */
+  name?: string
+  /** LVM 卷组名 / ZFS 池名，留空用 name */
+  vgname?: string
+  /** lvmthin 的 thin 池名 */
+  thinpool?: string
+  /** directory 的挂载路径 */
+  path?: string
+  /** ZFS 上额外建一个 thin 风格的 dataset */
+  zfsThin?: boolean
+  /** ZFS 池的 raidz 级别，单盘留空 */
+  raidlevel?: string
+  /** 设备是否带分区表，勾选后按整盘处理 */
+  force?: boolean
+  /** wipe 前是否做一次全盘清零（慢，但能彻底清除旧数据） */
+  fullWipe?: boolean
+}
+
+/* ------------------------------------------------------------------ *
+ * 虚拟机增强：快照 / 迁移 / 模板 / cloud-init
+ * ------------------------------------------------------------------ */
+
+export interface SnapshotInput {
+  ref: VmRef
+  /** 创建快照时必填；回滚/删除时用于展示，不会写入 PVE */
+  name?: string
+  description?: string
+  vmstate?: boolean
+  /** 不为空时对该快照执行回滚 */
+  rollback?: string
+  /** 不为空时删除该快照 */
+  delete?: string
+}
+
+export interface MigrateInput {
+  ref: VmRef
+  target: string
+  online?: boolean
+  withLocalDisks?: boolean
+  targetStorage?: string
+  force?: boolean
+}
+
+export interface TemplateInput {
+  ref: VmRef
+  /** true 转为模板，false 取消模板标记（仅 qemu 支持直接取消） */
+  template: boolean
+}
+
+export interface CloudInitInput {
+  ref: VmRef
+  /** 生成 cloud-init 磁盘（如 ide2=local-lvm:cloudinit） */
+  addDrive?: string
+  user?: string
+  password?: string
+  sshKeys?: string
+  ipconfig0?: string
+  nameserver?: string
+  searchdomain?: string
+  ciuser?: string
+  cicustom?: string
+  citype?: 'nocloud' | 'configdrive2'
+}
+
+export interface VmSendKeyInput {
+  ref: VmRef
+  keys: string[]
+}
+
+/* ------------------------------------------------------------------ *
+ * 任务管理
+ */
+
+export interface TaskListQuery {
+  node?: string
+  /** 最多返回条数，默认 200 */
+  limit?: number
+  /** 只看失败的 */
+  errorsOnly?: boolean
+  typeFilter?: string
+  /** 起始时间（秒），用于「最近 1 小时 / 24 小时」 */
+  since?: number
+}
+
+export interface TaskListData {
+  tasks: TaskSummary[]
+  warnings: string[]
+}
+
+/* ------------------------------------------------------------------ *
+ * 节点运维：订阅 / APT / 证书
+ */
+
+export interface SubscriptionInfo {
+  status: 'active' | 'expired' | 'notfound' | 'new' | 'invalid' | 'unknown'
+  level?: string
+  key?: string
+  message?: string
+  serverid?: string
+  sockets?: number
+  checkTime?: number
+  nextDueDate?: number
+  productName?: string
+  regDate?: string
+}
+
+export interface AptRepository {
+  path: string
+  fileType: string
+  index: number
+  enabled: boolean
+  components: string[]
+  uris: string[]
+  suites?: string[]
+  comment?: string
+  types?: string[]
+  warning?: string
+}
+
+export interface AptPackageUpdate {
+  package: string
+  title?: string
+  oldVersion?: string
+  version: string
+  section?: string
+  priority?: string
+  origin?: string
+  description?: string
+}
+
+export interface NodeAptData {
+  node: string
+  repositories: AptRepository[]
+  updates: AptPackageUpdate[]
+  /** 标准仓库 / 企业仓库是否启用，仅 pve 系发行版有意义 */
+  standardRepo: boolean
+  enterpriseRepo: boolean
+  warnings: string[]
+}
+
+export interface NodeCertificateData {
+  node: string
+  custom: boolean
+  info?: NodeCertificateInfo
+  /** 自定义证书的 PEM 原文，自签证书为空 */
+  pem?: string
+  warnings: string[]
+}
+
+export interface NodeCertificateUpload {
+  node: string
+  certificates: string
+  key: string
+  force?: boolean
+  restart?: boolean
+}
+
+export interface AptUpdateResult {
+  node: string
+  upid?: string
+  message: string
+}
+
+export interface NodeAptAction {
+  node: string
+  /** 升级全部软件包；为 false 时只执行 refresh */
+  upgrade?: boolean
+  /** 同时处理发行版升级（dist-upgrade） */
+  distUpgrade?: boolean
+  /** 排除的软件包 */
+  exclude?: string[]
+}
+
+export interface SnapshotMutationResult {
+  message: string
+  upid?: string
+  name: string
+}
+
 export interface DesktopApi {
   bootstrap: () => Promise<ApiResult<BootstrapData>>
   login: (input: LoginInput) => Promise<ApiResult<LoginResult>>
@@ -823,6 +1554,57 @@ export interface DesktopApi {
   cloneVm: (input: CloneVmInput) => Promise<ApiResult<MutationResult>>
   taskLog: (node: string, upid: string) => Promise<ApiResult<TaskLogLine[]>>
   taskStatus: (node: string, upid: string) => Promise<ApiResult<TaskStatusResult>>
+  accessOverview: () => Promise<ApiResult<AccessOverviewData>>
+  accessUserSave: (input: AccessUserInput) => Promise<ApiResult<void>>
+  accessUserDelete: (userid: string) => Promise<ApiResult<void>>
+  accessGroupSave: (input: AccessGroupInput) => Promise<ApiResult<void>>
+  accessGroupDelete: (groupid: string) => Promise<ApiResult<void>>
+  accessAclUpdate: (input: AccessAclInput) => Promise<ApiResult<void>>
+  accessTokenSave: (input: AccessTokenInput) => Promise<ApiResult<AccessTokenCreated | null>>
+  accessTokenDelete: (userid: string, tokenId: string) => Promise<ApiResult<void>>
+  storageOverview: () => Promise<ApiResult<StorageOverviewData>>
+  storageContents: (node: string, storage: string, contentType?: string) => Promise<ApiResult<StorageContentData>>
+  storageDefinitionSave: (input: StorageDefinitionInput) => Promise<ApiResult<void>>
+  storageContentDelete: (node: string, storage: string, volid: string) => Promise<ApiResult<ActionResult>>
+  poolSave: (input: PoolInput) => Promise<ApiResult<void>>
+  poolMemberUpdate: (input: PoolMemberInput) => Promise<ApiResult<void>>
+  backupOverview: () => Promise<ApiResult<BackupOverviewData>>
+  backupStart: (input: StartBackupInput) => Promise<ApiResult<ActionResult>>
+  backupJobSave: (input: BackupJobInput) => Promise<ApiResult<void>>
+  backupRestore: (input: RestoreBackupInput) => Promise<ApiResult<ActionResult>>
+  firewallOverview: (scope: FirewallScope) => Promise<ApiResult<FirewallOverviewData>>
+  firewallRuleSave: (input: FirewallRuleInput) => Promise<ApiResult<void>>
+  firewallOptionsSave: (input: FirewallOptionsInput) => Promise<ApiResult<void>>
+  firewallAliasSave: (input: FirewallAliasInput) => Promise<ApiResult<void>>
+  haOverview: () => Promise<ApiResult<HaOverviewData>>
+  haResourceSave: (input: HaResourceInput) => Promise<ApiResult<void>>
+  haGroupSave: (input: HaGroupInput) => Promise<ApiResult<void>>
+  vmSnapshot: (input: SnapshotInput) => Promise<ApiResult<SnapshotMutationResult>>
+  vmMigrate: (input: MigrateInput) => Promise<ApiResult<ActionResult>>
+  vmTemplate: (input: TemplateInput) => Promise<ApiResult<ActionResult>>
+  vmCloudInit: (input: CloudInitInput) => Promise<ApiResult<VmMutationResult>>
+  vmSendKey: (input: VmSendKeyInput) => Promise<ApiResult<void>>
+  taskList: (query?: TaskListQuery) => Promise<ApiResult<TaskListData>>
+  taskStop: (node: string, upid: string) => Promise<ApiResult<void>>
+  taskDelete: (node: string, upid: string) => Promise<ApiResult<void>>
+  subscriptionInfo: (node: string) => Promise<ApiResult<SubscriptionInfo>>
+  subscriptionUpdate: (node: string, key: string) => Promise<ApiResult<void>>
+  subscriptionDelete: (node: string) => Promise<ApiResult<void>>
+  nodeApt: (node: string) => Promise<ApiResult<NodeAptData>>
+  nodeAptRefresh: (input: NodeAptAction) => Promise<ApiResult<AptUpdateResult>>
+  nodeAptRepoSave: (node: string, repos: AptRepository[]) => Promise<ApiResult<void>>
+  nodeCertificate: (node: string) => Promise<ApiResult<NodeCertificateData>>
+  nodeCertificateUpload: (input: NodeCertificateUpload) => Promise<ApiResult<void>>
+  nodeCertificateReset: (node: string) => Promise<ApiResult<void>>
+  sdnOverview: () => Promise<ApiResult<SdnOverviewData>>
+  sdnZoneSave: (input: SdnZoneInput) => Promise<ApiResult<void>>
+  sdnVnetSave: (input: SdnVnetInput) => Promise<ApiResult<void>>
+  sdnSubnetSave: (input: SdnSubnetInput) => Promise<ApiResult<void>>
+  sdnApply: (revert?: boolean) => Promise<ApiResult<void>>
+  clusterJoinInfo: () => Promise<ApiResult<ClusterJoinInfo>>
+  clusterJoin: (input: ClusterJoinInput) => Promise<ApiResult<void>>
+  clusterNodeRemove: (node: string) => Promise<ApiResult<void>>
+  diskInit: (input: DiskInitInput) => Promise<ApiResult<void>>
   openConsoleWindow: (input: ConsoleOpenRequest) => Promise<ApiResult<void>>
   consoleWindowBootstrap: () => Promise<ApiResult<ConsoleWindowBootstrap>>
   consoleOpen: (input: ConsoleOpenRequest) => Promise<ApiResult<ConsoleSessionInfo>>

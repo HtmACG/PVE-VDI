@@ -2,17 +2,23 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   ArrowDownToLine,
+  ArrowRightLeft,
   ArrowUpFromLine,
+  Camera,
   Clock,
+  CloudCog,
   Cpu,
   ExternalLink,
   HardDrive,
   Info,
+  Keyboard,
   Loader2,
   MemoryStick,
   Network,
+  Package,
   Pencil,
   Plus,
+  RotateCcw,
   Server,
   Settings2,
   Terminal,
@@ -26,6 +32,7 @@ import type {
   VmDetail,
   VmDiskInfo,
   VmRef,
+  VmAction,
   VmSnapshot
 } from '@shared/types'
 import { TASK_TYPE_LABELS, VM_ACTION_LABELS } from '@shared/ipc'
@@ -45,7 +52,21 @@ import { AreaChart } from '@renderer/components/charts/area-chart'
 import { OsIcon } from '@renderer/components/os-icon'
 import { TaskStatusBadge, VmStatusBadge } from '@renderer/components/status-badges'
 import { VmDetailActionBar, type ActionTarget } from '@renderer/components/vms/vm-actions'
-import { AddDiskDialog, RemoveDiskDialog, ResizeDiskDialog, VmConfigDialog } from '@renderer/components/vms/vm-config-dialogs'
+import {
+  AddDiskDialog,
+  RemoveDiskDialog,
+  ResizeDiskDialog,
+  VmConfigDialog
+} from '@renderer/components/vms/vm-config-dialogs'
+import {
+  CloudInitDialog,
+  MigrateDialog,
+  SendKeyDialog,
+  SnapshotDeleteDialog,
+  SnapshotDialog,
+  SnapshotRollbackDialog,
+  TemplateDialog
+} from '@renderer/components/vms/vm-ops-dialogs'
 import { unwrap, errorDetail } from '@renderer/lib/api'
 import {
   formatBytes,
@@ -55,7 +76,6 @@ import {
   formatUptime
 } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
-import type { VmAction } from '@shared/types'
 
 interface VmDetailSheetProps {
   open: boolean
@@ -64,6 +84,7 @@ interface VmDetailSheetProps {
   refreshToken: number
   actionBusy: boolean
   storages: StorageSummary[]
+  nodes: string[]
   onRefresh: () => void
   onAction: (target: ActionTarget, action: VmAction) => void
   onConsole: (target: ActionTarget) => void
@@ -230,9 +251,41 @@ function SectionBar({
   )
 }
 
-function SnapshotRow({ snapshot }: { snapshot: VmSnapshot }): React.JSX.Element {
+function ToolbarButton({
+  icon,
+  label,
+  onClick,
+  disabled
+}: {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+  disabled?: boolean
+}): React.JSX.Element {
   return (
-    <div className="flex items-start gap-3 border-b border-border/60 px-3 py-2.5 last:border-0">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex h-7 items-center gap-1.5 px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {icon}
+      {label}
+    </button>
+  )
+}
+
+function SnapshotRow({
+  snapshot,
+  onRollback,
+  onDelete
+}: {
+  snapshot: VmSnapshot
+  onRollback: (snapshot: VmSnapshot) => void
+  onDelete: (snapshot: VmSnapshot) => void
+}): React.JSX.Element {
+  return (
+    <div className="group flex items-start gap-3 border-b border-border/60 px-3 py-2.5 last:border-0">
       <div className={cn('mt-1 h-1.5 w-1.5 shrink-0', snapshot.current ? 'bg-brand' : 'bg-border-strong')} aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -248,6 +301,27 @@ function SnapshotRow({ snapshot }: { snapshot: VmSnapshot }): React.JSX.Element 
         )}
         {snapshot.parent && <div className="mt-1 font-mono text-[10px] text-muted-foreground/80">父快照 {snapshot.parent}</div>}
       </div>
+      {!snapshot.current && (
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          <button
+            type="button"
+            onClick={() => onRollback(snapshot)}
+            className="inline-flex h-6 items-center gap-1 px-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            aria-label={`回滚到 ${snapshot.name}`}
+          >
+            <RotateCcw className="h-3 w-3" />
+            回滚
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(snapshot)}
+            className="inline-flex h-6 items-center gap-1 px-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            aria-label={`删除快照 ${snapshot.name}`}
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -288,6 +362,7 @@ export function VmDetailSheet({
   refreshToken,
   actionBusy,
   storages,
+  nodes,
   onRefresh,
   onAction,
   onConsole,
@@ -303,6 +378,13 @@ export function VmDetailSheet({
   const [addDiskOpen, setAddDiskOpen] = useState(false)
   const [resizeDisk, setResizeDisk] = useState<VmDiskInfo | null>(null)
   const [removeDisk, setRemoveDisk] = useState<VmDiskInfo | null>(null)
+  const [snapshotOpen, setSnapshotOpen] = useState(false)
+  const [rollbackSnapshot, setRollbackSnapshot] = useState<VmSnapshot | null>(null)
+  const [deleteSnapshot, setDeleteSnapshot] = useState<VmSnapshot | null>(null)
+  const [migrateOpen, setMigrateOpen] = useState(false)
+  const [templateOpen, setTemplateOpen] = useState(false)
+  const [cloudInitOpen, setCloudInitOpen] = useState(false)
+  const [sendKeyOpen, setSendKeyOpen] = useState(false)
   const refKey = vmRef ? `${vmRef.node}/${vmRef.type}/${vmRef.vmid}` : ''
 
   useEffect(() => {
@@ -371,13 +453,26 @@ export function VmDetailSheet({
       .sort(([a], [b]) => a.localeCompare(b))
   }, [detail])
 
-  const networks = useMemo(() => {
-    if (!detail) return []
+  const networks = useMemo(() => {    if (!detail) return []
     return Object.entries(detail.config)
       .filter(([key]) => /^net\d+$/.test(key))
       .map(([key, value]) => ({ key, value: String(value), parsed: parseNetwork(value) }))
       .sort((a, b) => a.key.localeCompare(b.key))
   }, [detail])
+
+  // cloud-init 磁盘只能落在支持 images 内容的存储上。
+  const ciStorages = useMemo(() => {
+    if (!detail) return []
+    const names = storages
+      .filter(
+        (storage) =>
+          storage.node === detail.ref.node &&
+          storage.active &&
+          storage.content.includes('images')
+      )
+      .map((storage) => storage.storage)
+    return Array.from(new Set(names)).sort()
+  }, [storages, detail])
 
   const memoryRatio = detail && detail.runtime.maxmem > 0 ? detail.runtime.mem / detail.runtime.maxmem : 0
   const cpuDisplay = detail ? formatPercent(detail.runtime.cpu, 1) : '—'
@@ -434,20 +529,56 @@ export function VmDetailSheet({
           </div>
 
           {target && (
-            <div className="mt-3">
+            <div className="mt-3 space-y-2">
               <VmDetailActionBar
                 target={target}
                 onAction={onAction}
                 onConsole={onConsole}
                 busy={actionBusy}
               />
+              {/* 生命周期之外的运维操作，统一收在第二行，避免和启停按钮混在一起。 */}
+              <div className="-ml-2 flex flex-wrap items-center gap-0.5">
+                <ToolbarButton
+                  icon={<Camera className="h-3.5 w-3.5" />}
+                  label="快照"
+                  onClick={() => {
+                    setTab('snapshots')
+                    setSnapshotOpen(true)
+                  }}
+                />
+                <ToolbarButton
+                  icon={<ArrowRightLeft className="h-3.5 w-3.5" />}
+                  label="迁移"
+                  disabled={nodes.length === 0}
+                  onClick={() => setMigrateOpen(true)}
+                />
+                <ToolbarButton
+                  icon={<Package className="h-3.5 w-3.5" />}
+                  label={detail?.runtime.template ? '取消模板' : '转模板'}
+                  onClick={() => setTemplateOpen(true)}
+                />
+                {detail?.ref.type === 'qemu' && (
+                  <>
+                    <ToolbarButton
+                      icon={<CloudCog className="h-3.5 w-3.5" />}
+                      label="cloud-init"
+                      onClick={() => setCloudInitOpen(true)}
+                    />
+                    <ToolbarButton
+                      icon={<Keyboard className="h-3.5 w-3.5" />}
+                      label="组合键"
+                      onClick={() => setSendKeyOpen(true)}
+                    />
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>
 
         <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-          <div className="shrink-0 border-b border-border px-5">
-            <TabsList className="w-full gap-0 overflow-x-auto">
+          <div className="shrink-0 px-5">
+            <TabsList className="w-full gap-0 border-b border-border">
               {[
                 ['overview', '概览'],
                 ['hardware', '硬件'],
@@ -455,7 +586,7 @@ export function VmDetailSheet({
                 ['snapshots', '快照'],
                 ['tasks', '任务']
               ].map(([value, label]) => (
-                <TabsTrigger key={value} value={value} className="mr-5 shrink-0">
+                <TabsTrigger key={value} value={value} className="mr-5 flex-none">
                   {label}
                 </TabsTrigger>
               ))}
@@ -786,9 +917,17 @@ export function VmDetailSheet({
                 </TabsContent>
 
                 <TabsContent value="snapshots" className="mt-0 space-y-3">
-                  <div className="flex items-center justify-between border-b border-border/70 pb-2">
-                    <span className="text-[11px] text-muted-foreground">显示 PVE 快照链，当前状态标记为 HEAD。</span>
-                    <span className="font-mono text-[10px] text-muted-foreground">{detail.snapshots.length}</span>
+                  <div className="flex items-center justify-between gap-3 border-b border-border/70 pb-2">
+                    <span className="text-[11px] text-muted-foreground">
+                      显示 PVE 快照链，当前状态标记为 HEAD。悬停可回滚或删除。
+                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="font-mono text-[10px] text-muted-foreground">{detail.snapshots.length}</span>
+                      <Button size="sm" variant="outline" onClick={() => setSnapshotOpen(true)}>
+                        <Camera className="mr-1.5 h-3 w-3" />
+                        新建快照
+                      </Button>
+                    </div>
                   </div>
                   {detail.snapshots.length === 0 ? (
                     <EmptyState
@@ -799,7 +938,12 @@ export function VmDetailSheet({
                   ) : (
                     <div className="border-y border-border/70">
                       {detail.snapshots.map((snapshot) => (
-                        <SnapshotRow key={snapshot.name} snapshot={snapshot} />
+                        <SnapshotRow
+                          key={snapshot.name}
+                          snapshot={snapshot}
+                          onRollback={setRollbackSnapshot}
+                          onDelete={setDeleteSnapshot}
+                        />
                       ))}
                     </div>
                   )}
@@ -878,6 +1022,57 @@ export function VmDetailSheet({
                 onSaved={onRefresh}
               />
             )}
+            <SnapshotDialog
+              open={snapshotOpen}
+              onOpenChange={setSnapshotOpen}
+              detail={detail}
+              onSaved={onRefresh}
+            />
+            <SnapshotRollbackDialog
+              open={Boolean(rollbackSnapshot)}
+              onOpenChange={(open) => {
+                if (!open) setRollbackSnapshot(null)
+              }}
+              detail={detail}
+              snapshot={rollbackSnapshot}
+              onSaved={onRefresh}
+            />
+            <SnapshotDeleteDialog
+              open={Boolean(deleteSnapshot)}
+              onOpenChange={(open) => {
+                if (!open) setDeleteSnapshot(null)
+              }}
+              detail={detail}
+              snapshot={deleteSnapshot}
+              onSaved={onRefresh}
+            />
+            <MigrateDialog
+              open={migrateOpen}
+              onOpenChange={setMigrateOpen}
+              detail={detail}
+              nodes={nodes}
+              onSaved={onRefresh}
+            />
+            <TemplateDialog
+              open={templateOpen}
+              onOpenChange={setTemplateOpen}
+              detail={detail}
+              onSaved={onRefresh}
+            />
+            <CloudInitDialog
+              open={cloudInitOpen}
+              onOpenChange={setCloudInitOpen}
+              detail={detail}
+              storages={ciStorages}
+              onSaved={onRefresh}
+            />
+            <SendKeyDialog
+              open={sendKeyOpen}
+              onOpenChange={setSendKeyOpen}
+              ref={detail.ref}
+              vmName={detail.name}
+              onSent={onRefresh}
+            />
           </>
         )}
       </SheetContent>

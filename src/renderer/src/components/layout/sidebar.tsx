@@ -1,16 +1,22 @@
 import {
   Activity,
+  Archive,
   Boxes,
   ClipboardList,
+  Database,
   Disc3,
+  Flame,
   LayoutDashboard,
   LogOut,
   Moon,
+  Network,
   Plus,
   Server,
   Settings,
+  ShieldCheck,
   Sun,
-  UserRound
+  UserRound,
+  UsersRound
 } from 'lucide-react'
 import type { DashboardData, SessionProfile, Theme } from '@shared/types'
 import { cn } from '@renderer/lib/utils'
@@ -18,7 +24,20 @@ import { Button } from '@renderer/components/ui/button'
 import { Progress } from '@renderer/components/ui/primitives'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 
-export type ViewKey = 'overview' | 'vms' | 'nodes' | 'images' | 'cluster' | 'tasks' | 'settings'
+export type ViewKey =
+  | 'overview'
+  | 'vms'
+  | 'nodes'
+  | 'images'
+  | 'storage'
+  | 'backup'
+  | 'cluster'
+  | 'sdn'
+  | 'ha'
+  | 'firewall'
+  | 'access'
+  | 'tasks'
+  | 'settings'
 
 interface SidebarProps {
   active: ViewKey
@@ -38,8 +57,17 @@ const WORKLOAD_NAV = [
 
 const INFRA_NAV = [
   { key: 'nodes' as const, label: '节点', icon: Server },
+  { key: 'storage' as const, label: '存储', icon: Database },
   { key: 'images' as const, label: '镜像', icon: Disc3 },
+  { key: 'backup' as const, label: '备份', icon: Archive }
+]
+
+const CLUSTER_NAV = [
   { key: 'cluster' as const, label: '集群', icon: Activity },
+  { key: 'sdn' as const, label: 'SDN', icon: Network },
+  { key: 'ha' as const, label: '高可用', icon: ShieldCheck },
+  { key: 'firewall' as const, label: '防火墙', icon: Flame },
+  { key: 'access' as const, label: '访问控制', icon: UsersRound },
   { key: 'tasks' as const, label: '任务', icon: ClipboardList }
 ]
 
@@ -57,6 +85,7 @@ export function Sidebar({
   const runningVms = vms.filter((vm) => vm.status === 'running').length
   const runningTasks = dashboard?.tasks.filter((task) => task.status === 'running').length ?? 0
   const nodes = dashboard?.nodes ?? []
+  const storageCount = new Set((dashboard?.storages ?? []).map((storage) => storage.storage)).size
   const usedMemory = nodes.reduce((sum, node) => sum + node.mem, 0)
   const totalMemory = nodes.reduce((sum, node) => sum + node.maxmem, 0)
   const memoryPercent = totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0
@@ -69,9 +98,11 @@ export function Sidebar({
         ? vms.length
         : item.key === 'nodes'
           ? nodes.length
-          : item.key === 'tasks' && runningTasks > 0
-            ? runningTasks
-            : undefined
+          : item.key === 'storage'
+            ? storageCount || undefined
+            : item.key === 'tasks' && runningTasks > 0
+              ? runningTasks
+              : undefined
     return (
       <button
         key={item.key}
@@ -107,6 +138,9 @@ export function Sidebar({
 
         <div className="mt-5 px-4 pb-1.5 text-[11px] font-medium text-muted-foreground">基础设施</div>
         <nav className="px-2">{INFRA_NAV.map(renderItem)}</nav>
+
+        <div className="mt-5 px-4 pb-1.5 text-[11px] font-medium text-muted-foreground">集群运维</div>
+        <nav className="px-2">{CLUSTER_NAV.map(renderItem)}</nav>
 
         <div className="mx-3 mt-5 border-t border-border pt-3">
           <div className="flex items-center justify-between gap-2">

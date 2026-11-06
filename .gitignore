@@ -1,6 +1,8 @@
 node_modules/
 out/
 release/
+# electron-builder 的临时输出目录（打包中间产物，勿提交）
+release-*/
 dist/
 .probe-*
 .probe-pve.json
@@ -13,3 +15,6 @@ playwright-report/
 test-results/
 .env
 .env.*
+# Vite / VitePress 构建时生成的临时配置副本
+electron.vite.config.ts.*.mjs
+*.timestamp-*.mjs
