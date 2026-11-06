@@ -18,6 +18,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Progress } from '@renderer/components/ui/primitives'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@renderer/components/ui/select'
 import { AreaChart } from '@renderer/components/charts/area-chart'
+import { GaugePanel, type GaugeSpec } from '@renderer/components/charts/gauge-panel'
 import { NodeStatusBadge, QuorumBadge, TaskStatusBadge, VmStatusBadge } from '@renderer/components/status-badges'
 import { VmRowActions, type ActionTarget } from '@renderer/components/vms/vm-actions'
 import { OsIcon } from '@renderer/components/os-icon'
@@ -103,6 +104,34 @@ function ServerResources({
   const points = (node?.metrics ?? []).map((point) => ({ time: point.time, value: point.cpu }))
   const hostThreads = nodes.reduce((sum, item) => sum + item.maxcpu, 0)
 
+  const gauges: GaugeSpec[] = node
+    ? [
+        {
+          label: 'CPU 使用率',
+          ratio: node.cpu,
+          display: formatPercent(node.cpu, 1),
+          caption: `共 ${node.maxcpu} 线程 · 负载 ${
+            node.loadavg.length ? node.loadavg.map((v) => v.toFixed(2)).join(' / ') : '—'
+          }`,
+          color: node.cpu > 0.85 ? 'var(--destructive)' : 'var(--brand)'
+        },
+        {
+          label: '内存使用',
+          ratio: memoryRatio,
+          display: formatPercent(memoryRatio, 1),
+          caption: `${formatBytes(node.mem)} / ${formatBytes(node.maxmem)}`,
+          color: memoryRatio > 0.85 ? 'var(--destructive)' : 'var(--info)'
+        },
+        {
+          label: '根磁盘使用',
+          ratio: diskRatio,
+          display: formatPercent(diskRatio, 1),
+          caption: `${formatBytes(node.disk)} / ${formatBytes(node.maxdisk)}`,
+          color: diskRatio > 0.85 ? 'var(--destructive)' : 'var(--fg)'
+        }
+      ]
+    : []
+
   if (!node) {
     return (
       <Card>
@@ -147,51 +176,7 @@ function ServerResources({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 divide-y divide-border border-b border-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        <div className="p-4">
-          <div className="text-[12px] text-muted-foreground">CPU 使用率</div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="font-mono text-[25px] text-foreground">{formatPercent(node.cpu, 1)}</span>
-            <span className="text-[12px] text-muted-foreground">/ {node.maxcpu} 线程</span>
-          </div>
-          <Progress
-            value={node.cpu * 100}
-            className="mt-3 h-1"
-            indicatorClassName={node.cpu > 0.85 ? 'bg-destructive' : 'bg-brand'}
-          />
-          <div className="mt-2 text-[12px] text-muted-foreground">
-            负载 {node.loadavg.length ? node.loadavg.map((v) => v.toFixed(2)).join(' / ') : '—'}
-          </div>
-        </div>
-        <div className="p-4">
-          <div className="text-[12px] text-muted-foreground">内存使用</div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="font-mono text-[25px] text-foreground">{formatPercent(memoryRatio, 1)}</span>
-            <span className="text-[12px] text-muted-foreground">/ {formatBytes(node.maxmem)}</span>
-          </div>
-          <Progress
-            value={memoryRatio * 100}
-            className="mt-3 h-1"
-            indicatorClassName={memoryRatio > 0.85 ? 'bg-destructive' : 'bg-info'}
-          />
-          <div className="mt-2 text-[12px] text-muted-foreground">
-            已用 {formatBytes(node.mem)} · 可用 {formatBytes(node.memAvailable ?? Math.max(0, node.maxmem - node.mem))}
-          </div>
-        </div>
-        <div className="p-4">
-          <div className="text-[12px] text-muted-foreground">根磁盘使用</div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="font-mono text-[25px] text-foreground">{formatPercent(diskRatio, 1)}</span>
-            <span className="text-[12px] text-muted-foreground">/ {formatBytes(node.maxdisk)}</span>
-          </div>
-          <Progress
-            value={diskRatio * 100}
-            className="mt-3 h-1"
-            indicatorClassName={diskRatio > 0.85 ? 'bg-destructive' : 'bg-foreground'}
-          />
-          <div className="mt-2 text-[12px] text-muted-foreground">已用 {formatBytes(node.disk)}</div>
-        </div>
-      </div>
+      <GaugePanel items={gauges} className="border-b border-border" />
 
       <div className="px-4 pt-3.5">
         <div className="mb-1.5 flex items-center justify-between">

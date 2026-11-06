@@ -877,6 +877,71 @@ try {
   await page.waitForTimeout(1300)
   await shot(page, '02-overview-light.png')
 
+  // 侧栏不再有「新建虚拟机」按钮
+  const sidebarProbe = await page.evaluate(() => {
+    const aside = document.querySelector('aside')
+    if (!aside) return null
+    const labels = [...aside.querySelectorAll('button')].map((b) => b.textContent?.trim() ?? '')
+    return { hasCreate: labels.some((t) => t.includes('新建虚拟机')), firstItem: labels[0] }
+  })
+  check('侧栏已移除「新建虚拟机」按钮', Boolean(sidebarProbe) && !sidebarProbe.hasCreate, JSON.stringify(sidebarProbe))
+  check('侧栏首项为导航（总览）', Boolean(sidebarProbe) && sidebarProbe.firstItem === '总览', JSON.stringify(sidebarProbe))
+
+  // 服务器资源三块改为 ECharts 仪表盘
+  const gauges = await page.evaluate(() => {
+    const holder = document.querySelector('[aria-label^="CPU 使用率"]')?.parentElement?.parentElement
+    const canvases = holder ? [...holder.querySelectorAll('canvas')] : []
+    const labels = [...document.querySelectorAll('[role="img"][aria-label]')]
+      .map((el) => el.getAttribute('aria-label') ?? '')
+      .filter((label) => /^(CPU 使用率|内存使用|根磁盘使用) /.test(label))
+    return {
+      canvasCount: canvases.length,
+      widths: canvases.map((c) => c.width),
+      heights: canvases.map((c) => c.height),
+      labels,
+      // 仪表盘画布必须有像素内容，否则说明 echarts 没画出来
+      painted: canvases.every((c) => {
+        const ctx = c.getContext('2d')
+        if (!ctx) return false
+        const data = ctx.getImageData(0, 0, c.width, c.height).data
+        for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return true
+        return false
+      })
+    }
+  })
+  check('服务器资源渲染 3 个仪表盘画布', gauges.canvasCount === 3, JSON.stringify({ count: gauges.canvasCount }))
+  check(
+    '仪表盘画布已绘制内容（非空白）',
+    gauges.painted && gauges.widths.every((w) => w > 0),
+    JSON.stringify({ painted: gauges.painted, widths: gauges.widths })
+  )
+  check(
+    '仪表盘覆盖 CPU / 内存 / 根磁盘三项',
+    gauges.labels.length === 3 &&
+      gauges.labels.some((l) => l.startsWith('CPU 使用率')) &&
+      gauges.labels.some((l) => l.startsWith('内存使用')) &&
+      gauges.labels.some((l) => l.startsWith('根磁盘使用')),
+    JSON.stringify(gauges.labels)
+  )
+
+  const gaugeTheme = await page.evaluate(() => {
+    const host = document.querySelector('[aria-label^="CPU 使用率"]')
+    const canvas = host?.querySelector('canvas')
+    if (!canvas) return null
+    const ctx = canvas.getContext('2d')
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+    // 取最亮的像素亮度，浅色主题下文字应为深色、背景为浅色
+    let bright = 0
+    let opaque = 0
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] === 0) continue
+      opaque += 1
+      bright = Math.max(bright, 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2])
+    }
+    return { bright, opaque }
+  })
+  check('浅色主题下仪表盘有可见像素', Boolean(gaugeTheme) && gaugeTheme.opaque > 500, JSON.stringify(gaugeTheme))
+
   const themeClass = await page.evaluate(() => document.documentElement.className)
   check('主界面应用浅色主题', themeClass.includes('light'), `className=${themeClass}`)
 
@@ -1400,6 +1465,33 @@ try {
   await page.evaluate(async () => window.pvevdi.updatePreferences({ theme: 'dark' }))
   await page.waitForTimeout(900)
   await shot(page, '07-list-dark.png')
+
+  // 深色模式下回总览，仪表盘颜色应随主题重绘
+  await page.getByRole('button', { name: /^总览/ }).first().click()
+  await page.waitForTimeout(1200)
+  const gaugeDark = await page.evaluate(() => {
+    const host = document.querySelector('[aria-label^="CPU 使用率"]')
+    const canvas = host?.querySelector('canvas')
+    if (!canvas) return null
+    const ctx = canvas.getContext('2d')
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+    let bright = 0
+    let opaque = 0
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] === 0) continue
+      opaque += 1
+      bright = Math.max(bright, 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2])
+    }
+    return { bright, opaque, themeClass: document.documentElement.className }
+  })
+  check(
+    '深色主题下仪表盘重绘为浅色文字',
+    Boolean(gaugeDark) && gaugeDark.themeClass.includes('dark') && gaugeDark.bright > 200,
+    JSON.stringify(gaugeDark)
+  )
+  await shot(page, '34-overview-dark-gauges.png')
+  await page.getByRole('button', { name: /^虚拟机/ }).first().click()
+  await page.waitForTimeout(900)
 
   await page.locator('tbody tr', { hasText: 'DBI-Business-Server' }).first().click()
   await page.waitForSelector('text=性能遥测', { timeout: 20_000 })

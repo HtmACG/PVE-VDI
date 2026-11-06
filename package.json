@@ -1,6 +1,6 @@
 {
   "name": "pve-vdi",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "Proxmox VE virtual desktop operations console",
   "main": "./out/main/index.js",
   "author": "北慕林奈 <htmacg@163.com> (https://www.htmacg.com)",
@@ -42,6 +42,7 @@
     "@xterm/xterm": "6.0.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "echarts": "^6.1.0",
     "lucide-react": "1.69.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",

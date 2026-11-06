@@ -10,7 +10,6 @@ import {
   LogOut,
   Moon,
   Network,
-  Plus,
   Server,
   Settings,
   ShieldCheck,
@@ -20,7 +19,6 @@ import {
 } from 'lucide-react'
 import type { DashboardData, SessionProfile, Theme } from '@shared/types'
 import { cn } from '@renderer/lib/utils'
-import { Button } from '@renderer/components/ui/button'
 import { Progress } from '@renderer/components/ui/primitives'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 
@@ -45,7 +43,6 @@ interface SidebarProps {
   session: SessionProfile
   theme: Theme
   onNavigate: (view: ViewKey) => void
-  onCreateVm: () => void
   onToggleTheme: () => void
   onDisconnect: () => void
 }
@@ -77,7 +74,6 @@ export function Sidebar({
   session,
   theme,
   onNavigate,
-  onCreateVm,
   onToggleTheme,
   onDisconnect
 }: SidebarProps): React.JSX.Element {
@@ -125,13 +121,6 @@ export function Sidebar({
 
   return (
     <aside className="flex w-[220px] shrink-0 flex-col border-r border-border bg-card">
-      <div className="border-b border-border p-3">
-        <Button variant="outline" className="w-full justify-start" onClick={onCreateVm}>
-          <Plus className="h-4 w-4 text-brand" />
-          新建虚拟机
-        </Button>
-      </div>
-
       <div className="flex-1 overflow-y-auto py-4">
         <div className="px-4 pb-1.5 text-[11px] font-medium text-muted-foreground">工作负载</div>
         <nav className="px-2">{WORKLOAD_NAV.map(renderItem)}</nav>

@@ -478,7 +478,6 @@ function ConnectedApp({
             session={session}
             theme={settings.theme}
             onNavigate={setView}
-            onCreateVm={() => setCreateOpen(true)}
             onToggleTheme={toggleTheme}
             onDisconnect={() => setDisconnectOpen(true)}
           />
