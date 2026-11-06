@@ -621,6 +621,11 @@ export default function App(): React.JSX.Element {
   }, [settings])
 
   useEffect(() => {
+    // 其它窗口（控制台等）修改偏好时同步主题与字体。
+    return window.pvevdi.onSettingsChanged((next) => setSettings(next))
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
     setBooting(true)
     setBootError(null)

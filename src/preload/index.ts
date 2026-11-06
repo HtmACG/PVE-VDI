@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc'
 import type {
+  AppSettings,
   BackgroundKind,
   CloneVmInput,
   ConsoleOpenRequest,
@@ -64,6 +65,7 @@ const api: DesktopApi = {
   consoleOpen: (input: ConsoleOpenRequest) => ipcRenderer.invoke(IPC.consoleOpen, input),
   consoleClose: (sessionId: string) => ipcRenderer.invoke(IPC.consoleClose, sessionId),
   windowMinimize: () => ipcRenderer.send(IPC.windowMinimize),
+  windowHide: () => ipcRenderer.send(IPC.windowHide),
   windowToggleMaximize: () => ipcRenderer.send(IPC.windowToggleMaximize),
   windowClose: () => ipcRenderer.send(IPC.windowClose),
   getWindowState: () => ipcRenderer.invoke(IPC.windowGetState),
@@ -72,6 +74,13 @@ const api: DesktopApi = {
     ipcRenderer.on(IPC.windowStateEvent, listener)
     return () => {
       ipcRenderer.removeListener(IPC.windowStateEvent, listener)
+    }
+  },
+  onSettingsChanged: (callback: (settings: AppSettings) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, settings: AppSettings): void => callback(settings)
+    ipcRenderer.on(IPC.settingsChanged, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.settingsChanged, listener)
     }
   }
 }

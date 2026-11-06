@@ -97,13 +97,13 @@ export function TaskLogDialog({
             {refreshing ? <Loader2 className="h-3 w-3 spin text-brand" /> : <CheckCircle2 className="h-3 w-3" />}
             {lines.length} 行输出
           </div>
-          <Button variant="ghost" size="sm" onClick={() => void load(true)} disabled={refreshing}>
+          <Button variant="surface" size="sm" onClick={() => void load(true)} disabled={refreshing}>
             <RefreshCw className={`h-3 w-3 ${refreshing ? 'spin' : ''}`} />
             刷新
           </Button>
         </div>
 
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto bg-[#07080a] p-4 dark:bg-[#07080a]">
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto bg-muted/50 p-4 dark:bg-[#07080a] dark:text-zinc-300">
           {loading && lines.length === 0 ? (
             <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
               <Loader2 className="h-3 w-3 spin" />
@@ -117,7 +117,7 @@ export function TaskLogDialog({
           ) : lines.length === 0 ? (
             <div className="font-mono text-[11px] text-muted-foreground">任务尚未产生输出。</div>
           ) : (
-            <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-[1.75] text-zinc-300">
+            <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-[1.75] text-foreground">
               {body}
             </pre>
           )}

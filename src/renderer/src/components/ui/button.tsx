@@ -11,6 +11,8 @@ const buttonVariants = cva(
       variant: {
         default: 'border-primary bg-primary text-primary-foreground hover:bg-primary/88',
         secondary: 'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/75',
+        /** 实底白/浅色按钮：浅色模式为白底，深色模式保持与卡片一致的可读实底。 */
+        surface: 'border-border-strong bg-surface text-foreground hover:bg-surface-hover',
         outline: 'border-border bg-transparent text-foreground hover:border-border-strong hover:bg-accent',
         ghost: 'border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground',
         destructive:

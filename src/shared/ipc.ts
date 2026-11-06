@@ -43,8 +43,10 @@ export const IPC = {
   consoleWindowOpen: 'console:window-open',
   consoleWindowBootstrap: 'console:window-bootstrap',
   windowMinimize: 'window:minimize',
+  windowHide: 'window:hide',
   windowToggleMaximize: 'window:toggle-maximize',
   windowClose: 'window:close',
+  settingsChanged: 'settings:changed',
   windowGetState: 'window:get-state',
   windowStateEvent: 'window:state'
 } as const

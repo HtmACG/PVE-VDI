@@ -13,7 +13,7 @@ import {
   Unplug,
   X
 } from 'lucide-react'
-import type { ConsoleOpenRequest, ConsoleSessionInfo } from '@shared/types'
+import type { ConsoleOpenRequest, ConsoleSessionInfo, Theme } from '@shared/types'
 import { Button } from '@renderer/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import { WindowButtons } from '@renderer/components/layout/window-buttons'
@@ -24,6 +24,55 @@ import { toast } from 'sonner'
 import '@xterm/xterm/css/xterm.css'
 
 type ConsolePhase = 'opening' | 'connecting' | 'connected' | 'disconnected' | 'error'
+
+const XTERM_THEMES: Record<Theme, Record<string, string>> = {
+  dark: {
+    background: '#050608',
+    foreground: '#d4d4d8',
+    cursor: '#f26b1d',
+    cursorAccent: '#050608',
+    selectionBackground: '#f26b1d40',
+    black: '#18181b',
+    red: '#f87171',
+    green: '#4ade80',
+    yellow: '#fbbf24',
+    blue: '#60a5fa',
+    magenta: '#c084fc',
+    cyan: '#22d3ee',
+    white: '#e4e4e7',
+    brightBlack: '#71717a',
+    brightRed: '#fca5a5',
+    brightGreen: '#86efac',
+    brightYellow: '#fde68a',
+    brightBlue: '#93c5fd',
+    brightMagenta: '#d8b4fe',
+    brightCyan: '#67e8f9',
+    brightWhite: '#fafafa'
+  },
+  light: {
+    background: '#ffffff',
+    foreground: '#27272a',
+    cursor: '#0078d4',
+    cursorAccent: '#ffffff',
+    selectionBackground: '#0078d440',
+    black: '#27272a',
+    red: '#b91c1c',
+    green: '#15803d',
+    yellow: '#a16207',
+    blue: '#1d4ed8',
+    magenta: '#7e22ce',
+    cyan: '#0e7490',
+    white: '#e4e4e7',
+    brightBlack: '#52525b',
+    brightRed: '#dc2626',
+    brightGreen: '#16a34a',
+    brightYellow: '#ca8a04',
+    brightBlue: '#2563eb',
+    brightMagenta: '#9333ea',
+    brightCyan: '#0891b2',
+    brightWhite: '#f4f4f5'
+  }
+}
 
 interface ConsoleViewProps {
   request: ConsoleOpenRequest
@@ -106,12 +155,19 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
   const [clipboardText, setClipboardText] = useState('')
   const [remoteClipboard, setRemoteClipboard] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [scaleHint, setScaleHint] = useState(true)
+  const [theme, setTheme] = useState<Theme>(() => (document.documentElement.classList.contains('light') ? 'light' : 'dark'))
 
   const contentRef = useRef<HTMLDivElement>(null)
   const noVncRef = useRef<HTMLDivElement>(null)
   const termHostRef = useRef<HTMLDivElement>(null)
   const noVncClientRef = useRef<{ disconnect: () => void; sendCtrlAltDel: () => void; clipboardPasteFrom: (text: string) => void; scaleViewport: boolean; focus: () => void } | null>(null)
-  const xtermRef = useRef<{ focus: () => void; getSelection: () => string; paste: (data: string) => void } | null>(null)
+  const xtermRef = useRef<{
+    focus: () => void
+    getSelection: () => string
+    paste: (data: string) => void
+    options: { theme?: Record<string, string> | unknown }
+  } | null>(null)
   const socketRef = useRef<WebSocket | null>(null)
   const activeSessionIdRef = useRef<string | null>(null)
 
@@ -240,29 +296,7 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
         lineHeight: 1.18,
         letterSpacing: 0,
         scrollback: 5000,
-        theme: {
-          background: '#050608',
-          foreground: '#d4d4d8',
-          cursor: '#f26b1d',
-          cursorAccent: '#050608',
-          selectionBackground: '#f26b1d40',
-          black: '#18181b',
-          red: '#f87171',
-          green: '#4ade80',
-          yellow: '#fbbf24',
-          blue: '#60a5fa',
-          magenta: '#c084fc',
-          cyan: '#22d3ee',
-          white: '#e4e4e7',
-          brightBlack: '#71717a',
-          brightRed: '#fca5a5',
-          brightGreen: '#86efac',
-          brightYellow: '#fde68a',
-          brightBlue: '#93c5fd',
-          brightMagenta: '#d8b4fe',
-          brightCyan: '#67e8f9',
-          brightWhite: '#fafafa'
-        }
+        theme: XTERM_THEMES[theme] ?? XTERM_THEMES.dark
       })
       terminal = term
       xtermRef.current = term
@@ -409,6 +443,22 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
   }, [request, retryToken])
 
   useEffect(() => {
+    // 主题变化时同步本地状态（顶栏“适应窗口”提示与暗色画布跟随）。
+    const root = document.documentElement
+    const sync = (): void => setTheme(root.classList.contains('light') ? 'light' : 'dark')
+    sync()
+    const observer = new MutationObserver(sync)
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    // xterm 的配色在创建时确定，主题切换时需要就地更新。
+    const term = xtermRef.current
+    if (term) term.options.theme = XTERM_THEMES[theme] ?? XTERM_THEMES.dark
+  }, [theme])
+
+  useEffect(() => {
     const onFullscreenChange = (): void => setIsFullscreen(Boolean(document.fullscreenElement))
     document.addEventListener('fullscreenchange', onFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
@@ -446,6 +496,11 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
     if (noVncClientRef.current) noVncClientRef.current.scaleViewport = value
   }
 
+  const toggleScale = (): void => {
+    setScale(!scaleViewport)
+    setScaleHint(false)
+  }
+
   const sendClipboard = (): void => {
     if (!clipboardText.trim()) return
     noVncClientRef.current?.clipboardPasteFrom(clipboardText)
@@ -463,7 +518,7 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
     <div
       ref={contentRef}
       data-console-root="true"
-      className="flex h-screen w-screen flex-col overflow-hidden border border-border bg-[#050608] text-foreground"
+      className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground outline-none"
     >
       <header className="drag-region flex h-10 shrink-0 items-stretch border-b border-border bg-card">
         <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3">
@@ -475,9 +530,21 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
           <span className="truncate text-[12px] font-medium text-foreground">
             {session?.title ?? request.name ?? '控制台'}
           </span>
-          <span className="hidden truncate font-mono text-[10px] text-muted-foreground/70 lg:block">
+          <span className="hidden h-3 w-px shrink-0 bg-border md:block" aria-hidden="true" />
+          <span className="hidden shrink-0 truncate font-mono text-[10px] text-muted-foreground/80 md:block">
             {session?.subtitle ?? `${request.node} · ${request.type?.toUpperCase() ?? 'NODE'} ${request.vmid ?? ''}`}
           </span>
+          <span className="hidden shrink-0 font-mono text-[10px] text-muted-foreground/60 lg:block">
+            {consoleModeHint === 'novnc' ? 'RFB' : 'termproxy'}
+          </span>
+          {session?.username && (
+            <span className="hidden shrink-0 font-mono text-[10px] text-muted-foreground/60 xl:block">
+              {session.username}
+            </span>
+          )}
+          {isNoVnc && phase === 'connected' && scaleHint && !scaleViewport && (
+            <span className="hidden shrink-0 text-[10px] text-warning xl:block">按原始尺寸显示</span>
+          )}
         </div>
 
         <div className="no-drag flex shrink-0 items-center gap-0.5 px-1">
@@ -501,7 +568,7 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
               <ConsoleToolButton
                 label={scaleViewport ? '原始尺寸' : '适应窗口'}
                 active={scaleViewport}
-                onClick={() => setScale(!scaleViewport)}
+                onClick={toggleScale}
                 disabled={phase !== 'connected'}
               >
                 <Scaling className="h-3.5 w-3.5" />
@@ -529,110 +596,108 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
           </ConsoleToolButton>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 px-2">{phaseBadge(phase)}</div>
+        <div className="flex shrink-0 items-center gap-2 pl-1 pr-2">
+          {phase === 'connected' ? (
+            <span className="flex items-center gap-1.5 text-[11px] text-success">
+              <span className="h-1.5 w-1.5 bg-success" aria-hidden="true" />
+              已连接
+            </span>
+          ) : (
+            phaseBadge(phase)
+          )}
+        </div>
         <WindowButtons />
       </header>
 
-        <div className="relative min-h-0 flex-1 overflow-hidden bg-[#050608]">
-          <div ref={noVncRef} className={cn('absolute inset-0', isNoVnc ? 'block' : 'hidden')} />
-          <div
-            ref={termHostRef}
-            className={cn('absolute inset-0 overflow-hidden px-3 pt-2', isXterm ? 'block' : 'hidden')}
-          />
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-background dark:bg-[#050608]">
+        <div ref={noVncRef} className={cn('absolute inset-0', isNoVnc ? 'block' : 'hidden')} />
+        <div
+          ref={termHostRef}
+          className={cn('absolute inset-0 overflow-hidden', isXterm ? 'block px-2 pt-1.5' : 'hidden')}
+        />
 
-          {phase === 'opening' || phase === 'connecting' ? (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#050608]/92">
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="h-6 w-6 spin text-brand" />
-                <div className="text-center">
-                  <div className="text-[12px] text-foreground">
-                    {phase === 'opening' ? '正在分配控制台会话' : '正在建立 PVE 控制通道'}
-                  </div>
-                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-                    {consoleModeHint === 'novnc' ? 'noVNC / RFB 003.008' : 'xterm.js / termproxy'}
-                  </div>
+        {phase === 'opening' || phase === 'connecting' ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/92 dark:bg-[#050608]/92">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-6 w-6 spin text-brand" />
+              <div className="text-center">
+                <div className="text-[12px] text-foreground">
+                  {phase === 'opening' ? '正在分配控制台会话' : '正在建立 PVE 控制通道'}
+                </div>
+                <div className="mt-1 font-mono text-[11px] text-muted-foreground">
+                  {consoleModeHint === 'novnc' ? 'noVNC / RFB 003.008' : 'xterm.js / termproxy'}
                 </div>
               </div>
             </div>
-          ) : null}
+          </div>
+        ) : null}
 
-          {phase === 'error' || phase === 'disconnected' ? (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#050608]/95">
-              <div className="w-[380px] max-w-[calc(100%-32px)] border border-destructive/35 bg-card p-4">
-                <div className="flex items-center gap-2 text-[12px] font-medium text-destructive">
-                  <Unplug className="h-4 w-4" />
-                  控制台连接中断
-                </div>
-                <p className="mt-2 break-words text-[11px] leading-5 text-muted-foreground">
-                  {error || '控制台连接已断开。'}
-                </p>
-                <div className="mt-4 flex gap-2">
-                  <Button variant="outline" size="sm" onClick={retry}>
-                    <RefreshCw className="h-3 w-3" />
-                    重新连接
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={onClose}>
-                    <X className="h-3 w-3" />
-                    关闭
-                  </Button>
-                </div>
+        {phase === 'error' || phase === 'disconnected' ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/95 dark:bg-[#050608]/95">
+            <div className="w-[380px] max-w-[calc(100%-32px)] border border-destructive/35 bg-card p-4">
+              <div className="flex items-center gap-2 text-[12px] font-medium text-destructive">
+                <Unplug className="h-4 w-4" />
+                控制台连接中断
               </div>
-            </div>
-          ) : null}
-
-          {clipboardOpen && isNoVnc && (
-            <div className="absolute bottom-4 right-4 z-20 w-[330px] border border-border-strong bg-card shadow-[0_18px_60px_rgba(0,0,0,0.5)]">
-              <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                <div className="flex items-center gap-2 text-[11px] font-medium text-foreground">
-                  <Clipboard className="h-3 w-3 text-brand" />
-                  发送剪贴板到虚拟机
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setClipboardOpen(false)}
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label="关闭剪贴板面板"
-                >
+              <p className="mt-2 break-words text-[11px] leading-5 text-muted-foreground">
+                {error || '控制台连接已断开。'}
+              </p>
+              <div className="mt-4 flex gap-2">
+                <Button variant="outline" size="sm" onClick={retry}>
+                  <RefreshCw className="h-3 w-3" />
+                  重新连接
+                </Button>
+                <Button variant="ghost" size="sm" onClick={onClose}>
                   <X className="h-3 w-3" />
-                </button>
-              </div>
-              <div className="space-y-2 p-3">
-                <Textarea
-                  value={clipboardText}
-                  onChange={(event) => setClipboardText(event.target.value)}
-                  placeholder="在此粘贴或输入要发送到客户机的文本…"
-                  className="h-28 resize-none font-mono text-[11px]"
-                  autoFocus
-                />
-                {remoteClipboard && (
-                  <div className="max-h-16 overflow-auto border border-border bg-background p-2 font-mono text-[11px] leading-4 text-muted-foreground">
-                    <div className="mb-1 text-[10px] text-muted-foreground">来自客户机</div>
-                    {remoteClipboard}
-                  </div>
-                )}
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setClipboardOpen(false)}>
-                    取消
-                  </Button>
-                  <Button size="sm" onClick={sendClipboard} disabled={!clipboardText.trim()}>
-                    发送
-                  </Button>
-                </div>
+                  关闭
+                </Button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        ) : null}
 
-        <div className="flex shrink-0 items-center justify-between border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-2">
-            <span>本地回环桥 / {session?.mode === 'novnc' ? 'RFB' : 'termproxy'}</span>
-          </span>
-          <span className="flex items-center gap-2">
-            {session?.username && <span>{session.username}</span>}
-            <span className="h-2.5 w-px bg-border" />
-            <span>{phase === 'connected' ? '会话活跃' : phaseLabel(phase)}</span>
-          </span>
-        </div>
+        {clipboardOpen && isNoVnc && (
+          <div className="absolute bottom-4 right-4 z-20 w-[330px] border border-border-strong bg-card shadow-[0_18px_60px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+              <div className="flex items-center gap-2 text-[11px] font-medium text-foreground">
+                <Clipboard className="h-3 w-3 text-brand" />
+                发送剪贴板到虚拟机
+              </div>
+              <button
+                type="button"
+                onClick={() => setClipboardOpen(false)}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="关闭剪贴板面板"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+            <div className="space-y-2 p-3">
+              <Textarea
+                value={clipboardText}
+                onChange={(event) => setClipboardText(event.target.value)}
+                placeholder="在此粘贴或输入要发送到客户机的文本…"
+                className="h-28 resize-none font-mono text-[11px]"
+                autoFocus
+              />
+              {remoteClipboard && (
+                <div className="max-h-16 overflow-auto border border-border bg-background p-2 font-mono text-[11px] leading-4 text-muted-foreground">
+                  <div className="mb-1 text-[10px] text-muted-foreground">来自客户机</div>
+                  {remoteClipboard}
+                </div>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setClipboardOpen(false)}>
+                  取消
+                </Button>
+                <Button size="sm" onClick={sendClipboard} disabled={!clipboardText.trim()}>
+                  发送
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
   )
 }

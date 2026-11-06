@@ -58,7 +58,7 @@ export function ClusterView({
         title="集群"
         description="查看 Quorum、节点成员、HA 与存储状态。"
         actions={
-          <Button variant="outline" onClick={onRefresh}>
+          <Button variant="surface" onClick={onRefresh}>
             <RefreshCw className="h-3.5 w-3.5" />
             刷新
           </Button>

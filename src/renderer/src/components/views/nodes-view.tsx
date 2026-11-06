@@ -256,7 +256,7 @@ export function NodesView({
         description="节点健康、资源占用、存储和硬件信息。资源数据每 2 秒刷新。"
         actions={
           <>
-            <Button variant="outline" onClick={onRefresh}>
+            <Button variant="surface" onClick={onRefresh}>
               <RefreshCw className="h-3.5 w-3.5" />
               刷新
             </Button>

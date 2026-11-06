@@ -72,7 +72,7 @@ export function LoginView({ settings, appVersion, initialError, loginBackground,
         </div>
         <div className="flex items-center gap-3">
           <span className="hidden text-[11px] text-muted-foreground sm:block">未连接</span>
-          <WindowButtons className="border-l-0" />
+          <WindowButtons className="border-l-0" closeHint="收起到托盘（后台继续运行）" />
         </div>
       </header>
 

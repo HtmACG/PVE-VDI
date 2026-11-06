@@ -1400,7 +1400,7 @@ function DiskSection({
         title="磁盘"
         description="物理磁盘型号、容量、健康状态与 SMART 温度。"
         actions={
-          <Button variant="ghost" size="sm" onClick={onRefresh} loading={loading}>
+          <Button variant="surface" size="sm" onClick={onRefresh} loading={loading}>
             <RefreshCw className="h-3.5 w-3.5" />
             刷新
           </Button>
@@ -1654,7 +1654,7 @@ export function NodeSettingsView({
               <ArrowLeft className="h-3.5 w-3.5" />
               返回节点
             </Button>
-            <Button variant="ghost" size="sm" onClick={refreshAll} loading={refreshing}>
+            <Button variant="surface" size="sm" onClick={refreshAll} loading={refreshing}>
               <RefreshCw className="h-3.5 w-3.5" />
               刷新
             </Button>

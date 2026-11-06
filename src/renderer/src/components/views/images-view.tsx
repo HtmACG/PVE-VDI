@@ -520,11 +520,11 @@ export function ImagesView({
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="ghost" size="sm" onClick={() => void load()} loading={refreshing}>
+            <Button variant="surface" size="sm" onClick={() => void load()} loading={refreshing}>
               <RefreshCw className="h-3.5 w-3.5" />
               刷新
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setUrlOpen(true)} disabled={activeIsoStorages.length === 0}>
+            <Button variant="surface" size="sm" onClick={() => setUrlOpen(true)} disabled={activeIsoStorages.length === 0}>
               <Link2 className="h-3.5 w-3.5" />
               从 URL 导入
             </Button>

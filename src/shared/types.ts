@@ -828,8 +828,10 @@ export interface DesktopApi {
   consoleOpen: (input: ConsoleOpenRequest) => Promise<ApiResult<ConsoleSessionInfo>>
   consoleClose: (sessionId: string) => Promise<ApiResult<void>>
   windowMinimize: () => void
+  windowHide: () => void
   windowToggleMaximize: () => void
   windowClose: () => void
   getWindowState: () => Promise<WindowState>
   onWindowState: (callback: (state: WindowState) => void) => () => void
+  onSettingsChanged: (callback: (settings: AppSettings) => void) => () => void
 }

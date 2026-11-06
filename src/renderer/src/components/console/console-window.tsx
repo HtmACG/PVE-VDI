@@ -31,6 +31,14 @@ export function ConsoleWindowApp(): React.JSX.Element {
     }
   }, [])
 
+  useEffect(() => {
+    // 主窗口切换深/浅色时，控制台窗口跟随更新。
+    return window.pvevdi.onSettingsChanged((next) => {
+      applyAppearance(next)
+      setBootstrap((current) => (current ? { ...current, settings: next } : current))
+    })
+  }, [])
+
   if (bootstrap) {
     return (
       <TooltipProvider delayDuration={250}>

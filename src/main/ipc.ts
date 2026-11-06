@@ -4,6 +4,7 @@ import path from 'node:path'
 import { IPC } from '@shared/ipc'
 import type {
   ApiResult,
+  AppSettings,
   BootstrapData,
   CloneVmInput,
   ConsoleOpenRequest,
@@ -56,8 +57,9 @@ export function registerIpc(options: {
   store: SettingsStore
   consoleWindows: ConsoleWindowManager
   getWindow: () => BrowserWindow | null
+  onSettingsChanged?: (settings: AppSettings) => void
 }): void {
-  const { manager, store, consoleWindows, getWindow } = options
+  const { manager, store, consoleWindows, getWindow, onSettingsChanged } = options
 
   ipcMain.handle(IPC.bootstrap, async (): Promise<ApiResult<BootstrapData>> => {
     return wrap(async () => {
@@ -121,7 +123,9 @@ export function registerIpc(options: {
   ipcMain.handle(IPC.updatePreferences, async (_event, rawPatch: unknown) => {
     return wrap(async () => {
       const patch = asObject<PreferencesPatch>(rawPatch)
-      return store.updatePreferences(patch)
+      const settings = store.updatePreferences(patch)
+      onSettingsChanged?.(settings)
+      return settings
     })
   })
 
@@ -367,6 +371,10 @@ export function registerIpc(options: {
 
   ipcMain.on(IPC.windowMinimize, (event) => {
     ;(BrowserWindow.fromWebContents(event.sender) ?? getWindow())?.minimize()
+  })
+
+  ipcMain.on(IPC.windowHide, (event) => {
+    ;(BrowserWindow.fromWebContents(event.sender) ?? getWindow())?.hide()
   })
 
   ipcMain.on(IPC.windowToggleMaximize, (event) => {

@@ -544,7 +544,7 @@ export function OverviewView({
         description="查看节点资源占用、集群健康状态和虚拟机运行情况。资源数据每 2 秒刷新。"
         actions={
           <>
-            <Button variant="outline" onClick={onRefresh}>
+            <Button variant="surface" onClick={onRefresh}>
               <RefreshCw className="h-3.5 w-3.5" />
               刷新
             </Button>

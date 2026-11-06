@@ -77,7 +77,7 @@ export function TasksView({
         title="任务"
         description="查看 PVE 任务执行记录与节点任务日志。"
         actions={
-          <Button variant="outline" onClick={onRefresh}>
+          <Button variant="surface" onClick={onRefresh}>
             <RefreshCw className="h-3.5 w-3.5" />
             刷新
           </Button>

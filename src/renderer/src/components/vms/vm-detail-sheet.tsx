@@ -162,64 +162,117 @@ function MetricTile({
   className?: string
 }): React.JSX.Element {
   return (
-    <div className={cn('border border-border bg-panel/45 p-3', className)}>
-      <div className="flex items-center justify-between text-[12px] text-muted-foreground">
+    <div className={cn('min-w-0 border-r border-border/60 px-3 py-2.5 last:border-r-0', className)}>
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <span className="text-muted-foreground/70">{icon}</span>
         {label}
-        <span className="text-muted-foreground/60">{icon}</span>
       </div>
-      <div className="mt-3 flex items-baseline gap-1.5">
-        <span className="font-mono text-[22px] font-medium tracking-tight text-foreground">{value}</span>
-        {suffix && <span className="font-mono text-[12px] text-muted-foreground">{suffix}</span>}
+      <div className="mt-1 flex items-baseline gap-1">
+        <span className="truncate font-mono text-[17px] font-medium tracking-tight text-foreground">{value}</span>
+        {suffix && <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{suffix}</span>}
       </div>
       {progress !== undefined && (
-        <Progress value={progress * 100} className="mt-2.5 h-1" indicatorClassName={progress > 0.85 ? 'bg-warning' : 'bg-brand'} />
+        <Progress
+          value={progress * 100}
+          className="mt-1.5 h-[3px]"
+          indicatorClassName={progress > 0.85 ? 'bg-warning' : 'bg-brand'}
+        />
       )}
-      {detail && <div className="mt-2 text-[11px] text-muted-foreground">{detail}</div>}
+      {detail && <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground">{detail}</div>}
+    </div>
+  )
+}
+
+function Field({
+  label,
+  children,
+  mono,
+  className
+}: {
+  label: string
+  children: React.ReactNode
+  mono?: boolean
+  className?: string
+}): React.JSX.Element {
+  return (
+    <div className={cn('min-w-0', className)}>
+      <div className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">{label}</div>
+      <div className={cn('mt-1 break-all text-[12px] leading-5 text-foreground', mono && 'font-mono text-[11px]')}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function SectionBar({
+  icon,
+  title,
+  hint,
+  actions,
+  children,
+  className
+}: {
+  icon?: React.ReactNode
+  title: string
+  hint?: React.ReactNode
+  actions?: React.ReactNode
+  children?: React.ReactNode
+  className?: string
+}): React.JSX.Element {
+  return (
+    <div className={cn('flex min-h-9 flex-wrap items-center gap-2 px-3.5 py-1.5', className)}>
+      {icon && <span className="text-muted-foreground">{icon}</span>}
+      <span className="text-[12px] font-medium text-foreground">{title}</span>
+      {hint && <span className="font-mono text-[10px] text-muted-foreground">{hint}</span>}
+      {children}
+      {actions && <div className="ml-auto flex items-center gap-1">{actions}</div>}
     </div>
   )
 }
 
 function SnapshotRow({ snapshot }: { snapshot: VmSnapshot }): React.JSX.Element {
   return (
-    <div className={cn('border p-3', snapshot.current ? 'border-brand/45 bg-brand/[0.035]' : 'border-border bg-panel/30')}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[12px] text-foreground">{snapshot.name}</span>
-        {snapshot.current && <Badge variant="brand">当前状态</Badge>}
-        {snapshot.vmstate && <Badge variant="info">含内存状态</Badge>}
-        <span className="ml-auto font-mono text-[11px] text-muted-foreground">
-          {snapshot.current ? '当前' : snapshot.snaptime ? formatFullDateTime(snapshot.snaptime * 1000) : '—'}
-        </span>
+    <div className="flex items-start gap-3 border-b border-border/60 px-3 py-2.5 last:border-0">
+      <div className={cn('mt-1 h-1.5 w-1.5 shrink-0', snapshot.current ? 'bg-brand' : 'bg-border-strong')} aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="truncate font-mono text-[12px] text-foreground">{snapshot.name}</span>
+          {snapshot.current && <Badge variant="brand">当前状态</Badge>}
+          {snapshot.vmstate && <Badge variant="info">含内存</Badge>}
+          <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
+            {snapshot.current ? 'HEAD' : snapshot.snaptime ? formatFullDateTime(snapshot.snaptime * 1000) : '—'}
+          </span>
+        </div>
+        {snapshot.description && (
+          <p className="mt-1 whitespace-pre-wrap text-[11px] leading-4 text-muted-foreground">{snapshot.description}</p>
+        )}
+        {snapshot.parent && <div className="mt-1 font-mono text-[10px] text-muted-foreground/80">父快照 {snapshot.parent}</div>}
       </div>
-      {snapshot.description && <p className="mt-2 whitespace-pre-wrap text-[11px] leading-4 text-muted-foreground">{snapshot.description}</p>}
-      {snapshot.parent && (
-        <div className="mt-1.5 font-mono text-[10px] text-muted-foreground/80">父快照: {snapshot.parent}</div>
-      )}
     </div>
   )
 }
 
 function AgentInterfaceRow({ iface }: { iface: AgentInterface }): React.JSX.Element {
   return (
-    <div className="border border-border bg-panel/30 p-3">
-      <div className="flex items-center gap-2">
-        <Network className="h-3 w-3 text-muted-foreground" />
+    <div className="border-b border-border/60 px-3 py-2.5 last:border-0">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-[12px] text-foreground">{iface.name}</span>
-        {iface.mac && <span className="ml-auto font-mono text-[10px] text-muted-foreground">{iface.mac}</span>}
-      </div>
-      <div className="mt-2 flex flex-wrap gap-1">
-        {iface.ips.length === 0 ? (
-          <span className="text-[11px] text-muted-foreground">无地址</span>
-        ) : (
-          iface.ips.map((ip) => (
-            <span key={`${ip.type}-${ip.address}`} className="border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] text-foreground">
-              {ip.address}
-              {ip.prefix !== undefined ? `/${ip.prefix}` : ''}
-            </span>
-          ))
-        )}
+        {iface.mac && <span className="font-mono text-[10px] text-muted-foreground">{iface.mac}</span>}
+        <div className="ml-auto flex flex-wrap items-center gap-1">
+          {iface.ips.length === 0 ? (
+            <span className="text-[11px] text-muted-foreground">无地址</span>
+          ) : (
+            iface.ips.map((ip) => (
+              <span key={`${ip.type}-${ip.address}`} className="font-mono text-[11px] text-foreground">
+                {ip.address}
+                {ip.prefix !== undefined ? `/${ip.prefix}` : ''}
+              </span>
+            ))
+          )}
+        </div>
       </div>
       {(iface.rxBytes !== undefined || iface.txBytes !== undefined) && (
-        <div className="mt-2 flex gap-4 font-mono text-[10px] text-muted-foreground">
+        <div className="mt-1 flex gap-4 font-mono text-[10px] text-muted-foreground">
           <span>RX {formatBytes(iface.rxBytes ?? 0)}</span>
           <span>TX {formatBytes(iface.txBytes ?? 0)}</span>
         </div>
@@ -335,43 +388,51 @@ export function VmDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="max-w-[700px]">
-        <div className="shrink-0 border-b border-border px-5 py-4 pr-14">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[11px] text-muted-foreground">
-              {vmRef?.type?.toUpperCase() ?? 'QEMU'} / {vmRef?.vmid ?? '—'}
-            </span>
+      <SheetContent className="max-w-[760px]">
+        <div className="shrink-0 border-b border-border px-5 pb-4 pt-4 pr-14">
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="font-mono">{vmRef?.type?.toUpperCase() ?? 'QEMU'}</span>
+            <span className="text-border-strong">/</span>
+            <span className="font-mono">{vmRef?.vmid ?? '—'}</span>
             {detail && <VmStatusBadge status={detail.runtime.status} />}
-            {refreshing && (
-              <span className="flex items-center gap-1 text-[11px] text-brand">
-                <Loader2 className="h-3 w-3 spin" />
-                正在刷新
-              </span>
-            )}
+            {refreshing && <Loader2 className="h-3 w-3 spin text-muted-foreground" aria-label="正在刷新" />}
+            <span className="ml-auto flex items-center gap-2 font-mono">
+              <span>{vmRef?.node ?? '—'}</span>
+              <span className="text-border-strong">·</span>
+              <span>QEMU {detail?.runtime.runningQemu ?? '—'}</span>
+            </span>
           </div>
-          <SheetTitle className="flex items-center gap-3 truncate text-[22px]">
-            {detail && <OsIcon os={detail.os} size="lg" />}
-            <span className="truncate">{detail?.name ?? (loading ? '正在读取虚拟机…' : '虚拟机详情')}</span>
-          </SheetTitle>
-          <SheetDescription className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px]">
-            <span className="font-mono">{vmRef?.node ?? '—'}</span>
-            {detail && <><span className="h-3 w-px bg-border" /><span>{detail.os.name}{detail.os.version ? ` ${detail.os.version}` : ''}</span></>}
-            <span className="h-3 w-px bg-border" />
-            <span className="font-mono">QEMU {detail?.runtime.runningQemu ?? '—'}</span>
-            {detail?.runtime.runningMachine && (
-              <>
-                <span className="h-3 w-px bg-border" />
-                <span className="font-mono">{detail.runtime.runningMachine}</span>
-              </>
-            )}
-          </SheetDescription>
-          {detail && detail.runtime.tags.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-              {detail.runtime.tags.map((tag) => (
-                <span key={tag}>{tag}</span>
-              ))}
+
+          <div className="mt-2 flex items-center gap-2.5">
+            {detail && <OsIcon os={detail.os} size="md" />}
+            <div className="min-w-0 flex-1">
+              <SheetTitle className="truncate text-[19px] font-semibold leading-6 tracking-[-0.01em]">
+                {detail?.name ?? (loading ? '正在读取虚拟机…' : '虚拟机详情')}
+              </SheetTitle>
+              <SheetDescription className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                {detail ? (
+                  <>
+                    <span>{detail.os.name}{detail.os.version ? ` ${detail.os.version}` : ''}</span>
+                    {detail.runtime.runningMachine && (
+                      <>
+                        <span className="text-border-strong">·</span>
+                        <span className="font-mono">{detail.runtime.runningMachine}</span>
+                      </>
+                    )}
+                    {detail.runtime.tags.length > 0 && (
+                      <>
+                        <span className="text-border-strong">·</span>
+                        <span className="font-mono">{detail.runtime.tags.join(' / ')}</span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <span>{vmRef?.node ?? '—'}</span>
+                )}
+              </SheetDescription>
             </div>
-          )}
+          </div>
+
           {target && (
             <div className="mt-3">
               <VmDetailActionBar
@@ -385,7 +446,7 @@ export function VmDetailSheet({
         </div>
 
         <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-          <div className="shrink-0 px-5">
+          <div className="shrink-0 border-b border-border px-5">
             <TabsList className="w-full gap-0 overflow-x-auto">
               {[
                 ['overview', '概览'],
@@ -440,64 +501,66 @@ export function VmDetailSheet({
             ) : detail ? (
               <>
                 <TabsContent value="overview" className="mt-0 space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 border-y border-border/70 sm:grid-cols-4">
                     <MetricTile
-                      label="CPU 使用率"
+                      label="CPU"
                       value={cpuDisplay}
                       suffix={`/ ${detail.runtime.cpus || '—'} vCPU`}
-                      icon={<Cpu className="h-3.5 w-3.5" />}
-                      detail={`负载压力 ${(detail.runtime.pressureCpu ?? 0).toFixed(1)}%`}
+                      icon={<Cpu className="h-3 w-3" />}
+                      detail={`压力 ${(detail.runtime.pressureCpu ?? 0).toFixed(1)}%`}
                     />
                     <MetricTile
                       label="内存"
                       value={formatBytes(detail.runtime.mem)}
                       suffix={`/ ${formatBytes(detail.runtime.maxmem)}`}
-                      icon={<MemoryStick className="h-3.5 w-3.5" />}
+                      icon={<MemoryStick className="h-3 w-3" />}
                       progress={memoryRatio}
                       detail={`Balloon ${detail.runtime.balloon ? formatBytes(detail.runtime.balloon) : '未启用'}`}
                     />
                     <MetricTile
                       label="磁盘 I/O"
                       value={formatBytes(diskread + diskwrite)}
-                      suffix="累计"
-                      icon={<HardDrive className="h-3.5 w-3.5" />}
+                      icon={<HardDrive className="h-3 w-3" />}
                       detail={`读 ${formatBytes(diskread)} · 写 ${formatBytes(diskwrite)}`}
+                      className="sm:border-t-0 border-t border-border/60"
                     />
                     <MetricTile
-                      label="网络吞吐"
+                      label="网络"
                       value={formatBytes(netin + netout)}
-                      suffix="累计"
-                      icon={<Network className="h-3.5 w-3.5" />}
+                      icon={<Network className="h-3 w-3" />}
                       detail={`↓ ${formatBytes(netin)} · ↑ ${formatBytes(netout)}`}
+                      className="border-t border-border/60 sm:border-t-0"
                     />
                   </div>
 
-                  <div className="border border-border bg-card">
-                    <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-                      <div className="flex items-center gap-2 text-[12px] font-medium">
-                        <Activity className="h-3.5 w-3.5 text-brand" />
-                        性能遥测
-                        <span className="font-mono text-[10px] text-muted-foreground">最近 1 小时</span>
-                      </div>
-                      <div className="flex border border-border">
-                        {[
-                          ['cpu', 'CPU'],
-                          ['memory', '内存']
-                        ].map(([value, label]) => (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => setMetric(value as 'cpu' | 'memory')}
-                            className={cn(
-                              'h-5 px-2 text-[11px] transition-colors',
-                              metric === value ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
-                            )}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  <div className="border-t border-border/70">
+                    <SectionBar
+                      icon={<Activity className="h-3.5 w-3.5" />}
+                      title="性能遥测"
+                      hint="最近 1 小时"
+                      actions={
+                        <div className="flex items-center">
+                          {[
+                            ['cpu', 'CPU'],
+                            ['memory', '内存']
+                          ].map(([value, label]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setMetric(value as 'cpu' | 'memory')}
+                              className={cn(
+                                'h-6 px-2 text-[11px] transition-colors',
+                                metric === value
+                                  ? 'text-foreground underline decoration-brand decoration-2 underline-offset-4'
+                                  : 'text-muted-foreground hover:text-foreground'
+                              )}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      }
+                    />
                     <div className="px-2 pb-2 pt-3">
                       <AreaChart
                         points={points}
@@ -509,44 +572,41 @@ export function VmDetailSheet({
                     </div>
                   </div>
 
-                  <div className="border border-border bg-card">
-                    <div className="flex items-center gap-2 border-b border-border px-3 py-2.5 text-[12px] font-medium">
-                      <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                      运行信息
-                    </div>
-                    <div className="grid grid-cols-1 px-3 sm:grid-cols-2 sm:gap-x-6">
-                      <DataRow label="运行时长">{formatUptime(detail.runtime.uptime)}</DataRow>
-                      <DataRow label="QMP 状态" mono>{detail.runtime.qmpStatus ?? '—'}</DataRow>
-                      <DataRow label="Guest Agent">
+                  <div className="border-t border-border/70">
+                    <SectionBar icon={<Info className="h-3.5 w-3.5" />} title="运行信息" />
+                    <div className="grid grid-cols-2 gap-x-6 px-3 py-1.5 sm:grid-cols-4">
+                      <Field label="运行时长" mono>{formatUptime(detail.runtime.uptime)}</Field>
+                      <Field label="QMP 状态" mono>{detail.runtime.qmpStatus ?? '—'}</Field>
+                      <Field label="Guest Agent">
                         <span className={detail.runtime.agentEnabled ? 'text-success' : 'text-muted-foreground'}>
                           {detail.runtime.agentEnabled ? '已启用' : '未启用'}
                         </span>
-                      </DataRow>
-                      <DataRow label="HA 托管" mono>{detail.runtime.haManaged ? 'YES' : 'NO'}</DataRow>
-                      <DataRow label="进程 PID" mono>{detail.runtime.pid ?? '—'}</DataRow>
-                      <DataRow label="内存宿主机" mono>{detail.runtime.memhost ? formatBytes(detail.runtime.memhost) : '—'}</DataRow>
-                      <DataRow label="I/O 压力" mono>{(detail.runtime.pressureIo ?? 0).toFixed(1)}%</DataRow>
-                      <DataRow label="内存压力" mono>{(detail.runtime.pressureMemory ?? 0).toFixed(1)}%</DataRow>
+                      </Field>
+                      <Field label="HA 托管" mono>{detail.runtime.haManaged ? 'YES' : 'NO'}</Field>
+                      <Field label="进程 PID" mono>{detail.runtime.pid ?? '—'}</Field>
+                      <Field label="宿主内存" mono>{detail.runtime.memhost ? formatBytes(detail.runtime.memhost) : '—'}</Field>
+                      <Field label="I/O 压力" mono>{(detail.runtime.pressureIo ?? 0).toFixed(1)}%</Field>
+                      <Field label="内存压力" mono>{(detail.runtime.pressureMemory ?? 0).toFixed(1)}%</Field>
                     </div>
                   </div>
                 </TabsContent>
 
                 <TabsContent value="hardware" className="mt-0 space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="border border-border bg-panel/40 p-3">
-                      <div className="text-[11px] text-muted-foreground">CPU 拓扑</div>
-                      <div className="mt-2 flex items-baseline gap-2">
-                        <span className="font-mono text-[20px] text-foreground">
+                  <div className="grid grid-cols-1 divide-y divide-border/70 border-y border-border/70 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                    <div className="px-3 py-2.5">
+                      <div className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">CPU 拓扑</div>
+                      <div className="mt-1 flex items-baseline gap-2">
+                        <span className="font-mono text-[17px] font-medium text-foreground">
                           {String(detail.config.cores ?? '—')} × {String(detail.config.sockets ?? 1)}
                         </span>
                         <span className="font-mono text-[10px] text-muted-foreground">cores × sockets</span>
                       </div>
                       <div className="mt-1 font-mono text-[10px] text-muted-foreground">{String(detail.config.cpu ?? '默认 CPU 类型')}</div>
                     </div>
-                    <div className="border border-border bg-panel/40 p-3">
-                      <div className="text-[11px] text-muted-foreground">内存配置</div>
-                      <div className="mt-2 flex items-baseline gap-2">
-                        <span className="font-mono text-[20px] text-foreground">{formatBytes(detail.runtime.maxmem)}</span>
+                    <div className="px-3 py-2.5">
+                      <div className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">内存配置</div>
+                      <div className="mt-1 flex items-baseline gap-2">
+                        <span className="font-mono text-[17px] font-medium text-foreground">{formatBytes(detail.runtime.maxmem)}</span>
                         <span className="font-mono text-[10px] text-muted-foreground">MAX</span>
                       </div>
                       <div className="mt-1 font-mono text-[10px] text-muted-foreground">
@@ -556,40 +616,43 @@ export function VmDetailSheet({
                   </div>
 
                   {detail.runtime.status === 'running' && (
-                    <div className="flex items-start gap-2 border border-warning/25 bg-warning/[0.05] px-3 py-2.5 text-[11px] leading-5 text-warning">
+                    <div className="flex items-start gap-2 border border-warning/25 bg-warning/[0.05] px-3 py-2 text-[11px] leading-5 text-warning">
                       <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       虚拟机关机后才能修改配置、添加或移除磁盘；磁盘扩容也受此限制。
                     </div>
                   )}
 
-                  <div className="border border-border bg-card">
-                    <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5 text-[12px] font-medium">
-                      <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />
-                      存储设备
-                      <div className="ml-auto flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setConfigOpen(true)}
-                          disabled={detail.runtime.status === 'running'}
-                        >
-                          <Settings2 className="h-3.5 w-3.5" />
-                          编辑配置
-                        </Button>
-                        {detail.ref.type === 'qemu' && (
+                  <div className="border-t border-border/70">
+                    <SectionBar
+                      icon={<HardDrive className="h-3.5 w-3.5" />}
+                      title="存储设备"
+                      hint={detail.disks.length > 0 ? `${detail.disks.length}` : undefined}
+                      actions={
+                        <>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setAddDiskOpen(true)}
+                            onClick={() => setConfigOpen(true)}
                             disabled={detail.runtime.status === 'running'}
                           >
-                            <Plus className="h-3.5 w-3.5" />
-                            添加磁盘
+                            <Settings2 className="h-3.5 w-3.5" />
+                            编辑配置
                           </Button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="divide-y divide-border">
+                          {detail.ref.type === 'qemu' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setAddDiskOpen(true)}
+                              disabled={detail.runtime.status === 'running'}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              添加磁盘
+                            </Button>
+                          )}
+                        </>
+                      }
+                    />
+                    <div className="divide-y divide-border/60">
                       {detail.disks.length === 0 ? (
                         <div className="px-3 py-4 text-[11px] text-muted-foreground">未找到磁盘配置。</div>
                       ) : (
@@ -597,47 +660,42 @@ export function VmDetailSheet({
                           const normalDisk = /^(scsi|virtio|sata|ide)\d+$/.test(disk.key)
                           const canRemove = normalDisk || disk.isCdrom
                           return (
-                            <div key={disk.key} className="px-3 py-2.5">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono text-[11px] text-brand">{disk.key}</span>
-                                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground" title={disk.volume}>
-                                  {disk.volume || '—'}
-                                </span>
-                                {disk.size !== undefined && <Badge variant="outline">{formatBytes(disk.size)}</Badge>}
-                                {disk.format && <Badge variant="outline">{disk.format}</Badge>}
-                                {disk.isCdrom && <Badge variant="info">CD-ROM</Badge>}
-                                <div className="flex items-center gap-1">
-                                  {normalDisk && !disk.isCdrom && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon-sm"
-                                      aria-label={`调整 ${disk.key} 容量`}
-                                      title="调整容量"
-                                      onClick={() => setResizeDisk(disk)}
-                                      disabled={detail.runtime.status === 'running'}
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </Button>
-                                  )}
-                                  {canRemove && !(detail.ref.type === 'lxc' && disk.key === 'rootfs') && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon-sm"
-                                      aria-label={`移除 ${disk.key}`}
-                                      title="移除磁盘"
-                                      onClick={() => setRemoveDisk(disk)}
-                                      disabled={detail.runtime.status === 'running'}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                              {disk.options.length > 0 && (
-                                <div className="mt-1 font-mono text-[8px] text-muted-foreground">
-                                  {disk.options.join(' · ')}
-                                </div>
+                            <div key={disk.key} className="flex items-center gap-2 px-3 py-2">
+                              <span className="w-[52px] shrink-0 font-mono text-[11px] text-muted-foreground">{disk.key}</span>
+                              <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground" title={disk.volume}>
+                                {disk.volume || '—'}
+                              </span>
+                              {disk.size !== undefined && (
+                                <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{formatBytes(disk.size)}</span>
                               )}
+                              {disk.format && <span className="shrink-0 font-mono text-[10px] text-muted-foreground/80">{disk.format}</span>}
+                              {disk.isCdrom && <Badge variant="info">CD-ROM</Badge>}
+                              <div className="flex shrink-0 items-center gap-0.5">
+                                {normalDisk && !disk.isCdrom && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label={`调整 ${disk.key} 容量`}
+                                    title="调整容量"
+                                    onClick={() => setResizeDisk(disk)}
+                                    disabled={detail.runtime.status === 'running'}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                {canRemove && !(detail.ref.type === 'lxc' && disk.key === 'rootfs') && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label={`移除 ${disk.key}`}
+                                    title="移除磁盘"
+                                    onClick={() => setRemoveDisk(disk)}
+                                    disabled={detail.runtime.status === 'running'}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           )
                         })
@@ -645,12 +703,9 @@ export function VmDetailSheet({
                     </div>
                   </div>
 
-                  <div className="border border-border bg-card">
-                    <div className="flex items-center gap-2 border-b border-border px-3 py-2.5 text-[12px] font-medium">
-                      <Server className="h-3.5 w-3.5 text-muted-foreground" />
-                      虚拟机配置
-                    </div>
-                    <div className="grid grid-cols-1 px-3 sm:grid-cols-2 sm:gap-x-6">
+                  <div className="border-t border-border/70">
+                    <SectionBar icon={<Server className="h-3.5 w-3.5" />} title="虚拟机配置" />
+                    <div className="grid grid-cols-1 gap-x-6 px-3 py-1.5 sm:grid-cols-2">
                       {configEntries.map(([key, value]) => (
                         <DataRow key={key} label={CONFIG_LABELS[key] ?? key} mono={key !== 'description'}>
                           <span className="line-clamp-3 break-all">{displayConfigValue(key, value)}</span>
@@ -659,62 +714,67 @@ export function VmDetailSheet({
                     </div>
                   </div>
 
-                  <details className="border border-border bg-card">
-                    <summary className="cursor-pointer px-3 py-2.5 text-[12px] font-medium text-muted-foreground hover:text-foreground">
+                  <details className="border-t border-border/70">
+                    <summary className="cursor-pointer px-3 py-2 text-[12px] font-medium text-muted-foreground hover:text-foreground">
                       原始配置数据
                     </summary>
-                    <pre className="max-h-64 overflow-auto border-t border-border bg-[#07080a] p-3 font-mono text-[10px] leading-5 text-zinc-300">
+                    <pre className="max-h-64 overflow-auto border-t border-border bg-muted/40 p-3 font-mono text-[10px] leading-5 text-foreground">
                       {JSON.stringify(detail.config, null, 2)}
                     </pre>
                   </details>
                 </TabsContent>
 
                 <TabsContent value="network" className="mt-0 space-y-4">
-                  <div className="flex flex-wrap items-center gap-2 border border-border bg-panel/30 p-3">
-                    <span className="flex items-center gap-1.5 font-mono text-[11px] text-foreground">
+                  <div className="flex flex-wrap items-center gap-4 border-y border-border/70 px-3 py-2 text-[11px]">
+                    <span className="flex items-center gap-1.5 font-mono text-foreground">
                       <ArrowDownToLine className="h-3 w-3 text-success" />
                       RX {formatBytes(netin)}
                     </span>
-                    <span className="flex items-center gap-1.5 font-mono text-[11px] text-foreground">
+                    <span className="flex items-center gap-1.5 font-mono text-foreground">
                       <ArrowUpFromLine className="h-3 w-3 text-info" />
                       TX {formatBytes(netout)}
                     </span>
                     <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-                      {networks.length} VIRTUAL INTERFACE{networks.length === 1 ? '' : 'S'}
+                      {networks.length} 个虚拟接口
                     </span>
                   </div>
 
                   {networks.length === 0 ? (
                     <EmptyState icon={<Network className="h-5 w-5" />} title="没有网络接口" description="此虚拟机尚未配置虚拟网卡。" />
                   ) : (
-                    networks.map((network) => (
-                      <div key={network.key} className="border border-border bg-card">
-                        <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
-                          <span className="font-mono text-[11px] text-brand">{network.key}</span>
-                          <span className="font-mono text-[12px] text-foreground">{network.parsed.model}</span>
-                          <span className="font-mono text-[10px] text-muted-foreground">{network.parsed.mac ?? '自动 MAC'}</span>
-                          {network.parsed.options.tag && <Badge variant="outline">VLAN {network.parsed.options.tag}</Badge>}
-                          {network.parsed.options.firewall === '1' && <Badge variant="success">Firewall</Badge>}
-                        </div>
-                        <div className="grid grid-cols-2 gap-x-6 px-3">
-                          <DataRow label="桥接" mono>{network.parsed.options.bridge ?? '—'}</DataRow>
-                          <DataRow label="速率限制" mono>{network.parsed.options.rate ?? '不限制'}</DataRow>
-                          <DataRow label="MTU" mono>{network.parsed.options.mtu ?? '默认'}</DataRow>
-                          <DataRow label="队列" mono>{network.parsed.options.queues ?? '默认'}</DataRow>
-                        </div>
+                    <div className="border-t border-border/70">
+                      <SectionBar icon={<Network className="h-3.5 w-3.5" />} title="虚拟网卡" hint={`${networks.length} 个`} />
+                      <div className="divide-y divide-border/60">
+                        {networks.map((network) => (
+                          <div key={network.key} className="px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-[11px] text-muted-foreground">{network.key}</span>
+                              <span className="font-mono text-[12px] text-foreground">{network.parsed.model}</span>
+                              <span className="font-mono text-[10px] text-muted-foreground">{network.parsed.mac ?? '自动 MAC'}</span>
+                              {network.parsed.options.tag && <Badge variant="outline">VLAN {network.parsed.options.tag}</Badge>}
+                              {network.parsed.options.firewall === '1' && <Badge variant="success">Firewall</Badge>}
+                            </div>
+                            <div className="mt-1.5 grid grid-cols-2 gap-x-6 sm:grid-cols-4">
+                              <Field label="桥接" mono>{network.parsed.options.bridge ?? '—'}</Field>
+                              <Field label="速率限制" mono>{network.parsed.options.rate ?? '不限制'}</Field>
+                              <Field label="MTU" mono>{network.parsed.options.mtu ?? '默认'}</Field>
+                              <Field label="队列" mono>{network.parsed.options.queues ?? '默认'}</Field>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))
+                    </div>
                   )}
 
-                  <div className="border border-border bg-card">
-                    <div className="flex items-center gap-2 border-b border-border px-3 py-2.5 text-[12px] font-medium">
-                      <Network className="h-3.5 w-3.5 text-muted-foreground" />
-                      Guest Agent 网络
-                      <span className="ml-auto font-mono text-[10px] text-muted-foreground">来自客户机</span>
-                    </div>
-                    <div className="space-y-2 p-3">
+                  <div className="border-t border-border/70">
+                    <SectionBar
+                      icon={<Network className="h-3.5 w-3.5" />}
+                      title="Guest Agent 网络"
+                      hint="来自客户机"
+                    />
+                    <div>
                       {detail.agentInterfaces.length === 0 ? (
-                        <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
+                        <div className="flex items-start gap-2 px-3 py-3 text-[11px] text-muted-foreground">
                           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                           {detail.agentError ?? '客户机没有报告任何网络接口。'}
                         </div>
@@ -726,11 +786,9 @@ export function VmDetailSheet({
                 </TabsContent>
 
                 <TabsContent value="snapshots" className="mt-0 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-[11px] text-muted-foreground">
-                      显示 PVE 快照链。当前状态标记为 HEAD。
-                    </div>
-                    <Badge variant="outline">{detail.snapshots.length} snapshots</Badge>
+                  <div className="flex items-center justify-between border-b border-border/70 pb-2">
+                    <span className="text-[11px] text-muted-foreground">显示 PVE 快照链，当前状态标记为 HEAD。</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">{detail.snapshots.length}</span>
                   </div>
                   {detail.snapshots.length === 0 ? (
                     <EmptyState
@@ -739,37 +797,43 @@ export function VmDetailSheet({
                       description="此虚拟机还没有创建快照，或当前账户无权读取快照信息。"
                     />
                   ) : (
-                    detail.snapshots.map((snapshot) => <SnapshotRow key={snapshot.name} snapshot={snapshot} />)
+                    <div className="border-y border-border/70">
+                      {detail.snapshots.map((snapshot) => (
+                        <SnapshotRow key={snapshot.name} snapshot={snapshot} />
+                      ))}
+                    </div>
                   )}
                 </TabsContent>
 
                 <TabsContent value="tasks" className="mt-0 space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between border-b border-border/70 pb-2">
                     <span className="text-[11px] text-muted-foreground">最近 12 条与 VMID 相关的任务。</span>
-                    <Badge variant="outline">{detail.tasks.length} tasks</Badge>
+                    <span className="font-mono text-[10px] text-muted-foreground">{detail.tasks.length}</span>
                   </div>
                   {detail.tasks.length === 0 ? (
                     <EmptyState icon={<Terminal className="h-5 w-5" />} title="没有任务记录" description="与当前虚拟机相关的任务尚未产生。" />
                   ) : (
-                    detail.tasks.map((task) => (
-                      <button
-                        key={task.upid}
-                        type="button"
-                        onClick={() => onViewTask(task)}
-                        className="flex w-full items-center gap-3 border border-border bg-panel/30 p-3 text-left transition-colors hover:border-border-strong hover:bg-panel"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[12px] text-foreground">{TASK_TYPE_LABELS[task.type] ?? task.type}</span>
-                            <TaskStatusBadge status={task.status} />
+                    <div className="divide-y divide-border/60 border-y border-border/70">
+                      {detail.tasks.map((task) => (
+                        <button
+                          key={task.upid}
+                          type="button"
+                          onClick={() => onViewTask(task)}
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-accent/60"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[12px] text-foreground">{TASK_TYPE_LABELS[task.type] ?? task.type}</span>
+                              <TaskStatusBadge status={task.status} />
+                            </div>
+                            <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                              {formatFullDateTime(task.startTime * 1000)} · {formatDuration(task.duration)} · {task.user}
+                            </div>
                           </div>
-                          <div className="mt-1 font-mono text-[8px] text-muted-foreground">
-                            {formatFullDateTime(task.startTime * 1000)} · {formatDuration(task.duration)} · {task.user}
-                          </div>
-                        </div>
-                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                      </button>
-                    ))
+                          <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </TabsContent>
               </>

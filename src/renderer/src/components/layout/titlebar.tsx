@@ -69,14 +69,19 @@ export function Titlebar({ session, dashboard, refreshing, onRefresh }: Titlebar
           >
             {maximized ? <Copy className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
           </button>
-          <button
-            type="button"
-            onClick={() => window.pvevdi.windowClose()}
-            className="no-drag flex h-10 w-[46px] items-center justify-center border-l border-border/60 text-muted-foreground transition-colors hover:bg-destructive hover:text-white"
-            aria-label="关闭"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => window.pvevdi.windowHide()}
+                className="no-drag flex h-10 w-[46px] items-center justify-center border-l border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                aria-label="收起到托盘"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>收起到托盘（后台继续运行）</TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </header>

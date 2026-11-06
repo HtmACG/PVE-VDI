@@ -1,7 +1,8 @@
-import { app, BrowserWindow, Menu, session, shell } from 'electron'
+import { app, BrowserWindow, Menu, nativeImage, nativeTheme, session, shell, Tray } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { IPC } from '@shared/ipc'
+import type { AppSettings, Theme } from '@shared/types'
 import { PveManager } from './pve/service'
 import { SettingsStore } from './settings'
 import { ConsoleWindowManager } from './console-windows'
@@ -20,6 +21,10 @@ if (!gotLock) {
 } else {
   let mainWindow: BrowserWindow | null = null
   let manager: PveManager | null = null
+  let store: SettingsStore | null = null
+  let consoleWindows: ConsoleWindowManager | null = null
+  let tray: Tray | null = null
+  let quitting = false
 
   const hasIcon = (() => {
     const devIcon = path.join(__dirname, '../../build/icon.png')
@@ -34,6 +39,51 @@ if (!gotLock) {
       : path.join(__dirname, '../../build/icon.png')
   }
 
+  function windowBackgroundColor(): string {
+    return nativeTheme.shouldUseDarkColors ? '#1f1f1f' : '#f3f3f3'
+  }
+
+  function applyNativeTheme(theme: Theme): void {
+    nativeTheme.themeSource = theme === 'light' ? 'light' : 'dark'
+  }
+
+  function broadcastSettings(settings: AppSettings): void {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(IPC.settingsChanged, settings)
+    }
+  }
+
+  function showMainWindow(): void {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createWindow()
+      return
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    if (!mainWindow.isVisible()) mainWindow.show()
+    mainWindow.focus()
+  }
+
+  function quitApp(): void {
+    quitting = true
+    app.quit()
+  }
+
+  function createTray(): void {
+    if (tray) return
+    const image = iconPath()
+    tray = new Tray(image ? nativeImage.createFromPath(image).resize({ width: 16, height: 16 }) : nativeImage.createEmpty())
+    tray.setToolTip('PVE VDI')
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: '打开主窗口', click: () => showMainWindow() },
+        { type: 'separator' },
+        { label: '退出 PVE VDI', click: () => quitApp() }
+      ])
+    )
+    tray.on('click', () => showMainWindow())
+    tray.on('double-click', () => showMainWindow())
+  }
+
   function createWindow(): void {
     mainWindow = new BrowserWindow({
       width: 1440,
@@ -42,7 +92,7 @@ if (!gotLock) {
       minHeight: 720,
       show: false,
       frame: false,
-      backgroundColor: '#09090b',
+      backgroundColor: windowBackgroundColor(),
       title: 'PVE VDI',
       icon: iconPath(),
       webPreferences: {
@@ -68,6 +118,12 @@ if (!gotLock) {
 
     mainWindow.on('maximize', sendWindowState)
     mainWindow.on('unmaximize', sendWindowState)
+    mainWindow.on('close', (event) => {
+      // 关闭按钮只收起窗口，应用继续常驻托盘与后台。
+      if (quitting) return
+      event.preventDefault()
+      mainWindow?.hide()
+    })
     mainWindow.on('closed', () => {
       mainWindow = null
     })
@@ -90,9 +146,7 @@ if (!gotLock) {
   }
 
   app.on('second-instance', () => {
-    if (!mainWindow) return
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
+    showMainWindow()
   })
 
   app.whenReady().then(() => {
@@ -103,11 +157,14 @@ if (!gotLock) {
     session.defaultSession.setPermissionCheckHandler(() => false)
 
     manager = new PveManager()
-    const store = new SettingsStore()
+    store = new SettingsStore()
     store.syncLaunchAtLogin()
-    const consoleWindows = new ConsoleWindowManager({
+    applyNativeTheme(store.get().theme)
+
+    const settingsStore = store
+    consoleWindows = new ConsoleWindowManager({
       manager,
-      store,
+      store: settingsStore,
       preloadPath: path.join(__dirname, '../preload/index.js'),
       rendererFile: path.join(__dirname, '../renderer/index.html'),
       iconPath
@@ -117,21 +174,31 @@ if (!gotLock) {
       manager,
       store,
       consoleWindows,
-      getWindow: () => mainWindow
+      getWindow: () => mainWindow,
+      onSettingsChanged: (settings) => {
+        applyNativeTheme(settings.theme)
+        broadcastSettings(settings)
+      }
     })
 
     createWindow()
+    createTray()
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+      showMainWindow()
     })
   })
 
+  // 窗口全部关闭时不退出：托盘常驻并保持后台服务继续运行。
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
+    // Intentionally left empty.
   })
 
   app.on('before-quit', () => {
+    quitting = true
     manager?.logout()
+    consoleWindows?.closeAll()
+    tray?.destroy()
+    tray = null
   })
 }

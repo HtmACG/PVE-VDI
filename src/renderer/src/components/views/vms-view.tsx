@@ -114,7 +114,7 @@ export function VmsView({
         description={`${dashboard.vms.filter((vm) => !vm.template).length} 台虚拟机 · ${running} 台运行中 · ${stopped} 台已停止`}
         actions={
           <>
-            <Button variant="outline" onClick={onRefresh}>
+            <Button variant="surface" onClick={onRefresh}>
               <RefreshCw className="h-3.5 w-3.5" />
               刷新
             </Button>
