@@ -1,6 +1,6 @@
 {
   "name": "pve-vdi",
-  "version": "1.8.2",
+  "version": "1.8.3",
   "description": "Proxmox VE virtual desktop operations console",
   "main": "./out/main/index.js",
   "author": "北慕林奈 <htmacg@163.com> (https://www.htmacg.com)",

@@ -152,6 +152,8 @@ export interface NodeMetricPoint {
   time: number
   cpu: number
   mem: number
+  /** 按物理线程拆分的占用比，索引即 coreN；数据源未提供时为空数组 */
+  cores?: number[]
 }
 
 export interface NodeSummary {
@@ -174,6 +176,8 @@ export interface NodeSummary {
   memAvailable?: number
   ksmShared?: number
   kernelVersion?: string
+  /** 最近一次采样里每个线程的占用比（0 ~ 1），索引即线程号；PVE 未上报时为 undefined */
+  cpuCores?: number[]
   metrics: NodeMetricPoint[]
 }
 

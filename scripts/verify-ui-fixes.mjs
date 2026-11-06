@@ -81,6 +81,10 @@ const node = (name, cpu) => ({
   cores: 16,
   memAvailable: 40 * GB,
   kernelVersion: '6.8.12-2-pve',
+  // 造一组有区分度的按核负载：覆盖空载 / 轻载 / 中载 / 告警四档，验证颜色分档
+  cpuCores: [
+    0.02, 0.05, 0.0, 0.31, 0.28, 0.42, 0.03, 0.08, 0.61, 0.66, 0.04, 0.07, 0.88, 0.92, 0.01, 0.06
+  ],
   metrics: [{ time: now - 60000, cpu, mem: 0.3 }]
 })
 
@@ -922,6 +926,77 @@ try {
       gauges.labels.some((l) => l.startsWith('内存使用')) &&
       gauges.labels.some((l) => l.startsWith('根磁盘使用')),
     JSON.stringify(gauges.labels)
+  )
+
+  // 按核负载格子：数量 = 核心数，底色 = 负载档位，位置在「CPU 负载」标题上方
+  const coreGrid = await page.evaluate(() => {
+    const grid = [...document.querySelectorAll('[role="img"][aria-label*="线程负载"]')].find((el) =>
+      el.getAttribute('aria-label')?.includes('线程负载')
+    )
+    if (!grid) return null
+    const cells = [...grid.querySelectorAll('[data-core]')]
+    const tones = cells.map((cell) => {
+      const style = getComputedStyle(cell)
+      return { index: Number(cell.getAttribute('data-core')), load: cell.getAttribute('data-load'), bg: style.backgroundColor }
+    })
+
+    // 找出「CPU 负载」这个标题元素，比较纵向位置
+    const heading = [...document.querySelectorAll('div')].find(
+      (el) => el.children.length === 0 && el.textContent?.trim() === 'CPU 负载'
+    )
+    const gridBox = grid.getBoundingClientRect()
+    const headingBox = heading?.getBoundingClientRect() ?? null
+
+    return {
+      label: grid.getAttribute('aria-label'),
+      count: cells.length,
+      sized: cells.every((cell) => {
+        const box = cell.getBoundingClientRect()
+        return box.width > 0 && box.height > 0
+      }),
+      distinctTones: new Set(tones.map((tone) => tone.bg)).size,
+      heavyTone: tones.find((tone) => Number(tone.load) >= 0.85)?.bg ?? '',
+      idleTone: tones.find((tone) => Number(tone.load) === 0)?.bg ?? '',
+      aboveChart: Boolean(headingBox) && gridBox.bottom <= headingBox.top + 1,
+      sample: tones.slice(0, 4)
+    }
+  })
+
+  check('按核负载格子已渲染 16 个格子', coreGrid?.count === 16, JSON.stringify({ count: coreGrid?.count }))
+  check('每个格子都有实际尺寸', Boolean(coreGrid?.sized), JSON.stringify({ sized: coreGrid?.sized }))
+  const cellBox = await page.evaluate(() => {
+    const grid = [...document.querySelectorAll('[role="img"]')].find((el) =>
+      el.getAttribute('aria-label')?.includes('线程负载')
+    )
+    const cell = grid?.querySelector('[data-core]')
+    if (!cell) return null
+    const box = cell.getBoundingClientRect()
+    const gridBox = grid.getBoundingClientRect()
+    return {
+      w: Math.round(box.width * 10) / 10,
+      h: Math.round(box.height * 10) / 10,
+      gridW: Math.round(gridBox.width),
+      gridH: Math.round(gridBox.height),
+      cols: getComputedStyle(grid).gridTemplateColumns.split(' ').length
+    }
+  })
+  check(
+    '格子为 12px 见方（宽高一致）',
+    Boolean(cellBox) && Math.abs(cellBox.w - cellBox.h) < 1.5 && Math.abs(cellBox.w - 12) < 1.5,
+    JSON.stringify(cellBox)
+  )
+  check('格子排成单行 16 列', cellBox?.cols === 16, JSON.stringify({ cols: cellBox?.cols }))
+  check('格子按负载分出多个色档', (coreGrid?.distinctTones ?? 0) >= 3, JSON.stringify({ tones: coreGrid?.distinctTones }))
+  check(
+    '满载格子与空载格子颜色不同',
+    Boolean(coreGrid) && coreGrid.heavyTone !== '' && coreGrid.idleTone !== '' && coreGrid.heavyTone !== coreGrid.idleTone,
+    JSON.stringify({ heavy: coreGrid?.heavyTone, idle: coreGrid?.idleTone })
+  )
+  check('按核格子位于「CPU 负载」标题上方', Boolean(coreGrid?.aboveChart), JSON.stringify({ above: coreGrid?.aboveChart }))
+  check(
+    '按核格子带可读的 aria 描述',
+    Boolean(coreGrid?.label) && /16 线程负载.*个线程高于 35%/.test(coreGrid?.label ?? ''),
+    JSON.stringify({ label: coreGrid?.label })
   )
 
   const gaugeTheme = await page.evaluate(() => {

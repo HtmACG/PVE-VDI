@@ -439,6 +439,23 @@ function mapStorage(raw: Raw): StorageSummary {
   }
 }
 
+/**
+ * 从 rrddata 的一行里挑出按线程的占用比。
+ * PVE 的字段名是 cpu0 / cpu1 … cpuN，值是 0~1 的占用比（不是百分比）。
+ * 字段顺序不保证，所以按数字后缀排序后再落数组，保证索引等于线程号。
+ */
+function pickCoreLoads(item: Raw): number[] | undefined {
+  const cores: Array<[number, number]> = []
+  for (const [key, value] of Object.entries(item)) {
+    const matched = /^cpu(\d+)$/.exec(key)
+    if (!matched) continue
+    cores.push([Number(matched[1]), clamp(number(value), 0, 1)])
+  }
+  if (cores.length === 0) return undefined
+  cores.sort((a, b) => a[0] - b[0])
+  return cores.map(([, value]) => value)
+}
+
 function mapNodeMetrics(raw: unknown[]): NodeMetricPoint[] {
   return raw
     .map((entry) => {
@@ -448,7 +465,8 @@ function mapNodeMetrics(raw: unknown[]): NodeMetricPoint[] {
       return {
         time: number(item.time) * 1000,
         cpu: clamp(number(item.cpu), 0, 1),
-        mem: memtotal > 0 ? clamp(memused / memtotal, 0, 1) : 0
+        mem: memtotal > 0 ? clamp(memused / memtotal, 0, 1) : 0,
+        cores: pickCoreLoads(item)
       }
     })
     .filter((point) => point.time > 0)
@@ -1169,6 +1187,7 @@ export class PveManager {
         cores: cpuinfo.cores === undefined ? undefined : number(cpuinfo.cores),
         memAvailable: memory.available === undefined ? undefined : number(memory.available),
         ksmShared: object(detail.ksm).shared === undefined ? undefined : number(object(detail.ksm).shared),
+        cpuCores: pickCoreLoads(object(array(metricsResult).at(-1))),
         metrics: mapNodeMetrics(array(metricsResult))
       }
     })

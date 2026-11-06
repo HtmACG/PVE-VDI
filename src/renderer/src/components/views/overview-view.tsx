@@ -18,6 +18,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Progress } from '@renderer/components/ui/primitives'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@renderer/components/ui/select'
 import { AreaChart } from '@renderer/components/charts/area-chart'
+import { CoreGrid } from '@renderer/components/charts/core-grid'
 import { GaugePanel, type GaugeSpec } from '@renderer/components/charts/gauge-panel'
 import { NodeStatusBadge, QuorumBadge, TaskStatusBadge, VmStatusBadge } from '@renderer/components/status-badges'
 import { VmRowActions, type ActionTarget } from '@renderer/components/vms/vm-actions'
@@ -179,6 +180,7 @@ function ServerResources({
       <GaugePanel items={gauges} className="border-b border-border" />
 
       <div className="px-4 pt-3.5">
+        <CoreGrid loads={node.cpuCores} total={node.maxcpu} className="mb-2.5" />
         <div className="mb-1.5 flex items-center justify-between">
           <div className="text-[12px] font-medium text-foreground">CPU 负载</div>
           <div className="text-[11px] text-muted-foreground">最近 1 小时</div>
