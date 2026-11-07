@@ -39,7 +39,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@renderer/components/ui/dialog'
-import { EmptyState } from '@renderer/components/common'
+import { EmptyState, StatTile } from '@renderer/components/common'
 import { errorDetail, unwrap } from '@renderer/lib/api'
 import { PveUnavailable } from './pve-unavailable'
 
@@ -289,18 +289,15 @@ export function SdnView({ dashboard }: { dashboard: DashboardData }): React.JSX.
         }
       />
 
-      <div className="grid grid-cols-2 border border-border bg-card sm:grid-cols-4 sm:divide-x sm:divide-border">
-        {[
-          ['区域', `${data?.zones.length ?? 0}`],
-          ['VNet', `${data?.vnets.length ?? 0}`],
-          ['子网', `${data?.subnets.length ?? 0}`],
-          ['待下发变更', `${pendingChanges}`]
-        ].map(([label, value]) => (
-          <div key={label} className="border-b border-border px-4 py-3 last:border-b-0 sm:border-b-0">
-            <div className="text-[12px] text-muted-foreground">{label}</div>
-            <div className="mt-1.5 font-mono text-[19px] text-foreground">{value}</div>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatTile label="区域" value={`${data?.zones.length ?? 0}`} detail="Zone 覆盖范围" />
+        <StatTile label="VNet" value={`${data?.vnets.length ?? 0}`} detail="虚拟网络" />
+        <StatTile label="子网" value={`${data?.subnets.length ?? 0}`} detail="已登记子网" />
+        <StatTile
+          label="SDN 状态"
+          value={data?.enabled ? '已启用' : '未启用'}
+          detail="由 PVE 集群统一管理"
+        />
       </div>
 
       {pendingChanges > 0 && (

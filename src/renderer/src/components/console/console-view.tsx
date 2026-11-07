@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Clipboard,
   ClipboardCopy,
+  Command,
+  Gauge,
   Keyboard,
   Loader2,
   Maximize2,
   Minimize2,
   Monitor,
+  MousePointer2,
   RefreshCw,
   Scaling,
   TerminalSquare,
@@ -15,6 +18,14 @@ import {
 } from 'lucide-react'
 import type { ConsoleOpenRequest, ConsoleSessionInfo, Theme } from '@shared/types'
 import { Button } from '@renderer/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@renderer/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import { WindowButtons } from '@renderer/components/layout/window-buttons'
 import { Textarea } from '@renderer/components/ui/input'
@@ -22,57 +33,28 @@ import { errorDetail, unwrap } from '@renderer/lib/api'
 import { cn } from '@renderer/lib/utils'
 import { toast } from 'sonner'
 import '@xterm/xterm/css/xterm.css'
+import { XTERM_THEMES } from './terminal-theme'
 
 type ConsolePhase = 'opening' | 'connecting' | 'connected' | 'disconnected' | 'error'
 
-const XTERM_THEMES: Record<Theme, Record<string, string>> = {
-  dark: {
-    background: '#050608',
-    foreground: '#d4d4d8',
-    cursor: '#f26b1d',
-    cursorAccent: '#050608',
-    selectionBackground: '#f26b1d40',
-    black: '#18181b',
-    red: '#f87171',
-    green: '#4ade80',
-    yellow: '#fbbf24',
-    blue: '#60a5fa',
-    magenta: '#c084fc',
-    cyan: '#22d3ee',
-    white: '#e4e4e7',
-    brightBlack: '#71717a',
-    brightRed: '#fca5a5',
-    brightGreen: '#86efac',
-    brightYellow: '#fde68a',
-    brightBlue: '#93c5fd',
-    brightMagenta: '#d8b4fe',
-    brightCyan: '#67e8f9',
-    brightWhite: '#fafafa'
-  },
-  light: {
-    background: '#ffffff',
-    foreground: '#27272a',
-    cursor: '#0078d4',
-    cursorAccent: '#ffffff',
-    selectionBackground: '#0078d440',
-    black: '#27272a',
-    red: '#b91c1c',
-    green: '#15803d',
-    yellow: '#a16207',
-    blue: '#1d4ed8',
-    magenta: '#7e22ce',
-    cyan: '#0e7490',
-    white: '#e4e4e7',
-    brightBlack: '#52525b',
-    brightRed: '#dc2626',
-    brightGreen: '#16a34a',
-    brightYellow: '#ca8a04',
-    brightBlue: '#2563eb',
-    brightMagenta: '#9333ea',
-    brightCyan: '#0891b2',
-    brightWhite: '#f4f4f5'
-  }
+type VncQuality = 'speed' | 'balanced' | 'quality'
+
+/** noVNC 的 compressionLevel / qualityLevel 都是 0-9；压缩越高越省带宽，画质越高越清晰 */
+const VNC_QUALITY: Record<VncQuality, { label: string; hint: string; compression: number; quality: number }> = {
+  speed: { label: '流畅', hint: '高压缩、低画质，适合弱网 / 远程', compression: 9, quality: 2 },
+  balanced: { label: '均衡', hint: '默认，带宽与画质折中', compression: 6, quality: 6 },
+  quality: { label: '高清', hint: '低压缩、高画质，适合局域网', compression: 2, quality: 9 }
 }
+
+const VNC_KEY = {
+  control: 0xffe3,
+  alt: 0xffe9,
+  delete: 0xffff,
+  backspace: 0xff08,
+  f1: 0xffbe,
+  f2: 0xffbf,
+  f12: 0xffc9
+} as const
 
 interface ConsoleViewProps {
   request: ConsoleOpenRequest
@@ -157,11 +139,25 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [scaleHint, setScaleHint] = useState(true)
   const [theme, setTheme] = useState<Theme>(() => (document.documentElement.classList.contains('light') ? 'light' : 'dark'))
+  const [localCursor, setLocalCursor] = useState(false)
+  const [quality, setQuality] = useState<VncQuality>('balanced')
+  const qualityRef = useRef<VncQuality>('balanced')
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [qualityOpen, setQualityOpen] = useState(false)
 
   const contentRef = useRef<HTMLDivElement>(null)
   const noVncRef = useRef<HTMLDivElement>(null)
   const termHostRef = useRef<HTMLDivElement>(null)
-  const noVncClientRef = useRef<{ disconnect: () => void; sendCtrlAltDel: () => void; clipboardPasteFrom: (text: string) => void; scaleViewport: boolean; focus: () => void } | null>(null)
+  const noVncClientRef = useRef<{
+    disconnect: () => void
+    sendCtrlAltDel: () => void
+    sendKey: (keysym: number, code: string, down: boolean) => void
+    clipboardPasteFrom: (text: string) => void
+    scaleViewport: boolean
+    compressionLevel: number
+    qualityLevel: number
+    focus: () => void
+  } | null>(null)
   const xtermRef = useRef<{
     focus: () => void
     getSelection: () => string
@@ -169,6 +165,8 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
     options: { theme?: Record<string, string> | unknown }
   } | null>(null)
   const socketRef = useRef<WebSocket | null>(null)
+  /** 控制台 socket 关闭时的原因，noVNC 的 disconnect 事件里没有这个信息 */
+  const socketCloseReason = useRef<string>('')
   const activeSessionIdRef = useRef<string | null>(null)
 
   const retry = useCallback(() => {
@@ -219,17 +217,66 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
       const module = await import('@novnc/novnc')
       if (cancelled) return
       const RFB = module.default
-      const client = new RFB(target, nextSession.wsUrl, {
+
+      /**
+       * 自己先建 WebSocket 再交给 noVNC。
+       *
+       * 这么做只有一个目的：noVNC 的 disconnect 事件不带原因，用户只能看到
+       * 「连接已断开」；而我们自己的 socket 能拿到 close code / reason，
+       * ConsoleHost 已经把「ticket 失效 / 无权限 / VNC 服务没起来」这些原因写进去了。
+       * noVNC 支持 attach 已有通道，行为与自动连线完全一致。
+       */
+      const socket = new WebSocket(nextSession.wsUrl, ['binary'])
+      socket.binaryType = 'arraybuffer'
+      socketRef.current = socket
+      socketCloseReason.current = ''
+      socket.addEventListener('close', (event) => {
+        socketCloseReason.current =
+          event.reason || (event.code === 1000 ? '' : `控制台连接已断开（${event.code}）`)
+      })
+
+      const client = new RFB(target, socket as unknown as string, {
         credentials: { password: nextSession.vncPassword },
         shared: true,
         wsProtocols: ['binary']
       })
-      noVncClientRef.current = client
+      noVncClientRef.current = client as unknown as NonNullable<typeof noVncClientRef.current>
       client.scaleViewport = scaleViewportRef.current
       client.resizeSession = false
       client.focusOnClick = true
       client.background = '#050608'
-      client.showDotCursor = false
+      client.compressionLevel = VNC_QUALITY[qualityRef.current].compression
+      client.qualityLevel = VNC_QUALITY[qualityRef.current].quality
+
+      /**
+       * 「填满窗口」下 canvas 被 CSS 拉伸成容器大小，noVNC 默认按等比缩放算鼠标坐标
+       * 会偏。这里接管 absX/absY：未填满时走原始等比映射，填满时按 canvas 实际 CSS
+       * 尺寸换算到远端 framebuffer 坐标。
+       */
+      const display = (
+        client as unknown as {
+          _display?: {
+            width: number
+            height: number
+            absX: (x: number) => number
+            absY: (y: number) => number
+          }
+        }
+      )._display
+      if (display) {
+        const originalX = display.absX.bind(display)
+        const originalY = display.absY.bind(display)
+        display.absX = (x: number): number => {
+          const canvas = target.querySelector('canvas')
+          if (!scaleViewportRef.current || !canvas || canvas.clientWidth <= 0) return originalX(x)
+          return Math.round((x / canvas.clientWidth) * display.width)
+        }
+        display.absY = (y: number): number => {
+          const canvas = target.querySelector('canvas')
+          if (!scaleViewportRef.current || !canvas || canvas.clientHeight <= 0) return originalY(y)
+          return Math.round((y / canvas.clientHeight) * display.height)
+        }
+      }
 
       const handleConnect = (): void => {
         if (cancelled) return
@@ -241,7 +288,13 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
         if (cancelled || closingIntentionally) return
         const detail = (event as CustomEvent<{ clean?: boolean }>).detail
         setPhase('disconnected')
-        setError(detail?.clean === false ? 'VNC 会话被远端关闭。' : null)
+        // 优先用本地桥带下来的真实原因（ticket 失效 / 没权限 / VNC 没起来）
+        const reason = socketCloseReason.current
+        if (reason) {
+          setError(reason)
+          return
+        }
+        setError(detail?.clean === false ? 'VNC 会话被远端关闭，请重试。' : null)
       }
       const handleSecurityFailure = (event: Event): void => {
         if (cancelled) return
@@ -501,6 +554,67 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
     setScaleHint(false)
   }
 
+  const toggleLocalCursor = (): void => {
+    const next = !localCursor
+    setLocalCursor(next)
+    toast.success(next ? '已开启本地光标' : '已恢复远端光标', {
+      description: next
+        ? 'VNC 画面内显示本机鼠标指针，不再使用远端下发的光标形状'
+        : '使用虚拟机下发的光标形状'
+    })
+  }
+
+  const applyQuality = (next: VncQuality): void => {
+    qualityRef.current = next
+    setQuality(next)
+    const client = noVncClientRef.current
+    if (client) {
+      client.compressionLevel = VNC_QUALITY[next].compression
+      client.qualityLevel = VNC_QUALITY[next].quality
+    }
+    toast.success(`画质已切换为${VNC_QUALITY[next].label}`, {
+      description: VNC_QUALITY[next].hint
+    })
+  }
+
+  /** 发送 Ctrl+Alt+<key>；noVNC 的 sendKey 需要 keysym + code */
+  const sendCtrlAltKey = (keysym: number, code: string): void => {
+    const client = noVncClientRef.current
+    if (!client) return
+    client.sendKey(VNC_KEY.control, 'ControlLeft', true)
+    client.sendKey(VNC_KEY.alt, 'AltLeft', true)
+    client.sendKey(keysym, code, true)
+    client.sendKey(keysym, code, false)
+    client.sendKey(VNC_KEY.alt, 'AltLeft', false)
+    client.sendKey(VNC_KEY.control, 'ControlLeft', false)
+  }
+
+  const pasteLocalClipboard = async (): Promise<void> => {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (!text) {
+        toast.error('本机剪贴板为空')
+        return
+      }
+      noVncClientRef.current?.clipboardPasteFrom(text)
+      toast.success('已粘贴本机剪贴板')
+      setShortcutsOpen(false)
+    } catch (err) {
+      toast.error('无法读取本机剪贴板', { description: errorDetail(err) })
+    }
+  }
+
+  // F11 全屏：noVNC 窗口里也用同一套习惯
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'F11') return
+      event.preventDefault()
+      void toggleFullscreen()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  })
+
   const sendClipboard = (): void => {
     if (!clipboardText.trim()) return
     noVncClientRef.current?.clipboardPasteFrom(clipboardText)
@@ -566,12 +680,33 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
                 <Clipboard className="h-3.5 w-3.5" />
               </ConsoleToolButton>
               <ConsoleToolButton
-                label={scaleViewport ? '原始尺寸' : '适应窗口'}
+                label={scaleViewport ? '原始尺寸' : '适应窗口（填满）'}
                 active={scaleViewport}
                 onClick={toggleScale}
                 disabled={phase !== 'connected'}
               >
                 <Scaling className="h-3.5 w-3.5" />
+              </ConsoleToolButton>
+              <ConsoleToolButton
+                label={`画质：${VNC_QUALITY[quality].label}`}
+                active={qualityOpen}
+                onClick={() => setQualityOpen((value) => !value)}
+              >
+                <Gauge className="h-3.5 w-3.5" />
+              </ConsoleToolButton>
+              <ConsoleToolButton
+                label={localCursor ? '关闭本地光标' : '本地光标'}
+                active={localCursor}
+                onClick={toggleLocalCursor}
+              >
+                <MousePointer2 className="h-3.5 w-3.5" />
+              </ConsoleToolButton>
+              <ConsoleToolButton
+                label="快捷键"
+                active={shortcutsOpen}
+                onClick={() => setShortcutsOpen((value) => !value)}
+              >
+                <Command className="h-3.5 w-3.5" />
               </ConsoleToolButton>
             </>
           )}
@@ -610,7 +745,16 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
       </header>
 
       <div className="relative min-h-0 flex-1 overflow-hidden bg-background dark:bg-[#050608]">
-        <div ref={noVncRef} className={cn('absolute inset-0', isNoVnc ? 'block' : 'hidden')} />
+        <div
+          ref={noVncRef}
+          className={cn(
+            'absolute inset-0',
+            isNoVnc ? 'block' : 'hidden',
+            scaleViewport &&
+              '[&>div]:!overflow-hidden [&_canvas]:!h-full [&_canvas]:!w-full [&_canvas]:!max-h-none [&_canvas]:!max-w-none',
+            localCursor && '[&_canvas]:!cursor-default'
+          )}
+        />
         <div
           ref={termHostRef}
           className={cn('absolute inset-0 overflow-hidden', isXterm ? 'block px-2 pt-1.5' : 'hidden')}
@@ -697,6 +841,96 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
             </div>
           </div>
         )}
+
+        <Dialog open={qualityOpen} onOpenChange={setQualityOpen}>
+          <DialogContent className="max-w-[430px]">
+            <DialogHeader>
+              <DialogTitle>VNC 连接质量</DialogTitle>
+              <DialogDescription>
+                压缩越高越省带宽但更糊；画质越高越清晰但更吃带宽。切换立即生效。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2 py-2">
+              {(Object.keys(VNC_QUALITY) as VncQuality[]).map((preset) => {
+                const item = VNC_QUALITY[preset]
+                const active = quality === preset
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => applyQuality(preset)}
+                    className={cn(
+                      'flex items-start gap-3 border p-3 text-left transition-colors',
+                      active
+                        ? 'border-brand bg-brand/5'
+                        : 'border-border hover:border-border-strong hover:bg-panel/60'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'mt-1 h-2 w-2 shrink-0',
+                        active ? 'bg-brand' : 'bg-border-strong'
+                      )}
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12px] font-medium text-foreground">{item.label}</span>
+                      <span className="mt-0.5 block text-[11px] text-muted-foreground">{item.hint}</span>
+                    </span>
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                      Q{item.quality} / C{item.compression}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+            <DialogFooter>
+              <Button size="sm" onClick={() => setQualityOpen(false)}>
+                完成
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
+          <DialogContent className="max-w-[470px]">
+            <DialogHeader>
+              <DialogTitle>VNC 快捷键</DialogTitle>
+              <DialogDescription>
+                浏览器无法截获系统级组合键时，用下面的按钮直接发送到虚拟机；F11 切换全屏。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-2 py-2">
+              {[
+                { label: 'Ctrl + Alt + Del', run: () => noVncClientRef.current?.sendCtrlAltDel() },
+                { label: 'Ctrl + Alt + F1', run: () => sendCtrlAltKey(VNC_KEY.f1, 'F1') },
+                { label: 'Ctrl + Alt + F2', run: () => sendCtrlAltKey(VNC_KEY.f2, 'F2') },
+                { label: 'Ctrl + Alt + F12', run: () => sendCtrlAltKey(VNC_KEY.f12, 'F12') },
+                {
+                  label: 'Ctrl + Alt + Backspace',
+                  run: () => sendCtrlAltKey(VNC_KEY.backspace, 'Backspace')
+                },
+                { label: '粘贴本机剪贴板', run: () => void pasteLocalClipboard() },
+                { label: isFullscreen ? '退出全屏' : '全屏（F11）', run: () => void toggleFullscreen() }
+              ].map((item) => (
+                <Button
+                  key={item.label}
+                  variant="outline"
+                  size="sm"
+                  className="justify-start font-mono text-[11px]"
+                  onClick={item.run}
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" size="sm" onClick={() => setShortcutsOpen(false)}>
+                关闭
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

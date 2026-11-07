@@ -131,7 +131,7 @@ export function LoginView({ settings, appVersion, initialError, loginBackground,
                   : 'mt-8 flex items-center justify-between border-t border-border pt-4 text-[11px] text-muted-foreground'
               }
             >
-              <span>PVE VDI {appVersion ?? '1.7.0'}</span>
+              <span>PVE VDI {appVersion ?? ''}</span>
             </div>
           </div>
         </section>

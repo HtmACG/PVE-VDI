@@ -1,45 +1,19 @@
-import { Activity, Boxes, ChevronRight, Database, HardDrive, RefreshCw, Server } from 'lucide-react'
+import { Activity, Boxes, ChevronRight, Database, HardDrive, Server } from 'lucide-react'
 import type { DashboardData, TaskSummary } from '@shared/types'
 import { TASK_TYPE_LABELS } from '@shared/ipc'
 import { PageHeader } from '@renderer/components/layout/page-header'
-import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
 import { Progress } from '@renderer/components/ui/primitives'
-import { NodeStatusBadge, TaskStatusBadge } from '@renderer/components/status-badges'
-import { EmptyState } from '@renderer/components/common'
+import { TaskStatusBadge } from '@renderer/components/status-badges'
+import { EmptyState, StatTile } from '@renderer/components/common'
 import { ClusterMembersCard } from './cluster-members-card'
-import { formatBytes, formatDateTime, formatPercent, formatUptimeShort, splitLicense } from '@renderer/lib/format'
-
-function SummaryCard({
-  label,
-  value,
-  detail,
-  icon
-}: {
-  label: string
-  value: string
-  detail: string
-  icon: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <div className="border border-border bg-card p-4">
-      <div className="flex items-center justify-between text-[12px] text-muted-foreground">
-        {label}
-        <span className="text-muted-foreground/60">{icon}</span>
-      </div>
-      <div className="mt-3 font-mono text-[24px] text-foreground">{value}</div>
-      <div className="mt-2 text-[12px] text-muted-foreground">{detail}</div>
-    </div>
-  )
-}
+import { formatBytes, formatDateTime, formatPercent } from '@renderer/lib/format'
 
 export function ClusterView({
   dashboard,
-  onRefresh,
   onOpenTask
 }: {
   dashboard: DashboardData
-  onRefresh: () => void
   onOpenTask?: (task: TaskSummary) => void
 }): React.JSX.Element {
   const { cluster, nodes, storages, vms } = dashboard
@@ -58,29 +32,28 @@ export function ClusterView({
         eyebrow={`${cluster.name} 集群`}
         title="集群"
         description="查看 Quorum、节点成员、HA 与存储状态。"
-        actions={
-          <Button variant="surface" onClick={onRefresh}>
-            <RefreshCw className="h-3.5 w-3.5" />
-            刷新
-          </Button>
-        }
       />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <SummaryCard
+        <StatTile
           label="Quorum"
           value={cluster.quorate ? '正常' : '异常'}
           detail={`${online} / ${nodes.length} 个节点在线`}
           icon={<Activity className="h-4 w-4" />}
         />
-        <SummaryCard label="节点" value={String(nodes.length)} detail={`${hostCpus} 个 CPU 线程`} icon={<Server className="h-4 w-4" />} />
-        <SummaryCard
+        <StatTile
+          label="节点"
+          value={String(nodes.length)}
+          detail={`${hostCpus} 个 CPU 线程`}
+          icon={<Server className="h-4 w-4" />}
+        />
+        <StatTile
           label="虚拟机"
           value={String(workloads)}
           detail={`${running} 台运行中`}
           icon={<Boxes className="h-4 w-4" />}
         />
-        <SummaryCard
+        <StatTile
           label="存储"
           value={formatBytes(totalStorage)}
           detail={`${formatPercent(totalStorage > 0 ? usedStorage / totalStorage : 0, 1)} 已使用`}
@@ -91,64 +64,6 @@ export function ClusterView({
       <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-12">
         <div className="space-y-3 xl:col-span-8">
           <ClusterMembersCard dashboard={dashboard} />
-
-          <Card>
-            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
-              <div>
-                <h2 className="text-[14px] font-medium text-foreground">节点负载</h2>
-                <div className="mt-1 text-[12px] text-muted-foreground">CPU、内存与根磁盘的实时占用</div>
-              </div>
-            </div>
-            <div className="divide-y divide-border">
-              {nodes.map((node) => (
-                <div key={node.node} className="px-4 py-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <Server className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-mono text-[12px] text-foreground">{node.node}</span>
-                      <NodeStatusBadge status={node.status} />
-                    </div>
-                    <span className="text-[12px] text-muted-foreground">运行时间 {formatUptimeShort(node.uptime)}</span>
-                  </div>
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div>
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>CPU</span>
-                        <span className="font-mono text-foreground">{formatPercent(node.cpu, 1)}</span>
-                      </div>
-                      <Progress value={node.cpu * 100} className="mt-1.5 h-1" indicatorClassName="bg-brand" />
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>内存</span>
-                        <span className="font-mono text-foreground">
-                          {formatPercent(node.maxmem > 0 ? node.mem / node.maxmem : 0, 1)}
-                        </span>
-                      </div>
-                      <Progress
-                        value={node.maxmem > 0 ? (node.mem / node.maxmem) * 100 : 0}
-                        className="mt-1.5 h-1"
-                        indicatorClassName="bg-info"
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>根磁盘</span>
-                        <span className="font-mono text-foreground">
-                          {formatPercent(node.maxdisk > 0 ? node.disk / node.maxdisk : 0, 1)}
-                        </span>
-                      </div>
-                      <Progress
-                        value={node.maxdisk > 0 ? (node.disk / node.maxdisk) * 100 : 0}
-                        className="mt-1.5 h-1"
-                        indicatorClassName="bg-foreground"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
 
           <Card>
             <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
@@ -196,7 +111,6 @@ export function ClusterView({
             <dl className="px-4 text-[12px]">
               {[
                 ['集群名称', cluster.name],
-                ['节点数量', String(nodes.length)],
                 ['键盘布局', cluster.keyboard ?? '—'],
                 ['PVE 版本', dashboard.version.version],
                 ['HA 状态', haResources.length > 0 ? `${haResources.length} 个资源` : '无托管资源'],

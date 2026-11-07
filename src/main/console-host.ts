@@ -38,11 +38,28 @@ function safeClose(socket: WebSocket | undefined, code = 1000, reason = ''): voi
   if (!socket) return
   try {
     if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
-      socket.close(code, reason.slice(0, 120))
+      // WebSocket 的 close reason 上限 123 字节，中文占 3 字节，按 120 字符截会超
+      socket.close(code, truncateUtf8(reason, 118))
     }
   } catch {
     // The socket may already be gone.
   }
+}
+
+/**
+ * 按 UTF-8 字节截断，不切断半个汉字。
+ * WebSocket 协议规定 close reason 不得超过 123 字节，超了会直接抛异常导致连接更加说不清。
+ */
+function truncateUtf8(text: string, maxBytes: number): string {
+  let out = ''
+  let bytes = 0
+  for (const char of text) {
+    const size = Buffer.byteLength(char, 'utf8')
+    if (bytes + size > maxBytes) break
+    out += char
+    bytes += size
+  }
+  return out
 }
 
 function isLoopback(address: string | undefined): boolean {
@@ -209,19 +226,33 @@ export class ConsoleHost {
       if (connection.closed || client.readyState !== WebSocket.OPEN) return
       client.send(data, { binary: isBinary })
     })
-    upstream.on('unexpected-response', () => {
-      safeClose(client, 1011, 'PVE console rejected the connection')
+    upstream.on('unexpected-response', (_request, response) => {
+      // PVE 会在状态码里说明原因：401 = ticket 失效，403 = 没权限，500 = VNC 服务没起来
+      const status = response?.statusCode ?? 0
+      const hint =
+        status === 401
+          ? 'PVE 认证已失效，请回主窗口重新登录后重试'
+          : status === 403
+            ? '当前账号没有该虚拟机的 VNC 权限'
+            : status === 500
+              ? 'PVE 侧的 VNC 服务没有起来，确认虚拟机在运行'
+              : `PVE 拒绝了控制台连接（HTTP ${status || '未知'}）`
+      console.warn(`[console] upstream rejected for ${session.info.vmid ?? 'node'}: HTTP ${status}`)
+      safeClose(client, 4011, hint)
       session.connections.delete(connection)
       this.closeConnection(connection)
     })
-    upstream.on('error', () => {
-      safeClose(client, 1011, 'PVE console connection failed')
+    upstream.on('error', (error) => {
+      console.warn(`[console] upstream error: ${error.message}`)
+      safeClose(client, 1011, `PVE 控制台连接失败：${error.message}`)
       session.connections.delete(connection)
       this.closeConnection(connection)
     })
-    upstream.on('close', (_code, reason) => {
+    upstream.on('close', (code, reason) => {
       if (!connection.closed) {
-        safeClose(client, 1011, reason.toString() || 'PVE console closed')
+        const text = reason.toString()
+        // PVE 主动断开时通常带上可读原因（比如 "connection lost"）
+        safeClose(client, 1011, text || `PVE 控制台已断开（${code}）`)
       }
       session.connections.delete(connection)
       this.closeConnection(connection)

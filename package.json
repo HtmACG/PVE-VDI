@@ -1,6 +1,6 @@
 {
   "name": "pve-vdi",
-  "version": "1.8.3",
+  "version": "1.8.5",
   "description": "Proxmox VE virtual desktop operations console",
   "main": "./out/main/index.js",
   "author": "北慕林奈 <htmacg@163.com> (https://www.htmacg.com)",
@@ -51,6 +51,7 @@
     "semver": "^7.8.6",
     "simple-icons": "^16.36.0",
     "sonner": "2.0.8",
+    "ssh2": "1.17.0",
     "tailwind-merge": "3.7.0",
     "ws": "8.22.1"
   },
@@ -60,6 +61,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/semver": "^7.8.0",
+    "@types/ssh2": "^1.15.6",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "6.2.1",
     "electron": "44.7.0",

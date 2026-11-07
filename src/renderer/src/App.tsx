@@ -6,6 +6,7 @@ import type {
   BackgroundImages,
   BackgroundPickResult,
   BootstrapData,
+  ConsoleMode,
   ConsoleOpenRequest,
   DashboardData,
   LoginResult,
@@ -36,11 +37,12 @@ import { SdnView } from '@renderer/components/views/sdn-view'
 import { FirewallView } from '@renderer/components/views/firewall-view'
 import { AccessView } from '@renderer/components/views/access-view'
 import { TasksView } from '@renderer/components/views/tasks-view'
+import { cn } from '@renderer/lib/utils'
 import { SettingsView } from '@renderer/components/views/settings-view'
 import { CreateVmDialog } from '@renderer/components/vms/create-vm-dialog'
 import { VmDetailSheet } from '@renderer/components/vms/vm-detail-sheet'
 import { TaskLogDialog } from '@renderer/components/tasks/task-log-dialog'
-import { type ActionTarget, actionDescription } from '@renderer/components/vms/vm-actions'
+import { type ActionTarget, actionDescription, actionProgressLabel } from '@renderer/components/vms/vm-actions'
 import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
 import { Skeleton } from '@renderer/components/ui/primitives'
@@ -144,6 +146,9 @@ function ConnectedApp({
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailRefreshToken, setDetailRefreshToken] = useState(0)
   const [busyKey, setBusyKey] = useState<string | null>(null)
+  /** 正在执行的动作，用于把按钮文案切成「正在启动…」并在状态变化前保持转圈 */
+  const [busyAction, setBusyAction] = useState<VmAction | null>(null)
+  const [busySince, setBusySince] = useState(0)
   const [confirmAction, setConfirmAction] = useState<{ target: ActionTarget; action: VmAction } | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
   const [taskLog, setTaskLog] = useState<TaskSummary | null>(null)
@@ -231,9 +236,46 @@ function ConnectedApp({
     }, 4200)
   }
 
+  const clearBusy = useCallback((): void => {
+    setBusyKey(null)
+    setBusyAction(null)
+    setBusySince(0)
+  }, [])
+
+  /**
+   * 等虚拟机状态真正变化后再收起转圈：
+   * 只是「指令已下发」时任务往往还在队列里，按钮一直显示「正在启动 / 正在关闭」更符合预期。
+   * 外部关机（ACPI）可能要等客户机响应，所以最长保留 5 分钟，避免卡死。
+   */
+  useEffect(() => {
+    if (!busyKey || !busyAction) return
+    const check = (): void => {
+      const elapsed = Date.now() - busySince
+      const vm = viewData?.vms.find((item) => `${item.type}/${item.vmid}` === busyKey)
+      if (!vm) {
+        clearBusy()
+        return
+      }
+      const settled =
+        busyAction === 'start' || busyAction === 'resume'
+          ? vm.status === 'running'
+          : busyAction === 'shutdown' || busyAction === 'stop'
+            ? vm.status === 'stopped'
+            : busyAction === 'suspend'
+              ? vm.status === 'paused' || vm.status === 'suspended'
+              : elapsed > 10_000
+      if (settled || elapsed > 5 * 60_000) clearBusy()
+    }
+    check()
+    const timer = window.setInterval(check, 1000)
+    return () => window.clearInterval(timer)
+  }, [busyKey, busyAction, busySince, viewData, clearBusy])
+
   const executeAction = async (target: ActionTarget, action: VmAction): Promise<void> => {
     const key = `${target.type}/${target.vmid}`
     setBusyKey(key)
+    setBusyAction(action)
+    setBusySince(Date.now())
     setActionBusy(true)
     try {
       const result = await unwrap(
@@ -249,10 +291,11 @@ function ConnectedApp({
       })
       setConfirmAction(null)
       scheduleRefresh()
+      // 不在这里清 busyKey：等上面那个 effect 看到状态变化后再收
     } catch (err) {
       toast.error('无法执行虚拟机操作', { description: errorDetail(err) })
+      clearBusy()
     } finally {
-      setBusyKey(null)
       setActionBusy(false)
     }
   }
@@ -280,30 +323,63 @@ function ConnectedApp({
     setDetailOpen(true)
   }
 
-  const openConsole = async (target: ActionTarget): Promise<void> => {
+  const openConsole = async (target: ActionTarget, mode: ConsoleMode): Promise<void> => {
     if (target.status && target.status !== 'running') {
       toast.error('虚拟机未运行', { description: '请先启动虚拟机，再打开控制台。' })
       return
     }
-    const request: ConsoleOpenRequest = {
-      kind: 'vm',
-      node: target.node,
-      type: target.type,
-      vmid: target.vmid,
-      name: target.name
-    }
+    const type = target.type ?? 'qemu'
     try {
+      if (mode === 'xterm') {
+        // 菜单已按探测结果置灰；这里再兜一层，防止旧缓存或快捷键绕过
+        if (target.console && !target.console.xterm) {
+          toast.error('终端控制台不可用', {
+            description: target.console.xtermReason ?? '该虚拟机没有可用的串口或客户机 SSH。'
+          })
+          return
+        }
+        // 有客户机 SSH 时优先直连虚拟机内部（文件面板也跟着进去），
+        // 否则走串口 / LXC pty，由主进程校验通道是否真的存在
+        const guestHost = target.console?.guestHost ?? undefined
+        await unwrap(
+          window.pvevdi.openSshWindow({
+            node: target.node,
+            vm: {
+              node: target.node,
+              vmid: target.vmid,
+              type,
+              name: target.name,
+              guestHost,
+              guestUser: target.console?.guestUser ?? undefined,
+              ostype: target.ostype
+            },
+            tabs: 1
+          })
+        )
+        return
+      }
+      const request: ConsoleOpenRequest = {
+        kind: 'vm',
+        node: target.node,
+        type,
+        vmid: target.vmid,
+        name: target.name,
+        mode: 'novnc'
+      }
       await unwrap(window.pvevdi.openConsoleWindow(request))
     } catch (err) {
-      toast.error('无法打开控制台窗口', { description: errorDetail(err) })
+      toast.error(mode === 'xterm' ? '无法打开终端控制台' : '无法打开 VNC 控制台', {
+        description: errorDetail(err)
+      })
     }
   }
 
   const openNodeShell = async (node: string): Promise<void> => {
     try {
-      await unwrap(window.pvevdi.openConsoleWindow({ kind: 'node', node, name: `节点 ${node}` }))
+      // 节点 Shell 走独立 SSH 窗口：多标签 + 文件面板
+      await unwrap(window.pvevdi.openSshWindow({ node, tabs: 1 }))
     } catch (err) {
-      toast.error('无法打开终端窗口', { description: errorDetail(err) })
+      toast.error('无法打开 SSH 窗口', { description: errorDetail(err) })
     }
   }
 
@@ -360,8 +436,8 @@ function ConnectedApp({
           <VmsView
             dashboard={dashboard}
             busyKey={busyKey}
+            busyAction={busyAction}
             onCreateVm={() => setCreateOpen(true)}
-            onRefresh={() => void refresh()}
             onOpenVm={openVm}
             onAction={requestAction}
             onConsole={openConsole}
@@ -384,7 +460,6 @@ function ConnectedApp({
             liveAt={live.data?.fetchedAt}
             liveError={live.error}
             onCreateVm={() => setCreateOpen(true)}
-            onRefresh={() => void refresh()}
             onNavigate={setView}
             onOpenShell={openNodeShell}
             onOpenSettings={openNodeSettings}
@@ -394,7 +469,6 @@ function ConnectedApp({
         return (
           <ClusterView
             dashboard={dashboard}
-            onRefresh={() => void refresh()}
             onOpenTask={setTaskLog}
           />
         )
@@ -443,8 +517,8 @@ function ConnectedApp({
             liveAt={live.data?.fetchedAt}
             liveError={live.error}
             busyKey={busyKey}
+            busyAction={busyAction}
             onCreateVm={() => setCreateOpen(true)}
-            onRefresh={() => void refresh()}
             onNavigate={setView}
             onOpenVm={openVm}
             onAction={requestAction}
@@ -470,7 +544,13 @@ function ConnectedApp({
         </>
       )}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-        <Titlebar session={session} dashboard={viewData} refreshing={refreshing} onRefresh={() => void refresh()} />
+        <Titlebar
+          session={session}
+          dashboard={viewData}
+          appVersion={bootstrap.appVersion}
+          refreshing={refreshing}
+          onRefresh={() => void refresh()}
+        />
         <div className="flex min-h-0 flex-1">
           <Sidebar
             active={view}
@@ -535,6 +615,7 @@ function ConnectedApp({
         vmRef={selectedRef}
         refreshToken={detailRefreshToken}
         actionBusy={detailBusy}
+        busyAction={detailBusy ? busyAction : null}
         storages={viewData?.storages ?? []}
         nodes={(viewData?.nodes ?? [])
           .filter((node) => node.status === 'online')
@@ -590,7 +671,9 @@ function ConnectedApp({
                 if (confirmAction) void executeAction(confirmAction.target, confirmAction.action)
               }}
             >
-              确认{confirmAction ? VM_ACTION_LABELS[confirmAction.action] : ''}
+              {actionBusy && busyAction
+                ? actionProgressLabel(busyAction)
+                : `确认${confirmAction ? VM_ACTION_LABELS[confirmAction.action] : ''}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -39,10 +39,15 @@ interface StoredSettings {
   accentColor: string
   networkView: NetworkView
   launchAtLogin: boolean
+  notificationsEnabled: boolean
+  notifyVmShutdown: boolean
+  notifyTaskFailure: boolean
   appearanceVersion: 2
   loginBackground?: string
   appBackground?: string
   encryptedPassword?: string
+  /** 应用内写入过 cloud-init 密码的虚拟机；PVE API 不回传 cipassword，只能自己缓存 */
+  encryptedCloudInitPasswords?: Record<string, string>
 }
 
 const DEFAULTS: StoredSettings = {
@@ -57,6 +62,9 @@ const DEFAULTS: StoredSettings = {
   accentColor: DEFAULT_ACCENT_COLOR,
   networkView: 'cards',
   launchAtLogin: false,
+  notificationsEnabled: true,
+  notifyVmShutdown: true,
+  notifyTaskFailure: true,
   appearanceVersion: 2
 }
 
@@ -110,12 +118,25 @@ export class SettingsStore {
         accentColor: migratedAccent ?? DEFAULTS.accentColor,
         networkView: raw.networkView === 'list' ? 'list' : 'cards',
         launchAtLogin: raw.launchAtLogin === true,
+        notificationsEnabled: raw.notificationsEnabled !== false,
+        notifyVmShutdown: raw.notifyVmShutdown !== false,
+        notifyTaskFailure: raw.notifyTaskFailure !== false,
         appearanceVersion: 2,
         loginBackground: typeof raw.loginBackground === 'string' ? raw.loginBackground : undefined,
         appBackground: typeof raw.appBackground === 'string' ? raw.appBackground : undefined,
         encryptedPassword:
           typeof raw.encryptedPassword === 'string' && raw.encryptedPassword
             ? raw.encryptedPassword
+            : undefined,
+        encryptedCloudInitPasswords:
+          raw.encryptedCloudInitPasswords &&
+          typeof raw.encryptedCloudInitPasswords === 'object' &&
+          !Array.isArray(raw.encryptedCloudInitPasswords)
+            ? Object.fromEntries(
+                Object.entries(raw.encryptedCloudInitPasswords).filter(
+                  ([key, value]) => /^\d+$/.test(key) && typeof value === 'string'
+                )
+              )
             : undefined
       }
     } catch {
@@ -149,6 +170,9 @@ export class SettingsStore {
       accentColor: this.data.accentColor,
       networkView: this.data.networkView,
       launchAtLogin: this.data.launchAtLogin,
+      notificationsEnabled: this.data.notificationsEnabled,
+      notifyVmShutdown: this.data.notifyVmShutdown,
+      notifyTaskFailure: this.data.notifyTaskFailure,
       hasLoginBackground: Boolean(this.backgroundFilePath('login')),
       hasAppBackground: Boolean(this.backgroundFilePath('app'))
     }
@@ -289,6 +313,31 @@ export class SettingsStore {
     }
   }
 
+  /** 应用内写入 cloud-init 密码时顺手缓存；PVE 的 GET config 不会回传 cipassword */
+  saveCloudInitPassword(vmid: number, password: string): void {
+    if (!password || !this.encryptionAvailable || !Number.isFinite(vmid)) return
+    try {
+      const encrypted = safeStorage.encryptString(password).toString('base64')
+      this.data.encryptedCloudInitPasswords = {
+        ...(this.data.encryptedCloudInitPasswords ?? {}),
+        [String(vmid)]: encrypted
+      }
+      this.persist()
+    } catch {
+      /* 加密失败就不缓存，用户下次手动输入 */
+    }
+  }
+
+  getCloudInitPassword(vmid: number): string | null {
+    const encrypted = this.data.encryptedCloudInitPasswords?.[String(vmid)]
+    if (!encrypted || !this.encryptionAvailable) return null
+    try {
+      return safeStorage.decryptString(Buffer.from(encrypted, 'base64'))
+    } catch {
+      return null
+    }
+  }
+
   updatePreferences(patch: PreferencesPatch): AppSettings {
     if (patch.theme !== undefined) {
       if (!validTheme(patch.theme)) throw new Error('主题设置无效。')
@@ -319,6 +368,18 @@ export class SettingsStore {
       if (typeof patch.launchAtLogin !== 'boolean') throw new Error('开机自启设置无效。')
       this.data.launchAtLogin = patch.launchAtLogin
     }
+    if (patch.notificationsEnabled !== undefined) {
+      if (typeof patch.notificationsEnabled !== 'boolean') throw new Error('桌面通知设置无效。')
+      this.data.notificationsEnabled = patch.notificationsEnabled
+    }
+    if (patch.notifyVmShutdown !== undefined) {
+      if (typeof patch.notifyVmShutdown !== 'boolean') throw new Error('虚拟机关机通知设置无效。')
+      this.data.notifyVmShutdown = patch.notifyVmShutdown
+    }
+    if (patch.notifyTaskFailure !== undefined) {
+      if (typeof patch.notifyTaskFailure !== 'boolean') throw new Error('任务失败通知设置无效。')
+      this.data.notifyTaskFailure = patch.notifyTaskFailure
+    }
     this.persist()
     this.syncLaunchAtLogin()
     return this.get()
@@ -327,6 +388,7 @@ export class SettingsStore {
   forgetCredentials(): AppSettings {
     this.data.rememberPassword = false
     this.data.encryptedPassword = undefined
+    this.data.encryptedCloudInitPasswords = undefined
     this.persist()
     return this.get()
   }

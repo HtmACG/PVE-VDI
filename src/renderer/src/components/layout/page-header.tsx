@@ -15,7 +15,7 @@ export function PageHeader({
   className?: string
 }): React.JSX.Element {
   return (
-    <div className={cn('flex flex-wrap items-end justify-between gap-x-8 gap-y-4 pb-5', className)}>
+    <div className={cn('flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-b border-border pb-4', className)}>
       <div className="min-w-0">
         <div className="mb-2 text-[11px] font-medium tracking-[0.02em] text-muted-foreground">{eyebrow}</div>
         <h1 className="text-[28px] font-semibold leading-[1.15] tracking-[-0.02em] text-foreground">{title}</h1>

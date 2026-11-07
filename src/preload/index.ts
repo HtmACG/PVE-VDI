@@ -16,6 +16,11 @@ import type {
   DesktopApi,
   ClusterJoinInput,
   DiskInitInput,
+  SshOpenShellInput,
+  SshShellEvent,
+  SshFsInput,
+  SshTargetOverride,
+  SshWindowOpenRequest,
   FirewallAliasInput,
   FirewallOptionsInput,
   FirewallRuleInput,
@@ -58,6 +63,7 @@ const api: DesktopApi = {
   logout: (clearSaved = false) => ipcRenderer.invoke(IPC.logout, clearSaved),
   updatePreferences: (patch: PreferencesPatch) => ipcRenderer.invoke(IPC.updatePreferences, patch),
   forgetCredentials: () => ipcRenderer.invoke(IPC.forgetCredentials),
+  testNotification: () => ipcRenderer.invoke(IPC.testNotification),
   pickBackground: (kind: BackgroundKind) => ipcRenderer.invoke(IPC.pickBackground, kind),
   clearBackground: (kind: BackgroundKind) => ipcRenderer.invoke(IPC.clearBackground, kind),
   dashboard: () => ipcRenderer.invoke(IPC.dashboard),
@@ -152,6 +158,33 @@ const api: DesktopApi = {
   consoleWindowBootstrap: () => ipcRenderer.invoke(IPC.consoleWindowBootstrap),
   consoleOpen: (input: ConsoleOpenRequest) => ipcRenderer.invoke(IPC.consoleOpen, input),
   consoleClose: (sessionId: string) => ipcRenderer.invoke(IPC.consoleClose, sessionId),
+  openSshWindow: (input?: SshWindowOpenRequest) => ipcRenderer.invoke(IPC.sshWindowOpen, input ?? {}),
+  sshWindowBootstrap: () => ipcRenderer.invoke(IPC.sshWindowBootstrap),
+  sshProbe: (override?: SshTargetOverride) => ipcRenderer.invoke(IPC.sshProbe, override),
+  sshShellOpen: (input: SshOpenShellInput) => ipcRenderer.invoke(IPC.sshShellOpen, input),
+  sshShellList: () => ipcRenderer.invoke(IPC.sshShellList),
+  sshShellWrite: (sessionId: string, data: string) =>
+    ipcRenderer.invoke(IPC.sshShellWrite, { sessionId, data }),
+  sshShellResize: (sessionId: string, cols: number, rows: number) =>
+    ipcRenderer.invoke(IPC.sshShellResize, { sessionId, cols, rows }),
+  sshShellClose: (sessionId: string) => ipcRenderer.invoke(IPC.sshShellClose, sessionId),
+  onSshShellEvent: (callback: (event: SshShellEvent) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: SshShellEvent): void => callback(payload)
+    ipcRenderer.on(IPC.sshShellEvent, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.sshShellEvent, listener)
+    }
+  },
+  sshFsList: (input: SshFsInput) => ipcRenderer.invoke(IPC.sshFsList, input),
+  sshFsRead: (input: SshFsInput) => ipcRenderer.invoke(IPC.sshFsRead, input),
+  sshFsWrite: (input: SshFsInput & { content: string }) => ipcRenderer.invoke(IPC.sshFsWrite, input),
+  sshFsCreateFile: (input: SshFsInput) => ipcRenderer.invoke(IPC.sshFsCreateFile, input),
+  sshFsCreateDir: (input: SshFsInput) => ipcRenderer.invoke(IPC.sshFsCreateDir, input),
+  sshFsRemove: (input: SshFsInput & { recursive?: boolean }) => ipcRenderer.invoke(IPC.sshFsRemove, input),
+  sshFsRename: (input: SshFsInput & { from: string; to: string }) => ipcRenderer.invoke(IPC.sshFsRename, input),
+  sshFsUpload: (input: SshFsInput & { remoteDir: string; localPath?: string }) =>
+    ipcRenderer.invoke(IPC.sshFsUpload, input),
+  sshFsDownload: (input: SshFsInput) => ipcRenderer.invoke(IPC.sshFsDownload, input),
   windowMinimize: () => ipcRenderer.send(IPC.windowMinimize),
   windowHide: () => ipcRenderer.send(IPC.windowHide),
   windowToggleMaximize: () => ipcRenderer.send(IPC.windowToggleMaximize),

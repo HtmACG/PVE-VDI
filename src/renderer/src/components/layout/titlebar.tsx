@@ -9,11 +9,12 @@ import { cn } from '@renderer/lib/utils'
 interface TitlebarProps {
   session: SessionProfile
   dashboard: DashboardData | null
+  appVersion: string
   refreshing: boolean
   onRefresh: () => void
 }
 
-export function Titlebar({ session, dashboard, refreshing, onRefresh }: TitlebarProps): React.JSX.Element {
+export function Titlebar({ session, dashboard, appVersion, refreshing, onRefresh }: TitlebarProps): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
 
   useEffect(() => {
@@ -25,13 +26,20 @@ export function Titlebar({ session, dashboard, refreshing, onRefresh }: Titlebar
 
   return (
     <header className="drag-region relative flex h-10 shrink-0 items-stretch border-b border-border bg-card pl-3.5">
+      {/*
+        左上角只留品牌 + 版本号。
+        IP 和集群名已从标题栏撤掉——这两个信息在「首选项 → 连接」和侧栏里都能看到，
+        挤在这里反而占地方，而且 IP 一变就得重启窗口才能更新。
+      */}
       <div className="flex items-center gap-3">
         <BrandLockup compact />
         <span className="h-3.5 w-px bg-border" />
-        <span className="font-mono text-[11px] text-muted-foreground">
-          {session.serverUrl.replace(/^https?:\/\//, '')}
+        <span
+          className="font-mono text-[11px] text-muted-foreground"
+          title={clusterName ? `${clusterName} 集群 · 已连接` : undefined}
+        >
+          v{appVersion}
         </span>
-        <span className="hidden text-[11px] text-muted-foreground lg:block">{clusterName}</span>
       </div>
 
       <div className="ml-auto flex items-stretch">

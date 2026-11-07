@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import type {
   AgentInterface,
+  ConsoleMode,
   StorageSummary,
   TaskSummary,
   VmDetail,
@@ -83,11 +84,13 @@ interface VmDetailSheetProps {
   vmRef: VmRef | null
   refreshToken: number
   actionBusy: boolean
+  /** 正在执行的动作（配合 actionBusy 显示「正在启动…」） */
+  busyAction?: VmAction | null
   storages: StorageSummary[]
   nodes: string[]
   onRefresh: () => void
   onAction: (target: ActionTarget, action: VmAction) => void
-  onConsole: (target: ActionTarget) => void
+  onConsole: (target: ActionTarget, mode: ConsoleMode) => void
   onViewTask: (task: TaskSummary) => void
 }
 
@@ -361,6 +364,7 @@ export function VmDetailSheet({
   vmRef,
   refreshToken,
   actionBusy,
+  busyAction,
   storages,
   nodes,
   onRefresh,
@@ -434,7 +438,9 @@ export function VmDetailSheet({
         type: detail.ref.type,
         vmid: detail.ref.vmid,
         name: detail.name,
-        status: detail.runtime.status
+        status: detail.runtime.status,
+        ostype: String(detail.config.ostype ?? ''),
+        console: detail.console
       }
     : null
 
@@ -535,6 +541,7 @@ export function VmDetailSheet({
                 onAction={onAction}
                 onConsole={onConsole}
                 busy={actionBusy}
+                busyAction={busyAction}
               />
               {/* 生命周期之外的运维操作，统一收在第二行，避免和启停按钮混在一起。 */}
               <div className="-ml-2 flex flex-wrap items-center gap-0.5">

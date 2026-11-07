@@ -178,20 +178,6 @@ export function TasksView({
         }
       />
 
-      <div className="grid grid-cols-2 border border-border bg-card sm:grid-cols-4 sm:divide-x sm:divide-border">
-        {[
-          ['全部任务', counts.all],
-          ['运行中', counts.running],
-          ['成功', counts.ok],
-          ['失败', counts.error]
-        ].map(([label, value]) => (
-          <div key={String(label)} className="border-b border-border px-4 py-3 last:border-b-0 sm:border-b-0">
-            <div className="text-[12px] text-muted-foreground">{label}</div>
-            <div className="mt-1.5 font-mono text-[19px] text-foreground">{value}</div>
-          </div>
-        ))}
-      </div>
-
       <div className="border border-border bg-card">
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
           <div className="flex items-center border border-border">
@@ -292,7 +278,7 @@ export function TasksView({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1020px] text-left">
             <thead>
-              <tr className="border-b border-border bg-panel/30 text-[11px] text-muted-foreground">
+              <tr className="border-b border-border bg-panel/30 text-[11px] tracking-[0.02em] text-muted-foreground">
                 <th className="px-4 py-2.5 font-medium">状态</th>
                 <th className="px-3 py-2.5 font-medium">任务</th>
                 <th className="px-3 py-2.5 font-medium">对象</th>

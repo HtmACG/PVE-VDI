@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  AlertTriangle,
   ArrowUpRight,
   Boxes,
   ChevronRight,
-  Cpu,
+  Container,
   HardDrive,
-  MemoryStick,
   Plus,
-  RefreshCw,
-  Server
+  Server,
+  Users
 } from 'lucide-react'
-import type { DashboardData, NodeSummary, TaskSummary, VmAction, VmSummary } from '@shared/types'
+import type {
+  ConsoleMode,
+  DashboardData,
+  NodeSummary,
+  TaskSummary,
+  VmAction,
+  VmSummary
+} from '@shared/types'
 import { TASK_TYPE_LABELS } from '@shared/ipc'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { Card } from '@renderer/components/ui/card'
@@ -23,7 +30,7 @@ import { GaugePanel, type GaugeSpec } from '@renderer/components/charts/gauge-pa
 import { NodeStatusBadge, QuorumBadge, TaskStatusBadge, VmStatusBadge } from '@renderer/components/status-badges'
 import { VmRowActions, type ActionTarget } from '@renderer/components/vms/vm-actions'
 import { OsIcon } from '@renderer/components/os-icon'
-import { EmptyState } from '@renderer/components/common'
+import { EmptyState, StatTile } from '@renderer/components/common'
 import {
   formatBytes,
   formatDateTime,
@@ -40,60 +47,75 @@ interface OverviewViewProps {
   liveAt?: number
   liveError?: string | null
   busyKey: string | null
+  /** 正在执行的动作（配合 busyKey 显示「正在启动…」） */
+  busyAction?: VmAction | null
   onCreateVm: () => void
-  onRefresh: () => void
   onNavigate: (view: ViewKey) => void
   onOpenVm: (vm: VmSummary) => void
   onAction: (target: ActionTarget, action: VmAction) => void
-  onConsole: (target: ActionTarget) => void
+  onConsole: (target: ActionTarget, mode: ConsoleMode) => void
   onOpenTask: (task: TaskSummary) => void
 }
 
-function StatCard({
-  label,
-  value,
-  unit,
-  detail,
-  icon,
-  usage,
-  color = 'bg-brand'
+/**
+ * 异常摘要条：只在真有异常时出现，把「离线节点 / 失败任务 / 高水位存储」提到首屏。
+ * 正常时整条不占位，避免和统计卡重复罗列同一组数字。
+ */
+function HealthStrip({
+  dashboard,
+  onNavigate
 }: {
-  label: string
-  value: string
-  unit?: string
-  detail: string
-  icon: React.ReactNode
-  usage?: number
-  color?: string
-}): React.JSX.Element {
+  dashboard: DashboardData
+  onNavigate: (view: ViewKey) => void
+}): React.JSX.Element | null {
+  const offline = dashboard.nodes.filter((node) => node.status !== 'online')
+  const failed = dashboard.tasks.filter((task) => task.status === 'error')
+  const hot = dashboard.storages.filter((storage) => storage.usedFraction >= 0.85)
+  if (offline.length === 0 && failed.length === 0 && hot.length === 0) return null
+
+  const Item = ({
+    count,
+    label,
+    view
+  }: {
+    count: number
+    label: string
+    view: ViewKey
+  }): React.JSX.Element => (
+    <button
+      type="button"
+      onClick={() => onNavigate(view)}
+      className="group flex items-baseline gap-1.5 text-[12px] text-foreground transition-colors hover:text-warning"
+    >
+      <span className="font-mono text-[13px] font-medium tabular">{count}</span>
+      <span className="text-muted-foreground group-hover:text-foreground">{label}</span>
+      <ChevronRight className="h-3 w-3 translate-y-0.5 text-muted-foreground/70" />
+    </button>
+  )
+
   return (
-    <div className="border border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="text-[12px] font-medium text-muted-foreground">{label}</div>
-        <div className="text-muted-foreground/70">{icon}</div>
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border border-warning/35 bg-warning/[0.04] px-4 py-2.5">
+      <div className="flex items-center gap-2 text-[12px] font-medium text-warning">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        需要关注
       </div>
-      <div className="mt-3 flex items-baseline gap-1.5">
-        <span className="font-mono text-[28px] font-medium leading-none tracking-[-0.04em] text-foreground tabular">
-          {value}
-        </span>
-        {unit && <span className="font-mono text-[12px] text-muted-foreground">{unit}</span>}
-      </div>
-      {usage !== undefined && (
-        <Progress value={Math.min(100, usage * 100)} className="mt-3 h-[3px]" indicatorClassName={color} />
-      )}
-      <div className="mt-2.5 text-[12px] leading-5 text-muted-foreground">{detail}</div>
+      {offline.length > 0 && <Item count={offline.length} label="个节点离线" view="nodes" />}
+      {failed.length > 0 && <Item count={failed.length} label="个任务失败" view="tasks" />}
+      {hot.length > 0 && <Item count={hot.length} label="个存储使用率超过 85%" view="storage" />}
     </div>
   )
 }
 
 function ServerResources({
   nodes,
+  serverUrl,
   selectedNode,
   onSelectNode,
   liveAt,
   liveError
 }: {
   nodes: NodeSummary[]
+  serverUrl?: string
   selectedNode: string
   onSelectNode: (node: string) => void
   liveAt?: number
@@ -103,7 +125,12 @@ function ServerResources({
   const memoryRatio = node && node.maxmem > 0 ? node.mem / node.maxmem : 0
   const diskRatio = node && node.maxdisk > 0 ? node.disk / node.maxdisk : 0
   const points = (node?.metrics ?? []).map((point) => ({ time: point.time, value: point.cpu }))
+  /** 1 小时曲线按峰值自适应纵轴，避免低负载时曲线贴底；峰值同时写在标题右侧 */
+  const peakCpu = points.reduce((max, point) => Math.max(max, point.value), 0)
+  const chartMax = Math.min(1, Math.max(0.12, peakCpu * 1.4))
   const hostThreads = nodes.reduce((sum, item) => sum + item.maxcpu, 0)
+  /** 头部已经显示过 CPU 型号，底栏再放一遍是重复；这里换成登录用的 PVE 地址 */
+  const pveAddress = (serverUrl ?? '').replace(/^https?:\/\//, '').replace(/\/+$/, '')
 
   const gauges: GaugeSpec[] = node
     ? [
@@ -142,7 +169,7 @@ function ServerResources({
   }
 
   return (
-    <Card className="h-full">
+    <Card className="flex h-full flex-col">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3.5">
         <div>
           <div className="flex items-center gap-2">
@@ -179,26 +206,33 @@ function ServerResources({
 
       <GaugePanel items={gauges} className="border-b border-border" />
 
-      <div className="px-4 pt-3.5">
+      <div className="flex flex-1 flex-col px-4 pt-3.5">
         <CoreGrid loads={node.cpuCores} total={node.maxcpu} className="mb-2.5" />
         <div className="mb-1.5 flex items-center justify-between">
           <div className="text-[12px] font-medium text-foreground">CPU 负载</div>
-          <div className="text-[11px] text-muted-foreground">最近 1 小时</div>
+          <div className="flex items-baseline gap-2 text-[11px] text-muted-foreground">
+            <span className="font-mono">峰值 {formatPercent(peakCpu, 1)}</span>
+            <span className="text-muted-foreground/60">·</span>
+            <span>最近 1 小时</span>
+          </div>
         </div>
-        <AreaChart
-          points={points}
-          height={160}
-          color="var(--brand)"
-          formatValue={(value) => formatPercent(value, 1)}
-          emptyLabel="正在读取节点遥测"
-        />
+        <div className="min-h-[150px] flex-1">
+          <AreaChart
+            points={points}
+            height="100%"
+            yMax={chartMax}
+            color="var(--brand)"
+            formatValue={(value) => formatPercent(value, 1)}
+            emptyLabel="正在读取节点遥测"
+          />
+        </div>
       </div>
 
       <div className="mt-auto grid grid-cols-2 gap-x-6 border-t border-border px-4 py-3 sm:grid-cols-4">
         <div>
-          <div className="text-[11px] text-muted-foreground">CPU 型号</div>
-          <div className="mt-1 truncate text-[12px] text-foreground" title={node.cpuModel}>
-            {node.cpuModel ?? '—'}
+          <div className="text-[11px] text-muted-foreground">PVE 地址</div>
+          <div className="mt-1 truncate font-mono text-[12px] text-foreground" title={pveAddress}>
+            {pveAddress || '—'}
           </div>
         </div>
         <div>
@@ -219,25 +253,16 @@ function ServerResources({
 }
 
 function ClusterPanel({ dashboard }: { dashboard: DashboardData }): React.JSX.Element {
-  const { cluster, nodes, storages } = dashboard
-  const workloads = dashboard.vms.filter((vm) => !vm.template)
-  const running = workloads.filter((vm) => vm.status === 'running').length
-  const stopped = workloads.filter((vm) => vm.status === 'stopped').length
-  const templates = dashboard.vms.filter((vm) => vm.template).length
-  const totalStorage = storages.reduce((sum, storage) => sum + storage.total, 0)
-  const usedStorage = storages.reduce((sum, storage) => sum + storage.used, 0)
-  const storageUsage = totalStorage > 0 ? usedStorage / totalStorage : 0
+  const { cluster, nodes } = dashboard
 
   return (
-    <Card className="h-full">
+    <Card>
       <div className="border-b border-border px-4 py-3.5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-[14px] font-medium text-foreground">集群状态</h2>
           <QuorumBadge quorate={cluster.quorate} />
         </div>
-        <div className="mt-1 text-[12px] text-muted-foreground">
-          {cluster.name} · {nodes.length} 个节点
-        </div>
+        <div className="mt-1 text-[12px] text-muted-foreground">{cluster.name}</div>
       </div>
       <div className="divide-y divide-border">
         {nodes.map((node) => (
@@ -257,46 +282,8 @@ function ClusterPanel({ dashboard }: { dashboard: DashboardData }): React.JSX.El
       </div>
       <div className="border-t border-border px-4 py-3">
         <div className="flex items-center justify-between text-[12px]">
-          <span className="text-muted-foreground">虚拟机状态</span>
-          <span className="text-muted-foreground">{workloads.length} 台</span>
-        </div>
-        <div className="mt-2 grid grid-cols-3 gap-3">
-          <div>
-            <div className="font-mono text-[18px] text-foreground">{running}</div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">运行中</div>
-          </div>
-          <div>
-            <div className="font-mono text-[18px] text-foreground">{stopped}</div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">已停止</div>
-          </div>
-          <div>
-            <div className="font-mono text-[18px] text-foreground">{templates}</div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">模板</div>
-          </div>
-        </div>
-      </div>
-      <div className="border-t border-border px-4 py-3">
-        <div className="flex items-center justify-between text-[12px]">
-          <span className="text-muted-foreground">存储占用</span>
-          <span className="font-mono text-foreground">{formatPercent(storageUsage, 1)}</span>
-        </div>
-        <Progress
-          value={storageUsage * 100}
-          className="mt-1.5 h-1"
-          indicatorClassName={storageUsage > 0.85 ? 'bg-destructive' : 'bg-foreground'}
-        />
-        <div className="mt-1.5 text-[11px] text-muted-foreground">
-          {formatBytes(usedStorage)} / {formatBytes(totalStorage)} · {storages.length} 个存储池
-        </div>
-      </div>
-      <div className="border-t border-border px-4 py-3">
-        <div className="flex items-center justify-between text-[12px]">
           <span className="text-muted-foreground">HA 状态</span>
           <span className="text-foreground">{cluster.ha.some((entry) => entry.type === 'service' || entry.type === 'resource') ? '已启用' : '无托管资源'}</span>
-        </div>
-        <div className="mt-2 flex items-center justify-between text-[12px]">
-          <span className="text-muted-foreground">集群版本</span>
-          <span className="font-mono text-foreground">PVE {splitLicense(dashboard.version.version)}</span>
         </div>
         <div className="mt-2 flex items-center justify-between text-[12px]">
           <span className="text-muted-foreground">默认键盘</span>
@@ -310,6 +297,7 @@ function ClusterPanel({ dashboard }: { dashboard: DashboardData }): React.JSX.El
 function VmFleet({
   dashboard,
   busyKey,
+  busyAction,
   onOpenVm,
   onAction,
   onConsole,
@@ -317,9 +305,10 @@ function VmFleet({
 }: {
   dashboard: DashboardData
   busyKey: string | null
+  busyAction?: VmAction | null
   onOpenVm: (vm: VmSummary) => void
   onAction: (target: ActionTarget, action: VmAction) => void
-  onConsole: (target: ActionTarget) => void
+  onConsole: (target: ActionTarget, mode: ConsoleMode) => void
   onNavigate: (view: ViewKey) => void
 }): React.JSX.Element {
   const vms = useMemo(
@@ -340,10 +329,7 @@ function VmFleet({
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3.5">
         <div>
           <h2 className="text-[14px] font-medium text-foreground">虚拟机</h2>
-          <div className="mt-1 text-[12px] text-muted-foreground">
-            {dashboard.vms.filter((vm) => !vm.template).length} 台 ·{' '}
-            {dashboard.vms.filter((vm) => vm.status === 'running' && !vm.template).length} 台运行中
-          </div>
+          <div className="mt-1 text-[12px] text-muted-foreground">按 CPU 使用率排序</div>
         </div>
         <Button variant="ghost" size="sm" onClick={() => onNavigate('vms')}>
           查看全部
@@ -353,7 +339,7 @@ function VmFleet({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[620px]">
           <thead>
-            <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
+            <tr className="border-b border-border bg-panel/30 text-left text-[11px] tracking-[0.02em] text-muted-foreground">
               <th className="px-4 py-2.5 font-medium">虚拟机</th>
               <th className="px-3 py-2.5 font-medium">状态</th>
               <th className="px-3 py-2.5 font-medium">CPU</th>
@@ -370,7 +356,9 @@ function VmFleet({
                 vmid: vm.vmid,
                 name: vm.name,
                 status: vm.status,
-                template: vm.template
+                template: vm.template,
+                ostype: vm.os?.family === 'windows' ? 'win11' : '',
+                  console: vm.console
               }
               return (
                 <tr
@@ -414,6 +402,7 @@ function VmFleet({
                       onAction={onAction}
                       onConsole={onConsole}
                       busy={busyKey === `${vm.type}/${vm.vmid}`}
+                      busyAction={busyKey === `${vm.type}/${vm.vmid}` ? busyAction : null}
                     />
                   </td>
                 </tr>
@@ -431,7 +420,7 @@ function VmFleet({
 
 function StoragePanel({ dashboard }: { dashboard: DashboardData }): React.JSX.Element {
   return (
-    <Card className="h-full">
+    <Card>
       <div className="border-b border-border px-4 py-3.5">
         <h2 className="text-[14px] font-medium text-foreground">存储</h2>
         <div className="mt-1 text-[12px] text-muted-foreground">{dashboard.storages.length} 个存储池</div>
@@ -497,8 +486,8 @@ export function OverviewView({
   liveAt,
   liveError,
   busyKey,
+  busyAction,
   onCreateVm,
-  onRefresh,
   onNavigate,
   onOpenVm,
   onAction,
@@ -516,12 +505,15 @@ export function OverviewView({
   const running = vms.filter((vm) => vm.status === 'running').length
   const templates = dashboard.vms.filter((vm) => vm.template).length
   const onlineNodes = dashboard.nodes.filter((node) => node.status === 'online').length
-  const hostCpus = dashboard.nodes.reduce((sum, node) => sum + node.maxcpu, 0)
-  const totalMemory = dashboard.nodes.reduce((sum, node) => sum + node.maxmem, 0)
-  const usedMemory = dashboard.nodes.reduce((sum, node) => sum + node.mem, 0)
-  const cpuUsage =
-    hostCpus > 0 ? dashboard.nodes.reduce((sum, node) => sum + node.cpu * node.maxcpu, 0) / hostCpus : 0
-  const memoryUsage = totalMemory > 0 ? usedMemory / totalMemory : 0
+
+  /**
+   * LXC 容器单独统计。
+   * 上面那张「运行中虚拟机」卡只算 qemu，容器混在里面会让人误判虚拟机数量；
+   * 模板不参与统计（和上卡的 `!vm.template` 保持一致）。
+   */
+  const containers = dashboard.vms.filter((vm) => vm.type === 'lxc' && !vm.template)
+  const runningContainers = containers.filter((vm) => vm.status === 'running').length
+  const nodeHosts = new Set(containers.map((vm) => vm.node)).size
 
   return (
     <div className="space-y-4">
@@ -530,82 +522,79 @@ export function OverviewView({
         title="运行概览"
         description="查看节点资源占用、集群健康状态和虚拟机运行情况。资源数据每 2 秒刷新。"
         actions={
-          <>
-            <Button variant="surface" onClick={onRefresh}>
-              <RefreshCw className="h-3.5 w-3.5" />
-              刷新
-            </Button>
-            <Button onClick={onCreateVm}>
-              <Plus className="h-3.5 w-3.5" />
-              新建虚拟机
-            </Button>
-          </>
+          <Button onClick={onCreateVm}>
+            <Plus className="h-3.5 w-3.5" />
+            新建虚拟机
+          </Button>
         }
       />
 
+      <HealthStrip dashboard={dashboard} onNavigate={onNavigate} />
+
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard
+        <StatTile
           label="节点"
           value={String(onlineNodes)}
           unit={`/ ${dashboard.nodes.length} 在线`}
-          detail={`${dashboard.cluster.quorate ? 'Quorum 正常' : 'Quorum 异常'} · PVE ${splitLicense(dashboard.version.version)}`}
+          detail={
+            onlineNodes === dashboard.nodes.length
+              ? '全部节点在线'
+              : `${dashboard.nodes.length - onlineNodes} 个节点未在线`
+          }
           icon={<Server className="h-4 w-4" />}
         />
-        <StatCard
+        <StatTile
           label="运行中虚拟机"
           value={String(running)}
           unit={`/ ${vms.length}`}
           detail={`${vms.length - running} 台已停止${templates ? ` · ${templates} 个模板` : ''}`}
           icon={<Boxes className="h-4 w-4" />}
         />
-        <StatCard
-          label="CPU 使用率"
-          value={formatPercent(cpuUsage, 1)}
-          detail={`${hostCpus} 个线程 · 集群平均负载`}
-          icon={<Cpu className="h-4 w-4" />}
-          usage={cpuUsage}
-          color={cpuUsage > 0.85 ? 'bg-destructive' : 'bg-brand'}
+        <StatTile
+          label="LXC 容器"
+          value={String(runningContainers)}
+          unit={`/ ${containers.length}`}
+          detail={`${containers.length - runningContainers} 个已停止${
+            nodeHosts ? ` · 分布在 ${nodeHosts} 个节点` : ''
+          }`}
+          icon={<Container className="h-4 w-4" />}
         />
-        <StatCard
-          label="内存使用率"
-          value={formatPercent(memoryUsage, 1)}
-          detail={`${formatBytes(usedMemory)} / ${formatBytes(totalMemory)}`}
-          icon={<MemoryStick className="h-4 w-4" />}
-          usage={memoryUsage}
-          color={memoryUsage > 0.85 ? 'bg-destructive' : 'bg-info'}
+        <StatTile
+          label="用户数量"
+          value={dashboard.userCount === undefined ? '—' : String(dashboard.userCount)}
+          detail={
+            dashboard.userCount === undefined ? '当前 API Token 无读取权限' : 'PVE 账号总数'
+          }
+          icon={<Users className="h-4 w-4" />}
         />
       </div>
 
-      <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-12">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
         <div className="xl:col-span-8">
           <ServerResources
             nodes={dashboard.nodes}
+            serverUrl={dashboard.cluster.serverUrl}
             selectedNode={selectedNode}
             onSelectNode={setSelectedNode}
             liveAt={liveAt}
             liveError={liveError}
           />
         </div>
-        <div className="xl:col-span-4">
+        <div className="space-y-3 xl:col-span-4">
           <ClusterPanel dashboard={dashboard} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
-        <div className="xl:col-span-8">
-          <VmFleet
-            dashboard={dashboard}
-            busyKey={busyKey}
-            onOpenVm={onOpenVm}
-            onAction={onAction}
-            onConsole={onConsole}
-            onNavigate={onNavigate}
-          />
-        </div>
-        <div className="xl:col-span-4">
           <StoragePanel dashboard={dashboard} />
         </div>
       </div>
+
+      <VmFleet
+        dashboard={dashboard}
+        busyKey={busyKey}
+        busyAction={busyAction}
+        onOpenVm={onOpenVm}
+        onAction={onAction}
+        onConsole={onConsole}
+        onNavigate={onNavigate}
+      />
 
       <Card>
         <div className="flex items-center justify-between border-b border-border px-4 py-3.5">

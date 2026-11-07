@@ -6,6 +6,17 @@ export interface ChangelogEntry {
 
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.8.5',
+    date: '2026-11-07',
+    items: [
+      '标题栏左上角改为品牌 + 版本号，不再显示 PVE 地址与设备名称',
+      '总览顶部「CPU 使用率」卡片改为 LXC 容器数量，「内存使用率」改为用户数量',
+      '服务器资源底栏与节点页头部的 CPU 型号改为 PVE 地址，避免重复',
+      '节点页「服务器信息」合并服务器型号、主板、CPU 型号与 CPU 温度，不显示逐核温度',
+      '侧栏「设置」改名为「首选项」，与节点设置区分'
+    ]
+  },
+  {
     version: '1.7.0',
     date: '2026-11-06',
     items: [

@@ -1,12 +1,12 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Boxes, Plus, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react'
-import type { DashboardData, VmAction, VmSummary } from '@shared/types'
+import { Boxes, Cpu, HardDrive, MemoryStick, Plus, Search, Server, SlidersHorizontal, X } from 'lucide-react'
+import type { ConsoleMode, DashboardData, VmAction, VmSummary } from '@shared/types'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
 import { Progress } from '@renderer/components/ui/primitives'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@renderer/components/ui/select'
-import { EmptyState } from '@renderer/components/common'
+import { EmptyState, StatTile } from '@renderer/components/common'
 import { VmStatusBadge } from '@renderer/components/status-badges'
 import { VmRowActions, type ActionTarget } from '@renderer/components/vms/vm-actions'
 import { OsIcon } from '@renderer/components/os-icon'
@@ -21,11 +21,12 @@ import { cn } from '@renderer/lib/utils'
 interface VmsViewProps {
   dashboard: DashboardData
   busyKey: string | null
+  /** 正在执行的动作（配合 busyKey 显示「正在启动…」） */
+  busyAction?: VmAction | null
   onCreateVm: () => void
-  onRefresh: () => void
   onOpenVm: (vm: VmSummary) => void
   onAction: (target: ActionTarget, action: VmAction) => void
-  onConsole: (target: ActionTarget) => void
+  onConsole: (target: ActionTarget, mode: ConsoleMode) => void
 }
 
 type StatusFilter = 'all' | 'running' | 'stopped' | 'other' | 'template'
@@ -48,8 +49,8 @@ function statusMatches(vm: VmSummary, filter: StatusFilter): boolean {
 export function VmsView({
   dashboard,
   busyKey,
+  busyAction,
   onCreateVm,
-  onRefresh,
   onOpenVm,
   onAction,
   onConsole
@@ -96,8 +97,14 @@ export function VmsView({
   }, [dashboard.vms, deferredQuery, node, status, tag])
 
   const hasFilters = Boolean(query) || status !== 'all' || node !== 'all' || tag !== 'all'
-  const running = dashboard.vms.filter((vm) => vm.status === 'running' && !vm.template).length
-  const stopped = dashboard.vms.filter((vm) => vm.status === 'stopped' && !vm.template).length
+  const workloads = dashboard.vms.filter((vm) => !vm.template)
+  const allocatedCpu = workloads.reduce((sum, vm) => sum + vm.cpus, 0)
+  const allocatedMemory = workloads.reduce((sum, vm) => sum + vm.maxmem, 0)
+  const allocatedDisk = workloads.reduce((sum, vm) => sum + vm.maxdisk, 0)
+  const availableMemory = dashboard.nodes.reduce(
+    (sum, item) => sum + (item.memAvailable ?? Math.max(0, item.maxmem - item.mem)),
+    0
+  )
 
   const clearFilters = (): void => {
     setQuery('')
@@ -111,38 +118,41 @@ export function VmsView({
       <PageHeader
         eyebrow={`${dashboard.cluster.name} 集群`}
         title="虚拟机"
-        description={`${dashboard.vms.filter((vm) => !vm.template).length} 台虚拟机 · ${running} 台运行中 · ${stopped} 台已停止`}
+        description="按状态、节点与标签筛选工作负载，查看资源分配并执行电源、控制台与配置操作。"
         actions={
-          <>
-            <Button variant="surface" onClick={onRefresh}>
-              <RefreshCw className="h-3.5 w-3.5" />
-              刷新
-            </Button>
-            <Button onClick={onCreateVm}>
-              <Plus className="h-3.5 w-3.5" />
-              新建虚拟机
-            </Button>
-          </>
+          <Button onClick={onCreateVm}>
+            <Plus className="h-3.5 w-3.5" />
+            新建虚拟机
+          </Button>
         }
       />
 
-      <div className="divide-x divide-border border border-border bg-card sm:grid sm:grid-cols-4">
-        {[
-          ['全部虚拟机', String(dashboard.vms.filter((vm) => !vm.template).length), '包含运行与停止'],
-          ['运行中', String(running), '当前正在运行'],
-          ['已停止', String(stopped), '可随时启动'],
-          [
-            '集群可用内存',
-            formatBytes(dashboard.nodes.reduce((sum, n) => sum + (n.memAvailable ?? Math.max(0, n.maxmem - n.mem)), 0)),
-            '节点当前可用'
-          ]
-        ].map(([label, value, detail]) => (
-          <div key={label} className="border-b border-border px-4 py-3 last:border-b-0 sm:border-b-0">
-            <div className="text-[12px] text-muted-foreground">{label}</div>
-            <div className="mt-1.5 font-mono text-[19px] text-foreground">{value}</div>
-            <div className="mt-1 text-[11px] text-muted-foreground">{detail}</div>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatTile
+          label="已分配 vCPU"
+          value={String(allocatedCpu)}
+          unit="vCPU"
+          detail={`跨 ${workloads.length} 台虚拟机`}
+          icon={<Cpu className="h-4 w-4" />}
+        />
+        <StatTile
+          label="已分配内存"
+          value={formatBytes(allocatedMemory)}
+          detail="按配置上限汇总"
+          icon={<MemoryStick className="h-4 w-4" />}
+        />
+        <StatTile
+          label="已分配磁盘"
+          value={formatBytes(allocatedDisk)}
+          detail="虚拟磁盘容量合计"
+          icon={<HardDrive className="h-4 w-4" />}
+        />
+        <StatTile
+          label="集群可用内存"
+          value={formatBytes(availableMemory)}
+          detail="节点当前可用"
+          icon={<Server className="h-4 w-4" />}
+        />
       </div>
 
       <div className="border border-border bg-card">
@@ -230,7 +240,7 @@ export function VmsView({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left">
             <thead>
-              <tr className="border-b border-border bg-panel/30 text-[11px] text-muted-foreground">
+              <tr className="border-b border-border bg-panel/30 text-[11px] tracking-[0.02em] text-muted-foreground">
                 <th className="px-4 py-2.5 font-medium">虚拟机</th>
                 <th className="px-3 py-2.5 font-medium">状态</th>
                 <th className="px-3 py-2.5 font-medium">节点</th>
@@ -250,7 +260,9 @@ export function VmsView({
                   vmid: vm.vmid,
                   name: vm.name,
                   status: vm.status,
-                  template
+                  template,
+                  ostype: vm.os?.family === 'windows' ? 'win11' : '',
+                  console: vm.console
                 }
                 return (
                   <tr
@@ -310,6 +322,7 @@ export function VmsView({
                         onAction={onAction}
                         onConsole={onConsole}
                         busy={busyKey === `${vm.type}/${vm.vmid}`}
+                        busyAction={busyKey === `${vm.type}/${vm.vmid}` ? busyAction : null}
                       />
                     </td>
                   </tr>

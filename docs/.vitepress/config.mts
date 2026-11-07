@@ -29,6 +29,7 @@ export default defineConfig({
           { text: '安装与登录', link: '/guide/getting-started' },
           { text: '虚拟机管理', link: '/guide/virtual-machines' },
           { text: '内置控制台', link: '/guide/console' },
+          { text: 'SSH 终端', link: '/guide/ssh' },
           { text: '存储管理', link: '/guide/storage' },
           { text: '备份与还原', link: '/guide/backup' },
           { text: '访问控制', link: '/guide/access' }
@@ -63,6 +64,7 @@ export default defineConfig({
             { text: '集群与节点', link: '/guide/dashboard' },
             { text: '虚拟机管理', link: '/guide/virtual-machines' },
             { text: '内置控制台', link: '/guide/console' },
+          { text: 'SSH 终端', link: '/guide/ssh' },
             { text: '节点设置', link: '/guide/node-settings' },
             { text: '镜像与磁盘', link: '/guide/images' },
             { text: '存储管理', link: '/guide/storage' },

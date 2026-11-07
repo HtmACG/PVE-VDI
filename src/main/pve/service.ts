@@ -1,5 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import type { Agent } from 'node:https'
+import { firstReachable } from './probe'
 import {
   GUEST_TYPES,
   MAX_REFRESH_INTERVAL,
@@ -132,12 +134,25 @@ import type {
   VmSendKeyInput,
   VmSnapshot,
   VmSummary,
+  VmConsoleInfo,
   VmType
 } from '@shared/types'
+
 import { PveClient, PveError, normalizeServerUrl, validateUpid } from './client'
 import { probeNodeHardware } from './node-hardware'
 import { ConsoleHost, type ConsoleUpstream } from '../console-host'
 import { agentEnabledFromConfig, detectAgentOs, detectVmOs, isGenericLinuxOs } from './os'
+import { deriveConsoleCapability } from './console-info'
+
+/** 客户机地址探测结果的有效期：太短会反复敲 22 端口，太长又跟不上 IP 变化 */
+const GUEST_HOST_TTL_MS = 5 * 60 * 1000
+/** 探测失败（没开 SSH / 没有 Agent）时的重试间隔，短一些便于装完 SSH 后尽快可用 */
+const GUEST_RETRY_TTL_MS = 2 * 60 * 1000
+/** 探客户机 SSH 只需要这几个字段，不绑死整个 VmSummary */
+type VmSummaryRef = { node: string; vmid: number; type: VmType }
+
+/** 同时在跑的客户机 SSH 探活上限 */
+const GUEST_PROBE_CONCURRENCY = 4
 
 type Raw = Record<string, unknown>
 
@@ -244,13 +259,23 @@ function vmBase(ref: VmRef): string {
   return `/nodes/${encodeURIComponent(validateNode(ref.node))}/${type}/${validateVmid(ref.vmid)}`
 }
 
-function pveConsoleUrl(serverUrl: string, path: string, port: number | string, ticket: string): string {
+function pveConsoleUrl(
+  serverUrl: string,
+  path: string,
+  port: number | string,
+  ticket: string,
+  extra?: Record<string, string>
+): string {
   const url = new URL(serverUrl)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
   url.pathname = `/api2/json${path}`
   url.search = ''
   url.searchParams.set('port', String(port))
   url.searchParams.set('vncticket', ticket)
+  // ttyd 走 vncwebsocket 时还要求 vncticket 走查询参数（PVE 7.4 起）
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) url.searchParams.set(key, value)
+  }
   return url.toString()
 }
 
@@ -417,6 +442,24 @@ function mapVmSummary(raw: Raw): VmSummary {
   }
 }
 
+/**
+ * 统计 PVE 账号数。
+ *
+ * `/access/users` 不带 `full=1` 时只返回 userid 等基础字段，代价很小。
+ * 同一 userid 理论上不会重复，这里仍做一次去重——集群里有复制过来的脏数据时也稳。
+ * 接口被权限拦住时返回 undefined，前端显示「—」而不是假装是 0。
+ */
+function countUniqueUsers(raw: unknown): number | undefined {
+  const entries = array(raw)
+  if (entries.length === 0) return undefined
+  const ids = new Set<string>()
+  for (const entry of entries) {
+    const userid = text(object(entry).userid)
+    if (userid) ids.add(userid)
+  }
+  return ids.size > 0 ? ids.size : undefined
+}
+
 function mapStorage(raw: Raw): StorageSummary {
   const used = number(raw.disk)
   const total = number(raw.maxdisk)
@@ -439,23 +482,6 @@ function mapStorage(raw: Raw): StorageSummary {
   }
 }
 
-/**
- * 从 rrddata 的一行里挑出按线程的占用比。
- * PVE 的字段名是 cpu0 / cpu1 … cpuN，值是 0~1 的占用比（不是百分比）。
- * 字段顺序不保证，所以按数字后缀排序后再落数组，保证索引等于线程号。
- */
-function pickCoreLoads(item: Raw): number[] | undefined {
-  const cores: Array<[number, number]> = []
-  for (const [key, value] of Object.entries(item)) {
-    const matched = /^cpu(\d+)$/.exec(key)
-    if (!matched) continue
-    cores.push([Number(matched[1]), clamp(number(value), 0, 1)])
-  }
-  if (cores.length === 0) return undefined
-  cores.sort((a, b) => a[0] - b[0])
-  return cores.map(([, value]) => value)
-}
-
 function mapNodeMetrics(raw: unknown[]): NodeMetricPoint[] {
   return raw
     .map((entry) => {
@@ -465,8 +491,7 @@ function mapNodeMetrics(raw: unknown[]): NodeMetricPoint[] {
       return {
         time: number(item.time) * 1000,
         cpu: clamp(number(item.cpu), 0, 1),
-        mem: memtotal > 0 ? clamp(memused / memtotal, 0, 1) : 0,
-        cores: pickCoreLoads(item)
+        mem: memtotal > 0 ? clamp(memused / memtotal, 0, 1) : 0
       }
     })
     .filter((point) => point.time > 0)
@@ -1041,6 +1066,23 @@ function buildNetworkForm(input: NodeNetworkInput): Record<string, string> {
   return form
 }
 
+/**
+ * 虚拟机终端凭据换发的结果。
+ *
+ * `termproxy` 后端带回 wsUrl / ticket / user，由 VmSessionManager 自己连；
+ * `serial` 后端不需要任何 ticket，靠节点 SSH 跑 `qm terminal`。
+ */
+export interface VmTerminalEndpoint {
+  backend: 'termproxy' | 'serial'
+  wsUrl?: string
+  ticket?: string
+  user?: string
+  node: string
+  type: 'qemu' | 'lxc'
+  vmid: number
+  name?: string
+}
+
 export class PveManager {
   private client: PveClient | null = null
   private profile: SessionProfile | null = null
@@ -1058,6 +1100,58 @@ export class PveManager {
     }
   >()
   private osEnrichmentRunning = false
+
+  /**
+   * 控制台能力缓存。探测要读 VM config（判断有没有 serial0、vga 类型），
+   * 属于低频信息，缓存 5 分钟；配置被改动时由 vmConfigUpdate 主动失效。
+   */
+  private readonly consoleCache = new Map<number, VmConsoleInfo>()
+  /** 上次探测控制台时的运行状态：状态变化要立刻重探，不能等缓存过期 */
+  private readonly consoleStatus = new Map<number, string>()
+  /** 虚拟机 → 探测到的可连 sshd 地址；host 为 null 表示探过但连不上 */
+  private readonly guestHostCache = new Map<
+    number,
+    { host: string | null; probedAt: number; noAgent?: boolean }
+  >()
+  private guestProbes = 0
+  /** 正在后台探测的虚拟机，避免同一轮刷新重复排队 */
+  private readonly guestProbing = new Set<number>()
+  /** 登录会话代次：异步探测回来时据此丢弃上一个集群的结果 */
+  private sessionEpoch = 0
+
+  /**
+   * 按核负载采样钩子。PVE 的 rrddata 只给聚合 cpu，拿不到每线程数据，
+   * 所以由外部（SSH 模块）注入一个采样函数；注入前 cpuCores 保持 undefined，
+   * 前端会退回「只显示线程数、不给颜色」的占位形态。
+   */
+  private coreSampler: (() => Promise<number[] | undefined>) | null = null
+  private coreSampleCache: { at: number; loads: number[] | undefined } | null = null
+  private coreSampleRunning = false
+
+  setCoreSampler(sampler: (() => Promise<number[] | undefined>) | null): void {
+    this.coreSampler = sampler
+    this.coreSampleCache = null
+  }
+
+  /** 取按核负载，带 1.5 秒缓存，避免刷新间隔小于采样耗时导致堆叠 */
+  private async sampleCores(): Promise<number[] | undefined> {
+    if (!this.coreSampler) return undefined
+    const now = Date.now()
+    if (this.coreSampleCache && now - this.coreSampleCache.at < 1500) {
+      return this.coreSampleCache.loads
+    }
+    if (this.coreSampleRunning) return this.coreSampleCache?.loads
+    this.coreSampleRunning = true
+    try {
+      const loads = await this.coreSampler()
+      this.coreSampleCache = { at: Date.now(), loads }
+      return loads
+    } catch {
+      return this.coreSampleCache?.loads
+    } finally {
+      this.coreSampleRunning = false
+    }
+  }
 
   get session(): SessionProfile | null {
     return this.profile
@@ -1095,6 +1189,10 @@ export class PveManager {
       this.lastDashboardAt = 0
       this.hardwareCache.clear()
       this.osCache.clear()
+      this.consoleCache.clear()
+      this.consoleStatus.clear()
+      this.guestHostCache.clear()
+      this.sessionEpoch += 1
       this.profile = {
         serverUrl,
         username,
@@ -1117,10 +1215,30 @@ export class PveManager {
     this.lastDashboardAt = 0
     this.hardwareCache.clear()
     this.osCache.clear()
+    this.consoleCache.clear()
+    this.consoleStatus.clear()
+    this.guestHostCache.clear()
+    this.sessionEpoch += 1
   }
 
   getCachedDashboard(): DashboardData | null {
     return this.lastDashboard
+  }
+
+  /**
+   * termproxy WebSocket 的 TLS 参数。
+   *
+   * 之前主进程用全局 WebSocket 连 wss://，没有把 API 客户端的 https.Agent 带过去，
+   * PVE 默认自签名证书时握手必然失败（界面上就是「PVE 隧道握手失败」）。
+   * 这里把 agent、是否校验证书、登录 Cookie 一起交给 vm-session。
+   */
+  consoleTlsOptions(): { rejectUnauthorized: boolean; agent: Agent; cookie: string } {
+    const client = this.requireClient()
+    return {
+      rejectUnauthorized: !client.allowSelfSigned,
+      agent: client.tlsAgent,
+      cookie: client.authCookieHeader
+    }
   }
 
   private requireClient(): PveClient {
@@ -1134,13 +1252,15 @@ export class PveManager {
     const client = this.requireClient()
     const started = Date.now()
 
-    const [rawClusterStatus, rawResources, rawNodes, rawVersion, rawHa, rawOptions] = await Promise.all([
+    const [rawClusterStatus, rawResources, rawNodes, rawVersion, rawHa, rawOptions, rawUsers] = await Promise.all([
       client.request<unknown[]>('/cluster/status'),
       client.request<unknown[]>('/cluster/resources'),
       client.request<unknown[]>('/nodes'),
       client.request<Raw>('/version').catch(() => ({})),
       client.request<unknown[]>('/cluster/ha/status/current').catch(() => []),
-      client.request<Raw>('/cluster/options').catch(() => ({}))
+      client.request<Raw>('/cluster/options').catch(() => ({})),
+      // 用户总数：不带 full=1，只取 userid，代价很小；权限不足时按未知处理
+      client.request<unknown[]>('/access/users').catch(() => [])
     ])
 
     const clusterEntries = array(rawClusterStatus).map(object)
@@ -1160,6 +1280,9 @@ export class PveManager {
         return { nodeEntry, statusResult, metricsResult, taskResult }
       })
     )
+
+    // 按核负载只有一份（SSH 连的是「当前 PVE 节点」），取一次给所有节点用
+    const coreLoads = await this.sampleCores()
 
     const nodes: NodeSummary[] = nodeResults.map(({ nodeEntry, statusResult, metricsResult }) => {
       const detail = object(statusResult)
@@ -1187,7 +1310,7 @@ export class PveManager {
         cores: cpuinfo.cores === undefined ? undefined : number(cpuinfo.cores),
         memAvailable: memory.available === undefined ? undefined : number(memory.available),
         ksmShared: object(detail.ksm).shared === undefined ? undefined : number(object(detail.ksm).shared),
-        cpuCores: pickCoreLoads(object(array(metricsResult).at(-1))),
+        cpuCores: coreLoads && coreLoads.length > 0 ? coreLoads : undefined,
         metrics: mapNodeMetrics(array(metricsResult))
       }
     })
@@ -1229,7 +1352,8 @@ export class PveManager {
       ha: mapHa(array(rawHa)),
       keyboard: text(object(rawOptions).keyboard) || undefined,
       allowedTags,
-      description: text(object(rawOptions).description) || undefined
+      description: text(object(rawOptions).description) || undefined,
+      serverUrl: this.serverUrl ?? undefined
     }
 
     const dashboard: DashboardData = {
@@ -1240,7 +1364,9 @@ export class PveManager {
       vms,
       storages,
       tasks: tasks.slice(0, 40),
-      version
+      version,
+      // 去重后计数：同一 userid 只算一个；接口没权限时给 undefined，前端显示 —
+      userCount: countUniqueUsers(rawUsers)
     }
     this.lastDashboard = dashboard
     this.lastDashboardAt = Date.now()
@@ -1631,46 +1757,218 @@ export class PveManager {
     })
   }
 
+  /**
+   * 探测客户机 SSH 是否可达，顺便把可用的 IP 记下来给「打开终端 / 文件面板」用。
+   *
+   * 走 Guest Agent 的 network-get-interfaces 拿 IPv4，再并发敲 22 端口。
+   * 拿不到 Agent 数据时返回 undefined（不下「不可用」结论），
+   * 只有拿到地址但连不上才返回 false。
+   */
+  private async probeGuestSsh(vm: VmSummaryRef): Promise<boolean | undefined> {
+    const cached = this.guestHostCache.get(vm.vmid)
+    const now = Date.now()
+    if (cached) {
+      const ttl = cached.host ? GUEST_HOST_TTL_MS : GUEST_RETRY_TTL_MS
+      if (now - cached.probedAt < ttl) {
+        return cached.noAgent ? undefined : Boolean(cached.host)
+      }
+    }
+    // 同一轮刷新里不要同时敲几十台：每台最多 1.2s，全并发会给局域网刷出一堆 SYN
+    while (this.guestProbes >= GUEST_PROBE_CONCURRENCY) {
+      await new Promise((resolve) => setTimeout(resolve, 120))
+    }
+    this.guestProbes += 1
+    try {
+      return await this.doProbeGuestSsh(vm)
+    } finally {
+      this.guestProbes -= 1
+    }
+  }
+
+  private async doProbeGuestSsh(vm: VmSummaryRef): Promise<boolean | undefined> {
+    const client = this.requireClient()
+    const epoch = this.sessionEpoch
+    const now = Date.now()
+    const fresh = (): boolean => epoch === this.sessionEpoch
+    let interfaces: AgentInterface[]
+    try {
+      const raw = await client.request<unknown>(`${vmBase(vm)}/agent/network-get-interfaces`, {
+        timeoutMs: 2_500
+      })
+      interfaces = mapAgent(raw)
+    } catch {
+      // Guest Agent 没装/没响应：不下否定结论，但记一笔，避免每分钟反复等超时
+      if (fresh()) this.guestHostCache.set(vm.vmid, { host: null, probedAt: now, noAgent: true })
+      return undefined
+    }
+
+    const candidates = interfaces
+      .flatMap((item) => item.ips)
+      .filter((ip) => !ip.type || ip.type === 'ipv4')
+      .map((ip) => ip.address)
+      .filter((address) => address && !address.startsWith('127.') && address !== '0.0.0.0')
+
+    if (!fresh()) return undefined
+    if (candidates.length === 0) {
+      this.guestHostCache.set(vm.vmid, { host: null, probedAt: now })
+      return false
+    }
+
+    const host = await firstReachable(candidates, 22, 1_200)
+    if (!fresh()) return undefined
+    this.guestHostCache.set(vm.vmid, { host, probedAt: now })
+    return Boolean(host)
+  }
+
+  /** 取某台虚拟机上次探测到的可用客机地址（打开终端 / 文件面板时用） */
+  guestHostOf(vmid: number): string | null {
+    const cached = this.guestHostCache.get(vmid)
+    if (!cached) return null
+    if (Date.now() - cached.probedAt > GUEST_HOST_TTL_MS) return null
+    return cached.host
+  }
+
+  /**
+   * 后台探测客户机 SSH：不阻塞 dashboard。
+   * 结果写回控制台缓存，下一次轮询（默认 8 秒）就能反映到控制台菜单。
+   */
+  private queueGuestSshProbe(vm: VmSummaryRef, status: string): void {
+    if (this.guestProbing.has(vm.vmid)) return
+    this.guestProbing.add(vm.vmid)
+    const epoch = this.sessionEpoch
+    void this.probeGuestSsh(vm)
+      .then((reachable) => {
+        if (epoch !== this.sessionEpoch) return
+        if (this.consoleStatus.get(vm.vmid) !== status) return
+        const cached = this.consoleCache.get(vm.vmid)
+        if (!cached) return
+        this.consoleCache.set(vm.vmid, {
+          ...cached,
+          xterm: true,
+          xtermReason:
+            reachable === true
+              ? undefined
+              : reachable === false
+                ? '客户机 22 端口不可达；打开终端时可手动填写 SSH 地址与账号密码'
+                : '未能自动探测客户机 IP；打开终端时手动填写 SSH 地址即可',
+          guestHost: reachable === true ? this.guestHostOf(vm.vmid) : null,
+          xtermBackend: 'guest-ssh',
+          probedAt: Date.now()
+        })
+      })
+      .catch(() => {
+        /* 探测失败只影响控制台菜单的提示，不影响页面 */
+      })
+      .finally(() => this.guestProbing.delete(vm.vmid))
+  }
+
   private async enrichVmOsForDashboard(vms: VmSummary[]): Promise<void> {
     if (vms.length === 0) return
     const client = this.requireClient()
     const now = Date.now()
     const staleAfter = 30 * 60 * 1000
+    const consoleStaleAfter = 5 * 60 * 1000
+    /** 控制台不可用时更频繁地重试：装完 OpenSSH 后两分钟内菜单就能变回可用 */
+    const consoleRetryAfter = 2 * 60 * 1000
 
     const pending = vms.filter((vm) => {
       const cached = this.osCache.get(vm.vmid)
       return !cached || now - cached.configFetchedAt > staleAfter
     })
 
-    if (pending.length > 0) {
-      await Promise.allSettled(
-        pending.map(async (vm) => {
-          try {
-            const config = await client.request<Raw>(`${vmBase(vm)}/config`, { timeoutMs: 6_000 })
+    // 控制台能力也需要 config，跟 OS 探测复用同一次请求；
+    // 运行状态变了必须立刻重探，否则「先关机后开机」会一直沿用旧结论
+    const consolePending = vms.filter((vm) => {
+      const cached = this.consoleCache.get(vm.vmid)
+      if (!cached) return true
+      if (this.consoleStatus.get(vm.vmid) !== vm.status) return true
+      const ttl =
+        vm.status === 'running' && !cached.xterm ? consoleRetryAfter : consoleStaleAfter
+      return now - cached.probedAt > ttl
+    })
+
+    await Promise.allSettled(
+      vms.map(async (vm) => {
+        const needsOs = pending.includes(vm)
+        const needsConsole = consolePending.includes(vm)
+        if (!needsOs && !needsConsole) return
+        try {
+          const config = await client.request<Raw>(`${vmBase(vm)}/config`, { timeoutMs: 6_000 })
+          if (needsOs) {
             this.osCache.set(vm.vmid, {
               os: detectVmOs(vm.type, config, vm.name),
               agentEnabled: agentEnabledFromConfig(config),
               configFetchedAt: Date.now()
             })
-          } catch {
+          }
+          if (needsConsole) {
+            const agentEnabled = agentEnabledFromConfig(config)
+            const cachedGuest = this.guestHostCache.get(vm.vmid)
+            const guestFresh =
+              cachedGuest !== undefined &&
+              Date.now() - cachedGuest.probedAt <
+                (cachedGuest.host ? GUEST_HOST_TTL_MS : GUEST_RETRY_TTL_MS)
+            const guestSsh = guestFresh
+              ? cachedGuest.noAgent
+                ? undefined
+                : Boolean(cachedGuest.host)
+              : undefined
+            /**
+             * QEMU 终端统一走客户机 SSH，后台探测 22 端口只为自动带出 IP；
+             * 探测失败也不置灰，用户可以在终端窗口里手动填写地址。
+             */
+            const needsGuestProbe =
+              vm.type === 'qemu' && vm.status === 'running' && agentEnabled && !guestFresh
+            const capability = deriveConsoleCapability({
+              type: vm.type,
+              status: vm.status,
+              config,
+              guestSsh,
+              vncEnabled: text(config.vnc, '') !== '0'
+            })
+            const guest = this.guestHostOf(vm.vmid)
+            this.consoleCache.set(vm.vmid, {
+              ...capability,
+              xtermReason:
+                needsGuestProbe && !capability.xterm
+                  ? '正在探测客户机 SSH（22 端口）…'
+                  : capability.xtermReason,
+              guestHost: guest,
+              guestUser: text(config.ciuser, '') || undefined,
+              xtermBackend: guest ? 'guest-ssh' : capability.backend,
+              probedAt: Date.now()
+            })
+            this.consoleStatus.set(vm.vmid, vm.status)
+            if (needsGuestProbe) this.queueGuestSshProbe(vm, vm.status)
+          }
+        } catch {
+          if (needsOs) {
             this.osCache.set(vm.vmid, {
               os: detectVmOs(vm.type, { name: vm.name, tags: vm.tags.join(' ') }, vm.name),
               agentEnabled: false,
               configFetchedAt: Date.now() - 25 * 60 * 1000
             })
           }
-        })
-      )
-    }
+        }
+      })
+    )
 
     const activeIds = new Set(vms.map((vm) => vm.vmid))
     for (const cachedId of this.osCache.keys()) {
       if (!activeIds.has(cachedId)) this.osCache.delete(cachedId)
     }
+    for (const cachedId of this.consoleCache.keys()) {
+      if (!activeIds.has(cachedId)) this.consoleCache.delete(cachedId)
+    }
+    for (const cachedId of this.consoleStatus.keys()) {
+      if (!activeIds.has(cachedId)) this.consoleStatus.delete(cachedId)
+    }
 
     for (const vm of vms) {
       const cached = this.osCache.get(vm.vmid)
       if (cached) vm.os = cached.os
+      const consoleInfo = this.consoleCache.get(vm.vmid)
+      if (consoleInfo) vm.console = consoleInfo
     }
 
     if (this.osEnrichmentRunning) return
@@ -1693,8 +1991,7 @@ export class PveManager {
     })
   }
 
-  private async enrichVmOsFromAgent(vms: VmSummary[]): Promise<void> {
-    let client: PveClient
+  private async enrichVmOsFromAgent(vms: VmSummary[]): Promise<void> {    let client: PveClient
     try {
       client = this.requireClient()
     } catch {
@@ -1773,10 +2070,35 @@ export class PveManager {
       vmid: validateVmid(ref.vmid)
     }
     const disks = await this.mapVmDisks(client, normalizedRef, config)
+    // 控制台能力：QEMU 统一走客户机 SSH，详情弹窗用同一份缓存避免重复探测
+    const guestSsh =
+      ref.type === 'qemu' &&
+      runtime.status === 'running' &&
+      agentEnabledFromConfig(config)
+        ? await this.probeGuestSsh({ node: normalizedRef.node, vmid: normalizedRef.vmid, type: ref.type })
+        : undefined
+    const guest = this.guestHostOf(normalizedRef.vmid)
+    const capability = deriveConsoleCapability({
+      type: ref.type,
+      status: runtime.status,
+      config,
+      guestSsh,
+      vncEnabled: text(config.vnc, '') !== '0'
+    })
+    const consoleInfo: VmConsoleInfo = {
+      ...capability,
+      guestHost: guest,
+      guestUser: text(config.ciuser, '') || undefined,
+      xtermBackend: guest ? 'guest-ssh' : capability.backend,
+      probedAt: Date.now()
+    }
+    this.consoleCache.set(normalizedRef.vmid, consoleInfo)
+    this.consoleStatus.set(normalizedRef.vmid, runtime.status)
     return {
       ref: normalizedRef,
       name,
       os: detectVmOs(ref.type, config, name),
+      console: consoleInfo,
       runtime,
       config: sanitizeConfig(config),
       disks,
@@ -1858,6 +2180,9 @@ export class PveManager {
       form,
       timeoutMs: 30_000
     })
+    // 改配置可能加/删串口，控制台能力必须重探
+    this.consoleCache.delete(ref.vmid)
+    this.consoleStatus.delete(ref.vmid)
     return { message: '虚拟机配置已更新。' }
   }
 
@@ -2525,6 +2850,90 @@ export class PveManager {
   }
 
   async openConsole(input: ConsoleOpenRequest): Promise<ConsoleSessionInfo> {
+    // 虚拟机 xterm 走 SshServers.vmSessions（要处理 termproxy 帧协议），这里只保留 noVNC / 节点终端
+    return this.openConsoleSession(input)
+  }
+
+  /**
+   * 虚拟机 xterm.js 控制台的凭据换发。
+   *
+   * 这里只负责向 PVE 要 ticket 并拼出 vncwebsocket 地址，真正的 WS 连接与
+   * termproxy 帧协议由 SshServers.vmSessions 负责（那边还要剥掉认证回包 'OK'）。
+   *
+   * 判定顺序：
+   *   1. LXC → termproxy（容器天生有 pty）
+   *   2. QEMU：serial(socket) 存在 → 串口（qm terminal）
+   *   3. QEMU 没有串口 → 抛错；客户机 SSH 由 ipc 层在这之前优先尝试
+   */
+  async prepareVmTerminal(input: ConsoleOpenRequest): Promise<VmTerminalEndpoint> {
+    const client = this.requireClient()
+    const node = validateNode(input.node)
+    const type = validateVmType(input.type ?? 'qemu')
+    const vmid = validateVmid(input.vmid ?? 0)
+    const vmPath = `/nodes/${encodeURIComponent(node)}/${type}/${vmid}`
+
+    const termproxyUrl = (port: number | string, ticket: string): string =>
+      pveConsoleUrl(client.serverUrl, `${vmPath}/vncwebsocket`, port, ticket)
+
+    if (type === 'lxc') {
+      const term = await client.request<{ port: number | string; ticket: string; user?: string }>(
+        `${vmPath}/termproxy`,
+        { method: 'POST', timeoutMs: 20_000 }
+      )
+      if (!term?.ticket || term.port === undefined) {
+        throw new PveError('CONSOLE_ERROR', 'PVE 没有返回容器终端凭据。')
+      }
+      return {
+        backend: 'termproxy',
+        wsUrl: termproxyUrl(term.port, term.ticket),
+        ticket: term.ticket,
+        user: term.user || client.username,
+        node,
+        type,
+        vmid,
+        name: input.name
+      }
+    }
+
+    // QEMU 串口方案已取消：终端统一走客户机 SSH，由 ipc 层优先处理。
+    // 这里只保留 LXC 的容器 pty。
+    throw new PveError(
+      'CONSOLE_ERROR',
+      'QEMU 串口控制台已取消，请打开 xterm.js 并填写客户机 SSH 地址与账号密码。'
+    )
+  }
+
+
+  /**
+   * 节点 Shell 的 PVE termproxy。
+   *
+   * 很多 PVE 节点只允许密钥 SSH（Debian 默认 PermitRootLogin prohibit-password），
+   * 但 PVE 自己的 termproxy 只用 API ticket，不依赖节点 sshd；
+   * QEMU 串口也可以先开这个通道再执行 `qm terminal`。
+   */
+  async prepareNodeTerminal(node: string): Promise<{ wsUrl: string; ticket: string; user: string }> {
+    const client = this.requireClient()
+    const valid = validateNode(node)
+    const term = await client.request<{ port: number | string; ticket: string; user?: string }>(
+      `/nodes/${encodeURIComponent(valid)}/termproxy`,
+      { method: 'POST', timeoutMs: 20_000 }
+    )
+    if (!term?.ticket || term.port === undefined) {
+      throw new PveError('CONSOLE_ERROR', 'PVE 没有返回节点终端凭据。')
+    }
+    return {
+      wsUrl: pveConsoleUrl(
+        client.serverUrl,
+        `/nodes/${encodeURIComponent(valid)}/vncwebsocket`,
+        term.port,
+        term.ticket
+      ),
+      ticket: term.ticket,
+      user: term.user || client.username
+    }
+  }
+
+  private async openConsoleSession(input: ConsoleOpenRequest): Promise<ConsoleSessionInfo> {
     const client = this.requireClient()
     const node = validateNode(input.node)
 

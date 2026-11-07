@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
+  Bell,
   CheckCircle2,
   Download,
   EthernetPort,
@@ -107,6 +108,7 @@ export function SettingsView({
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [changelogOpen, setChangelogOpen] = useState(false)
   const [backgroundBusy, setBackgroundBusy] = useState<BackgroundKind | null>(null)
+  const [testingNotification, setTestingNotification] = useState(false)
 
   useEffect(() => {
     setCustomFontDraft(settings.customFont)
@@ -170,6 +172,20 @@ export function SettingsView({
     void window.pvevdi.openExternal(url)
   }
 
+  const sendTestNotification = async (): Promise<void> => {
+    setTestingNotification(true)
+    try {
+      await unwrap(window.pvevdi.testNotification())
+      toast.success('已发送测试通知', {
+        description: '如果没有看到，请检查 Windows 通知设置与「专注助手」。'
+      })
+    } catch (err) {
+      toast.error('无法发送通知', { description: errorDetail(err) })
+    } finally {
+      setTestingNotification(false)
+    }
+  }
+
   const pickBackground = async (kind: BackgroundKind): Promise<void> => {
     setBackgroundBusy(kind)
     try {
@@ -201,7 +217,7 @@ export function SettingsView({
     <div className="space-y-4">
       <PageHeader
         eyebrow={`${session.clusterName} 集群`}
-        title="设置"
+        title="首选项"
       />
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
@@ -528,6 +544,70 @@ export function SettingsView({
                 onCheckedChange={(value) => void update({ launchAtLogin: value })}
                 aria-label="开机自启"
               />
+            </div>
+          </Card>
+
+          <Card>
+            <PanelHeader
+              title="桌面通知"
+              description="通过 Windows 通知中心提醒集群事件；窗口收起到托盘时同样生效。"
+              actions={
+                <Switch
+                  checked={settings.notificationsEnabled}
+                  disabled={saving}
+                  onCheckedChange={(value) => void update({ notificationsEnabled: value })}
+                  aria-label="桌面通知"
+                />
+              }
+            />
+            <div className="divide-y divide-border">
+              <div className="flex items-center justify-between gap-4 px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <Power className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <div className="text-[12px] text-foreground">虚拟机关机</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">虚拟机从运行变成已停止时提醒。</div>
+                  </div>
+                </div>
+                <Switch
+                  checked={settings.notifyVmShutdown}
+                  disabled={saving || !settings.notificationsEnabled}
+                  onCheckedChange={(value) => void update({ notifyVmShutdown: value })}
+                  aria-label="虚拟机关机通知"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4 px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <div className="text-[12px] text-foreground">任务失败</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">PVE 任务以失败状态结束时提醒。</div>
+                  </div>
+                </div>
+                <Switch
+                  checked={settings.notifyTaskFailure}
+                  disabled={saving || !settings.notificationsEnabled}
+                  onCheckedChange={(value) => void update({ notifyTaskFailure: value })}
+                  aria-label="任务失败通知"
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div>
+                  <div className="text-[12px] text-foreground">测试通知</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    确认 Windows 通知未被系统设置或「专注助手」拦截。
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={saving || testingNotification || !settings.notificationsEnabled}
+                  onClick={() => void sendTestNotification()}
+                >
+                  <Bell className="h-3 w-3" />
+                  发送测试通知
+                </Button>
+              </div>
             </div>
           </Card>
 

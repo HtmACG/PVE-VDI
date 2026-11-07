@@ -18,7 +18,8 @@ export interface ChartPoint {
 
 interface AreaChartProps {
   points: ChartPoint[]
-  height?: number
+  /** 数字按像素，'100%' 用于自适应父容器高度 */
+  height?: number | string
   color?: string
   className?: string
   yMax?: number

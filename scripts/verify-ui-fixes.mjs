@@ -15,6 +15,8 @@ fs.mkdirSync(outDir, { recursive: true })
 
 const rendererDir = path.join(root, 'out', 'renderer')
 const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
+// 版本号从 package.json 读，别在 mock 里写死——写死过一次，界面显示 1.7.0 而实际发的是 1.8.x
+const APP_VERSION = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -58,6 +60,9 @@ const makeSettings = (theme) => ({
   accentColor: '#0078d4',
   networkView: 'cards',
   launchAtLogin: false,
+  notificationsEnabled: true,
+  notifyVmShutdown: true,
+  notifyTaskFailure: true,
   appearanceVersion: 2,
   appBackground: ''
 })
@@ -99,8 +104,12 @@ const dashboard = {
     version: 8,
     ha: [{ id: 'ha/node/pve', type: 'node', node: 'pve', status: 'online' }],
     keyboard: 'en-us',
-    allowedTags: []
+    allowedTags: [],
+    // 标题栏 / 服务器资源底栏显示的 PVE 地址
+    serverUrl: 'https://pve.example.com:8006'
   },
+  // PVE 账号总数，后端走 /access/users 去重计数
+  userCount: 7,
   nodes: [node('pve', 0.083), node('pve2', 0.12), node('pve3', 0.05)],
   vms: [
     {
@@ -119,6 +128,7 @@ const dashboard = {
       tags: ['dbi'],
       ostype: 'l26',
       os: { family: 'linux', name: 'Linux', version: '10.1.2', source: 'agent' },
+      console: { vnc: true, xterm: true, guestHost: '10.10.12.204', xtermBackend: 'guest-ssh', probedAt: Date.now() },
       haManaged: false,
       cpus: 4,
       disk: 132 * GB,
@@ -146,6 +156,7 @@ const dashboard = {
       tags: [],
       ostype: 'debian',
       os: { family: 'linux', name: 'Debian', version: '12', source: 'ostype' },
+      console: { vnc: false, xterm: true, vncReason: 'LXC 容器没有图形界面，只能用终端控制台', probedAt: Date.now() },
       haManaged: false,
       cpus: 2,
       disk: 8 * GB,
@@ -166,6 +177,7 @@ const detail = {
   ref: { node: 'pve', type: 'qemu', vmid: 204 },
   name: 'DBI-Business-Server',
   os: { family: 'linux', name: 'Linux', version: '10.1.2', source: 'agent' },
+  console: { vnc: true, xterm: true, probedAt: Date.now() },
   config: {
     cores: 4,
     sockets: 1,
@@ -691,17 +703,19 @@ const newModuleData = {
 /** 主窗口 mock：页面脚本执行前注入 window.pvevdi */
 function mainMock(payload) {
   // addInitScript 会序列化函数体，数据通过第二个参数（payload）注入
-  const { theme, dashboard, detail, imagesData, newModuleData } = payload
+  const { theme, dashboard, detail, imagesData, newModuleData, sshBootstrap } = payload
   const ok = (data) => Promise.resolve({ ok: true, data })
   const listeners = new Set()
-  let current = { serverUrl: 'https://pve.example.com:8006', username: 'root@pam', allowSelfSigned: true, rememberPassword: false, hasSavedPassword: false, credentialStorageAvailable: true, theme: theme, refreshInterval: 8, uiFont: 'inter', customFont: '', accentColor: '#0078d4', networkView: 'cards', launchAtLogin: false, appearanceVersion: 2, appBackground: '' }
+  const sshListeners = new Set()
+  const mockSshSessions = []
+  let current = { serverUrl: 'https://pve.example.com:8006', username: 'root@pam', allowSelfSigned: true, rememberPassword: false, hasSavedPassword: false, credentialStorageAvailable: true, theme: theme, refreshInterval: 8, uiFont: 'inter', customFont: '', accentColor: '#0078d4', networkView: 'cards', launchAtLogin: false, notificationsEnabled: true, notifyVmShutdown: true, notifyTaskFailure: true, appearanceVersion: 2, appBackground: '' }
   Object.defineProperty(window, 'pvevdi', {
     configurable: true,
     writable: true,
     value: {
       bootstrap: () =>
         ok({
-          appVersion: '1.7.0',
+          appVersion: payload.appVersion,
           settings: current,
           backgrounds: {},
           session: {
@@ -713,6 +727,12 @@ function mainMock(payload) {
           autoLoginError: null
         }),
       dashboard: () => ok(dashboard),
+      // 独立 SSH 窗口的启动上下文
+      sshWindowBootstrap: () => (sshBootstrap ? ok(sshBootstrap) : Promise.resolve({ ok: false, error: { message: 'not an ssh window' } })),
+      openSshWindow: (input) => {
+        window.__lastSshWindowOpen = input ?? null
+        return ok(null)
+      },
       liveMetrics: () => ok({ fetchedAt: Date.now(), nodes: [] }),
       vmDetail: () => ok(detail),
       vmSnapshot: (input) =>
@@ -747,6 +767,7 @@ function mainMock(payload) {
         for (const fn of listeners) fn(current)
         return ok(current)
       },
+      testNotification: () => ok(undefined),
       onSettingsChanged: (fn) => {
         listeners.add(fn)
         return () => listeners.delete(fn)
@@ -759,6 +780,72 @@ function mainMock(payload) {
       windowClose: () => {},
       openConsoleWindow: () => ok(null),
       openExternal: () => ok(null),
+      // SSH：返回假的会话与目录列表，供界面断言
+      sshProbe: () => ok({ ok: true, message: 'SSH 可用，检测到 48 个线程', host: 'pve.example.com', port: 22, username: 'root' }),
+      sshShellOpen: (input) => {
+        const sessionId = 'ssh-mock-' + Date.now()
+        mockSshSessions.push(sessionId)
+        // 模拟主进程推送 banner，让终端里真的出现字符
+        setTimeout(() => {
+          for (const listener of sshListeners) {
+            listener({
+              type: 'data',
+              sessionId,
+              data: 'Welcome to Proxmox VE 8.2.4\r\nroot@pve1:~# '
+            })
+          }
+        }, 120)
+        return ok({
+          sessionId,
+          host: 'pve.example.com',
+          username: 'root',
+          title: 'root@pve1',
+          createdAt: Date.now(),
+          cols: input?.cols ?? 120,
+          rows: input?.rows ?? 32,
+          transport: input?.vm ? 'guest-ssh' : 'ssh'
+        })
+      },
+      sshShellList: () => ok([]),
+      sshShellWrite: () => ok(null),
+      sshShellResize: () => ok(null),
+      sshShellClose: () => ok(null),
+      onSshShellEvent: (fn) => {
+        sshListeners.add(fn)
+        return () => sshListeners.delete(fn)
+      },
+      sshFsList: (input) => {
+        ;(window.__sshFsCalls ??= []).push(input ?? {})
+        return ok({
+          path: input?.path ?? '/root',
+          home: '/root',
+          entries: [
+            { name: '.config', path: '/root/.config', type: 'dir', size: 0, mtime: Date.now() - 86400000 },
+            { name: 'iso', path: '/root/iso', type: 'dir', size: 0, mtime: Date.now() - 7200000 },
+            { name: '.bashrc', path: '/root/.bashrc', type: 'file', size: 3107, mtime: Date.now() - 2592000000 },
+            { name: '.bash_logout', path: '/root/.bash_logout', type: 'file', size: 220, mtime: Date.now() - 2592000000 },
+            { name: 'docker-entrypoint.sh', path: '/root/docker-entrypoint.sh', type: 'file', size: 6862, mtime: Date.now() - 604800000 }
+          ]
+        })
+      },
+      sshFsRead: (input) => {
+        const payload = {
+          path: input?.path ?? '/root/.bashrc',
+          size: 3107,
+          text: '# ~/.bashrc\nexport PATH=$PATH:/usr/sbin\n',
+          truncated: false,
+          binary: false,
+          mtime: Date.now()
+        }
+        return ok(payload)
+      },
+      sshFsWrite: () => ok({ path: '/root/.bashrc', size: 40 }),
+      sshFsCreateFile: (input) => ok({ path: input?.path }),
+      sshFsCreateDir: (input) => ok({ path: input?.path }),
+      sshFsRemove: (input) => ok({ path: input?.path }),
+      sshFsRename: (input) => ok({ from: input?.from, to: input?.to }),
+      sshFsUpload: () => ok(null),
+      sshFsDownload: () => ok(null),
       // 新模块
       accessOverview: () => ok(newModuleData.access),
       accessUserSave: () => ok(null),
@@ -838,6 +925,7 @@ function consoleMock(payload) {
         for (const fn of listeners) fn(current)
         return ok(current)
       },
+      testNotification: () => ok(undefined),
       onSettingsChanged: (fn) => {
         listeners.add(fn)
         return () => listeners.delete(fn)
@@ -868,7 +956,7 @@ try {
     if (m.type() === 'error') logs.push(`[console] ${m.text()}`)
   })
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`))
-  await page.addInitScript(mainMock, { theme: 'light', dashboard, detail, imagesData, newModuleData })
+  await page.addInitScript(mainMock, { appVersion: APP_VERSION, theme: 'light', dashboard, detail, imagesData, newModuleData })
   await page.goto(`http://127.0.0.1:${port}/index.html`)
   try {
     await page.waitForSelector('text=DBI-Business-Server', { timeout: 25_000 })
@@ -881,6 +969,88 @@ try {
   await page.waitForTimeout(1300)
   await shot(page, '02-overview-light.png')
 
+  // ── 标题栏：左上角只留品牌 + 版本号 ──────────────────────────────
+  // 需求：logo 处加版本号，撤掉 IP 与设备（集群）名。
+  const titlebar = await page.evaluate(() => {
+    const header = document.querySelector('header')
+    if (!header) return null
+    const text = header.innerText.replace(/\s+/g, ' ').trim()
+    return {
+      text,
+      hasVersion: /v\d+\.\d+\.\d+/.test(text),
+      hasIp: /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(text),
+      hasProto: /https?:\/\//.test(text),
+      // 集群名来自 mock 的 cluster.name
+      hasClusterName: text.includes('pve-cluster')
+    }
+  })
+  check(
+    '标题栏显示软件版本号（与 package.json 一致）',
+    Boolean(titlebar?.hasVersion) && titlebar.text.includes(`v${APP_VERSION}`),
+    JSON.stringify({ expect: `v${APP_VERSION}`, text: titlebar?.text })
+  )
+  check(
+    '标题栏不再显示 PVE 地址',
+    Boolean(titlebar) && !titlebar.hasIp && !titlebar.hasProto,
+    JSON.stringify({ hasIp: titlebar?.hasIp, text: titlebar?.text })
+  )
+  check('标题栏不再显示设备（集群）名称', Boolean(titlebar) && !titlebar.hasClusterName, JSON.stringify(titlebar))
+
+  // ── 顶部四张统计卡：节点 / 运行中虚拟机 / LXC 容器 / 用户数量 ─────
+  const statCards = await page.evaluate(() => {
+    // StatCard 根节点：带 bg-card 的方框，内部第一行是 12px 的指标名
+    const cards = [...document.querySelectorAll('div.border.border-border.bg-card')]
+      .filter((el) => el.querySelector('.font-mono.text-\\[26px\\]'))
+      .map((el) => {
+        const label = el.querySelector('.text-\\[12px\\].font-medium')?.textContent?.trim() ?? ''
+        const value = el.querySelector('.font-mono.text-\\[26px\\]')?.textContent?.trim() ?? ''
+        return { label, value, text: el.innerText.replace(/\s+/g, ' ').trim() }
+      })
+    return {
+      labels: cards.map((c) => c.label),
+      cards,
+      hasLxc: cards.some((c) => c.label === 'LXC 容器'),
+      hasUser: cards.some((c) => c.label === '用户数量'),
+      // 被替换掉的两张不该再出现在这一排
+      hasCpuCard: cards.some((c) => c.label === 'CPU 使用率'),
+      hasMemCard: cards.some((c) => c.label === '内存使用率')
+    }
+  })
+  check(
+    '顶部统计卡为 节点 / 虚拟机 / LXC 容器 / 用户数量',
+    statCards.labels.length === 4 &&
+      statCards.labels[0] === '节点' &&
+      statCards.labels[1] === '运行中虚拟机' &&
+      statCards.labels[2] === 'LXC 容器' &&
+      statCards.labels[3] === '用户数量',
+    JSON.stringify(statCards.labels)
+  )
+  check('顶部「CPU 使用率」卡片已替换为 LXC 容器', statCards.hasLxc && !statCards.hasCpuCard, JSON.stringify(statCards.labels))
+  check(
+    '顶部「内存使用率」卡片已替换为用户数量',
+    statCards.hasUser && !statCards.hasMemCard,
+    JSON.stringify(statCards.labels)
+  )
+  // mock 里只有 1 个 LXC（vmid 118，running），四张卡里应有 1 / 1
+  check(
+    'LXC 容器卡片计数正确（1 运行 / 共 1）',
+    statCards.cards.find((c) => c.label === 'LXC 容器')?.text.includes('1') ?? false,
+    JSON.stringify(statCards.cards.find((c) => c.label === 'LXC 容器'))
+  )
+  // mock 的 userCount = 7，卡片应显示 7 而不是占位符「—」
+  const userCard = statCards.cards.find((c) => c.label === '用户数量')
+  check('用户数量卡片取到真实账号数（7）', userCard?.value === '7', JSON.stringify(userCard))
+  // 服务器资源底栏第一格应为「PVE 地址」，值是去掉协议头的地址
+  const pveAddr = await page.evaluate(() => {
+    const label = [...document.querySelectorAll('div')].find(
+      (el) => el.children.length === 0 && el.textContent?.trim() === 'PVE 地址'
+    )
+    if (!label) return null
+    const value = label.nextElementSibling?.textContent?.trim() ?? ''
+    return { label: 'PVE 地址', value }
+  })
+  check('服务器资源底栏显示 PVE 地址（不再是 CPU 型号）', pveAddr?.value === 'pve.example.com:8006', JSON.stringify(pveAddr))
+
   // 侧栏不再有「新建虚拟机」按钮
   const sidebarProbe = await page.evaluate(() => {
     const aside = document.querySelector('aside')
@@ -890,6 +1060,16 @@ try {
   })
   check('侧栏已移除「新建虚拟机」按钮', Boolean(sidebarProbe) && !sidebarProbe.hasCreate, JSON.stringify(sidebarProbe))
   check('侧栏首项为导航（总览）', Boolean(sidebarProbe) && sidebarProbe.firstItem === '总览', JSON.stringify(sidebarProbe))
+
+  // 软件设置 → 首选项（名字改了，避免和「节点设置」混淆）
+  const sidebarSettings = await page.evaluate(() => {
+    const aside = document.querySelector('aside')
+    if (!aside) return null
+    const labels = [...aside.querySelectorAll('button')].map((b) => b.textContent?.trim() ?? '')
+    return { hasPreference: labels.includes('首选项'), hasSettings: labels.includes('设置'), labels }
+  })
+  check('侧栏底部入口改名为「首选项」', Boolean(sidebarSettings?.hasPreference), JSON.stringify(sidebarSettings))
+  check('侧栏不再出现仅写「设置」的入口', Boolean(sidebarSettings) && !sidebarSettings.hasSettings, JSON.stringify(sidebarSettings?.labels))
 
   // 服务器资源三块改为 ECharts 仪表盘
   const gauges = await page.evaluate(() => {
@@ -1304,6 +1484,458 @@ try {
     await shot(page, `${view.shot}-light.png`)
   }
 
+  // SSH：主窗口不再有 SSH 页，终端一律独立窗口
+  const sidebarSsh = await page.evaluate(() => {
+    const aside = document.querySelector('aside')
+    const labels = aside ? [...aside.querySelectorAll('button')].map((b) => b.textContent?.trim() ?? '') : []
+    return {
+      hasSshNav: labels.some((label) => label === 'SSH'),
+      inlineXterm: document.querySelectorAll('.xterm').length
+    }
+  })
+  check('主窗口已移除 SSH 终端页', Boolean(sidebarSsh) && !sidebarSsh.hasSshNav, JSON.stringify(sidebarSsh))
+  check('主窗口不内嵌终端', (sidebarSsh?.inlineXterm ?? -1) === 0, JSON.stringify({ inlineXterm: sidebarSsh?.inlineXterm }))
+
+  // 独立 SSH 窗口：新开页面，带 ?ssh=1 走 SshWindowApp
+  const sshPage = await context.newPage()
+  sshPage.on('console', (m) => {
+    if (m.type() === 'error') logs.push(`[ssh-console] ${m.text()}`)
+  })
+  sshPage.on('pageerror', (e) => logs.push(`[ssh-pageerror] ${e.message}`))
+  const sshBootstrap = {
+    request: { tabs: 1 },
+    settings: {
+      serverUrl: 'https://pve.example.com:8006',
+      username: 'root@pam',
+      theme: 'light',
+      uiFont: 'inter',
+      customFont: '',
+      accentColor: '#0078d4'
+    }
+  }
+  await sshPage.addInitScript(mainMock, {
+    appVersion: APP_VERSION,
+    theme: 'light',
+    dashboard,
+    detail,
+    imagesData,
+    newModuleData,
+    sshBootstrap
+  })
+  await sshPage.goto(`http://127.0.0.1:${port}/index.html?ssh=1`)
+  await sshPage.waitForTimeout(2200)
+
+  const sshWindowShell = await sshPage.evaluate(() => {
+    const body = document.body.innerText
+    return {
+      hasTitleBar: body.includes('SSH 终端'),
+      hasCloseBtn: [...document.querySelectorAll('button')].some(
+        (b) => (b.getAttribute('aria-label') ?? '') === '关闭窗口'
+      )
+    }
+  })
+  check('SSH 独立窗口有自绘标题栏', Boolean(sshWindowShell?.hasTitleBar), JSON.stringify(sshWindowShell))
+  check('SSH 独立窗口有关闭按钮', Boolean(sshWindowShell?.hasCloseBtn), JSON.stringify(sshWindowShell))
+
+  const sshPanel = await sshPage.evaluate(() => {
+    const body = document.body.innerText
+    // xterm 6 的 DOM 渲染器不再生成 canvas，判据换成 .xterm-rows 里的行
+    const rows = [...document.querySelectorAll('.xterm-rows > div')]
+    const termRoot = document.querySelector('.xterm')
+    const tabButtons = [...document.querySelectorAll('button')].filter((b) =>
+      (b.getAttribute('title') ?? '') === '关闭标签'
+    )
+    return {
+      tabCount: tabButtons.length,
+      hasXterm: Boolean(termRoot),
+      rowCount: rows.length,
+      termText: rows.map((r) => r.textContent ?? '').join(''),
+      hasFiles: body.includes('.bashrc'),
+      hasPathBar: body.includes('/root'),
+      hasStatus: body.includes('xterm.js')
+    }
+  })
+
+  check('SSH 窗口渲染出 xterm 终端', Boolean(sshPanel?.hasXterm), JSON.stringify({ hasXterm: sshPanel?.hasXterm }))
+  check(
+    '终端输出已写入屏幕行',
+    (sshPanel?.rowCount ?? 0) > 0 && (sshPanel?.termText ?? '').includes('Proxmox VE'),
+    JSON.stringify({ rows: sshPanel?.rowCount, text: (sshPanel?.termText ?? '').slice(0, 40) })
+  )
+  check('SSH 有标签栏与可关闭标签', (sshPanel?.tabCount ?? 0) >= 1, JSON.stringify({ tabs: sshPanel?.tabCount }))
+  check('SSH 底部状态条显示会话信息', Boolean(sshPanel?.hasStatus), JSON.stringify({ hasStatus: sshPanel?.hasStatus }))
+  check('右侧文件面板列出目录内容', Boolean(sshPanel?.hasFiles), JSON.stringify({ hasFiles: sshPanel?.hasFiles }))
+  check('文件面板有路径栏', Boolean(sshPanel?.hasPathBar), JSON.stringify({ hasPath: sshPanel?.hasPathBar }))
+  await sshPage.screenshot({ path: path.join(outDir, '22-ssh-window-light.png') })
+
+  // 悬停态截图：确认按钮变底色时标题栏那条下边线依然连续
+  await sshPage.locator('[data-window-button="minimize"]').first().hover()
+  await sshPage.waitForTimeout(300)
+  await sshPage.screenshot({
+    path: path.join(outDir, '25-ssh-window-buttons-hover.png'),
+    clip: { x: 1080, y: 0, width: 200, height: 44 },
+    scale: 'device'
+  })
+  await sshPage.mouse.move(4, 600)
+  await sshPage.waitForTimeout(200)
+
+  /**
+   * 标题栏按钮不能溢出：宿主是 h-10 + border-b，内容盒只有 39px。
+   * 按钮写死 40px 时会盖住那条下边线，悬停变色后看起来像「底部横线断了一截」。
+   */
+  const windowButtonFit = await sshPage.evaluate(() => {
+    const group = document.querySelector('[data-window-buttons]')
+    const bar = group?.parentElement
+    if (!group || !bar) return null
+    const g = group.getBoundingClientRect()
+    const b = bar.getBoundingClientRect()
+    const barCs = getComputedStyle(bar)
+    return {
+      groupH: Math.round(g.height * 10) / 10,
+      barH: Math.round(b.height * 10) / 10,
+      barBorderBottom: barCs.borderBottomWidth,
+      groupOverflow: Math.round((g.bottom - b.bottom) * 10) / 10,
+      buttonsHeight: [...group.querySelectorAll('button')].map((el) => Math.round(el.getBoundingClientRect().height))
+    }
+  })
+  check(
+    '标题栏按钮不超出标题栏高度',
+    windowButtonFit !== null && windowButtonFit.groupOverflow <= 0,
+    JSON.stringify(windowButtonFit)
+  )
+  check(
+    '标题栏按钮撑满内容盒（不压住下边线）',
+    windowButtonFit !== null &&
+      windowButtonFit.buttonsHeight.every((h) => h === windowButtonFit.groupH) &&
+      windowButtonFit.groupH === windowButtonFit.barH - 1,
+    JSON.stringify(windowButtonFit)
+  )
+
+  // 悬停最小化后，标题栏下边线不能被盖掉（按钮背景不能压到 border 所在那一行）
+  const hoverLine = await sshPage.evaluate(async () => {
+    const btn = document.querySelector('[data-window-button="minimize"]')
+    const bar = btn?.parentElement?.parentElement
+    if (!bar) return null
+    return { barBottom: Math.round(bar.getBoundingClientRect().bottom), btnBottom: Math.round(btn.getBoundingClientRect().bottom) }
+  })
+  if (hoverLine) {
+    await sshPage.locator('[data-window-button="minimize"]').first().hover()
+    await sshPage.waitForTimeout(260)
+    const hovered = await sshPage.evaluate(() => {
+      const btn = document.querySelector('[data-window-button="minimize"]')
+      const bar = btn?.parentElement?.parentElement
+      return { barBottom: Math.round(bar.getBoundingClientRect().bottom), btnBottom: Math.round(btn.getBoundingClientRect().bottom) }
+    })
+    check(
+      '悬停最小化后按钮下沿不越过标题栏底边',
+      hovered.btnBottom < hovered.barBottom,
+      JSON.stringify({ idle: hoverLine, hovered })
+    )
+    await sshPage.mouse.move(4, 600)
+    await sshPage.waitForTimeout(200)
+  }
+
+  /**
+   * 终端与文件面板之间的分隔线必须横贯整窗，不能只在文件面板那段出现。
+   * 取像素行比对：分隔线那一行从左到右应当是同一种颜色。
+   */
+  const divider = await sshPage.evaluate(() => {
+    const row = [...document.querySelectorAll('div')].find(
+      (d) => typeof d.className === 'string' && d.className.includes('border-b') && d.classList.contains('flex') && d.querySelector('.xterm')
+    )
+    if (!row) return null
+    const r = row.getBoundingClientRect()
+    return { y: Math.round(r.bottom) - 1, width: Math.round(r.width) }
+  })
+  if (divider) {
+    const stripBuf = await sshPage.screenshot({ clip: { x: 0, y: divider.y, width: 1280, height: 1 } })
+    const runs = await sshPage.evaluate(async (dataUrl) => {
+      const img = new Image()
+      img.src = dataUrl
+      await img.decode()
+      const c = document.createElement('canvas')
+      c.width = img.width
+      c.height = img.height
+      const ctx = c.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      const d = ctx.getImageData(0, 0, img.width, 1).data
+      const out = []
+      let prev = null
+      let start = 0
+      for (let x = 0; x <= img.width; x += 1) {
+        const key = x === img.width ? 'END' : `${d[x * 4]},${d[x * 4 + 1]},${d[x * 4 + 2]}`
+        if (key !== prev) {
+          if (prev !== null) out.push({ from: start, to: x - 1, color: prev })
+          prev = key
+          start = x
+        }
+      }
+      return out
+    }, `data:image/png;base64,${stripBuf.toString('base64')}`)
+    check(
+      '终端底部分割线横贯整窗',
+      runs.length === 1 && runs[0].from === 0 && runs[0].to === 1279,
+      JSON.stringify({ y: divider.y, runs })
+    )
+  } else {
+    check('终端底部分割线横贯整窗', false, '未找到终端行容器')
+  }
+
+
+  // 新建第二个标签 → 应该变成两个
+  const addBtn = sshPage.locator('button[title="新建 SSH 标签"]').first()
+  if (await addBtn.count()) {
+    await addBtn.click()
+    await sshPage.waitForTimeout(1200)
+  }
+  const tabAfterAdd = await sshPage.evaluate(
+    () => [...document.querySelectorAll('button')].filter((b) => (b.getAttribute('title') ?? '') === '关闭标签').length
+  )
+  check('可多开 SSH 标签', tabAfterAdd === 2, JSON.stringify({ tabs: tabAfterAdd }))
+
+  // 文件预览：点文件名应进入编辑态
+  const fileBtn = sshPage.locator('button').filter({ hasText: '.bashrc' }).first()
+  await fileBtn.click()
+  await sshPage.waitForTimeout(900)
+  const previewState = await sshPage.evaluate(() => {
+    const areas = [...document.querySelectorAll('textarea')]
+    // 取第一个可见且有值的编辑区，避开弹窗里残留的 textarea
+    const area = areas.find((el) => el.offsetParent !== null && el.value.length > 0) ?? areas.find((el) => el.offsetParent !== null)
+    return {
+      hasEditor: Boolean(area),
+      content: area instanceof HTMLTextAreaElement ? area.value.slice(0, 40) : '',
+      hasSave: [...document.querySelectorAll('button')].some((b) => (b.textContent ?? '').trim() === '保存')
+    }
+  })
+  check('文件可点击进入文本预览', Boolean(previewState?.hasEditor), JSON.stringify({ hasEditor: previewState?.hasEditor }))
+  check('预览载入了文件内容', (previewState?.content ?? '').includes('.bashrc'), JSON.stringify({ content: previewState?.content }))
+  check('预览带保存入口', Boolean(previewState?.hasSave), JSON.stringify({ hasSave: previewState?.hasSave }))
+  await sshPage.screenshot({ path: path.join(outDir, '23-ssh-preview-light.png') })
+
+  // 返回列表
+  const closePreview = sshPage.locator('button[title="关闭预览"]').first()
+  if (await closePreview.count()) await closePreview.click()
+  await sshPage.waitForTimeout(400)
+
+  // 新建目录按钮
+  check('文件面板有新建目录入口', (await sshPage.locator('button[title="新建目录"]').count()) > 0)
+  check('文件面板有上传入口', (await sshPage.locator('button[title="上传文件"]').count()) > 0)
+  check('文件面板有重命名与删除入口', (await sshPage.locator('button[title="重命名"]').count()) > 0)
+
+  // 标签样式：选中项有底部下划线，且下划线只在选中项上
+  const tabStyle = await sshPage.evaluate(() => {
+    const rows = [...document.querySelectorAll('div')].filter((el) =>
+      (el.className ?? '').toString().includes('border-r border-border/70')
+    )
+    const underlines = rows.map((row) => {
+      const bar = row.querySelector('span')
+      const style = bar ? getComputedStyle(bar) : null
+      return { h: style?.height ?? '', bg: style?.backgroundColor ?? '' }
+    })
+    const barHeights = underlines.map((u) => u.h)
+    return {
+      tabs: rows.length,
+      barHeights,
+      // 有且只有一条可见下划线
+      visibleBars: underlines.filter((u) => u.h === '2px' && u.bg !== 'rgba(0, 0, 0, 0)').length
+    }
+  })
+  check('标签使用底部下划线选中态', tabStyle.tabs >= 1 && tabStyle.barHeights.every((h) => h === '2px'), JSON.stringify(tabStyle))
+  check('只有选中标签显示下划线', tabStyle.visibleBars === 1, JSON.stringify({ visibleBars: tabStyle.visibleBars, tabs: tabStyle.tabs }))
+  await sshPage.screenshot({ path: path.join(outDir, '24-ssh-tabs-light.png') })
+
+  await sshPage.close()
+
+  // 控制台类型选择：VNC / xterm.js 两项，不支持的那项置灰
+  await page.getByRole('button', { name: /^虚拟机/ }).first().click()
+  await page.waitForSelector('tbody tr', { timeout: 20_000 })
+  await page.waitForTimeout(600)
+
+  /**
+   * 打开指定虚拟机行操作菜单里的「控制台」子菜单，读回两项的可用状态。
+   * 用 data-console-mode / data-console-enabled 断言，避免依赖文案。
+   * 注意：Radix 靠 pointerdown 触发，必须用真实点击而不是 el.click()。
+   */
+  const rowOf = (vmName) => page.locator('tbody tr', { hasText: vmName }).first()
+
+  const inspectConsole = async (vmName, shotName) => {
+    await rowOf(vmName).locator('button[aria-label="更多操作"]').click()
+    await page.waitForSelector('[role="menu"]', { timeout: 8000 }).catch(() => null)
+    await page.waitForTimeout(300)
+    const items = await page.evaluate(() => {
+      return [...document.querySelectorAll('[data-console-mode]')].map((item) => ({
+        mode: item.getAttribute('data-console-mode'),
+        backend: item.getAttribute('data-console-backend'),
+        enabled: item.getAttribute('data-console-enabled') === 'true',
+        disabled:
+          item.getAttribute('aria-disabled') === 'true' ||
+          item.hasAttribute('data-disabled') ||
+          item.getAttribute('data-state') === 'disabled',
+        title: item.getAttribute('title') ?? '',
+        text: (item.textContent ?? '').trim(),
+        opacity: getComputedStyle(item).opacity
+      }))
+    })
+    if (items.length === 0) {
+      const html = await page.evaluate(() => {
+        const menu = document.querySelector('[role="menu"]')
+        return menu ? menu.outerHTML.slice(0, 900) : 'NO_MENU'
+      })
+      console.log(`[console-probe] ${vmName} ${html}`)
+    }
+    if (shotName) await shot(page, shotName)
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(250)
+    return items
+  }
+
+  const asItems = (result) => (Array.isArray(result) ? result : [])
+  const consoleQemu = await inspectConsole('DBI-Business-Server', '34-console-menu-qemu.png')
+  check(
+    '控制台菜单同时提供 VNC 与 xterm.js 两项',
+    asItems(consoleQemu).map((i) => i.mode).sort().join(',') === 'novnc,xterm',
+    JSON.stringify(consoleQemu)
+  )
+  check(
+    'VNC 与 xterm 都支持的虚拟机两项均可点',
+    asItems(consoleQemu).length === 2 && asItems(consoleQemu).every((i) => i.enabled && !i.disabled),
+    JSON.stringify(asItems(consoleQemu).map((i) => ({ mode: i.mode, enabled: i.enabled })))
+  )
+
+  const consoleLxc = await inspectConsole('cert-hub', '35-console-menu-lxc.png')
+  const lxcVnc = asItems(consoleLxc).find((i) => i.mode === 'novnc')
+  const lxcXterm = asItems(consoleLxc).find((i) => i.mode === 'xterm')
+  check(
+    'LXC 容器上 VNC 置灰',
+    Boolean(lxcVnc) && !lxcVnc.enabled && lxcVnc.disabled,
+    JSON.stringify(lxcVnc ?? null)
+  )
+  check(
+    'LXC 容器上 xterm.js 可用',
+    Boolean(lxcXterm) && lxcXterm.enabled && !lxcXterm.disabled,
+    JSON.stringify(lxcXterm ?? null)
+  )
+  check(
+    '置灰项降低不透明度',
+    Boolean(lxcVnc) && Number(lxcVnc.opacity) < 1,
+    JSON.stringify({ opacity: lxcVnc?.opacity })
+  )
+  check(
+    '置灰项给出不可用原因',
+    Boolean(lxcVnc) && lxcVnc.title.length > 0,
+    JSON.stringify({ title: lxcVnc?.title })
+  )
+
+  // 检测方式优化：xterm 菜单项要标出实际走的通道，客户机 SSH 可用时提示直连虚拟机内部
+  const consoleQemuAgain = await inspectConsole('DBI-Business-Server', null)
+  const qemuXterm = asItems(consoleQemuAgain).find((i) => i.mode === 'xterm')
+  check(
+    'xterm 项标出实际通道（客户机 SSH）',
+    Boolean(qemuXterm) && qemuXterm.backend === 'guest-ssh' && qemuXterm.text.includes('SSH'),
+    JSON.stringify({ backend: qemuXterm?.backend, text: qemuXterm?.text })
+  )
+  check(
+    'xterm 提示里给出客户机地址',
+    Boolean(qemuXterm) && qemuXterm.title.includes('10.10.12.204'),
+    JSON.stringify({ title: qemuXterm?.title })
+  )
+  check(
+    '客户机 SSH 可用时 xterm 不再置灰',
+    Boolean(qemuXterm) && qemuXterm.enabled && !qemuXterm.disabled,
+    JSON.stringify({ enabled: qemuXterm?.enabled })
+  )
+
+  // 文件面板对接虚拟机内部：SSH 窗口带 vm.guestHost 时，面板请求必须携带 guest 目标
+  const sshVmPage = await context.newPage()
+  sshVmPage.on('pageerror', (e) => logs.push(`[ssh-vm-window] ${e.message}`))
+  await sshVmPage.addInitScript(mainMock, {
+    appVersion: APP_VERSION,
+    theme: 'light',
+    dashboard,
+    detail,
+    imagesData,
+    newModuleData,
+    sshBootstrap: {
+      request: {
+        tabs: 1,
+        vm: {
+          node: 'pve',
+          vmid: 204,
+          type: 'qemu',
+          name: 'DBI-Business-Server',
+          guestHost: '10.10.12.204',
+          ostype: 'win11'
+        }
+      },
+      settings: {
+        serverUrl: 'https://pve.example.com:8006',
+        username: 'root@pam',
+        theme: 'light',
+        uiFont: 'inter',
+        customFont: '',
+        accentColor: '#0078d4'
+      }
+    }
+  })
+  await sshVmPage.goto(`http://127.0.0.1:${port}/index.html?ssh=1`)
+  await sshVmPage.waitForTimeout(2400)
+
+  const guestFsCall = await sshVmPage.evaluate(() => {
+    const calls = window.__sshFsCalls ?? []
+    const withGuest = calls.filter((call) => call?.guest?.host)
+    const badge = document.querySelector('[data-sftp-source]')
+    return {
+      total: calls.length,
+      withGuest: withGuest.length,
+      host: withGuest[0]?.guest?.host ?? null,
+      username: withGuest[0]?.guest?.username ?? null,
+      path: withGuest[0]?.path ?? null,
+      badgeKind: badge?.getAttribute('data-sftp-source') ?? null,
+      badgeText: (badge?.textContent ?? '').trim(),
+      badgeTitle: badge?.getAttribute('title') ?? ''
+    }
+  })
+  check(
+    '文件面板请求带上客户机目标',
+    guestFsCall.total > 0 && guestFsCall.withGuest === guestFsCall.total,
+    JSON.stringify(guestFsCall)
+  )
+  check(
+    '客户机目标使用探测到的 IP',
+    guestFsCall.host === '10.10.12.204',
+    JSON.stringify({ host: guestFsCall.host })
+  )
+  check(
+    'Windows 客户机默认用 Administrator 登录',
+    guestFsCall.username === 'Administrator',
+    JSON.stringify({ username: guestFsCall.username })
+  )
+  check(
+    '文件面板标出数据来源为虚拟机内部',
+    guestFsCall.badgeKind === 'guest' && guestFsCall.badgeText.includes('10.10.12.204'),
+    JSON.stringify({ kind: guestFsCall.badgeKind, text: guestFsCall.badgeText })
+  )
+  check(
+    '来源提示里写明登录账号（避免误以为是节点）',
+    guestFsCall.badgeTitle.includes('虚拟机') && guestFsCall.badgeTitle.includes('Administrator'),
+    JSON.stringify({ title: guestFsCall.badgeTitle })
+  )
+  const filesSource = await sshVmPage.evaluate(() => {
+    const el = document.querySelector('[data-files-source]')
+    return { kind: el?.getAttribute('data-files-source') ?? null, text: (el?.textContent ?? '').trim() }
+  })
+  check(
+    '状态条标明文件面板来源是客户机',
+    filesSource.kind === 'guest' && filesSource.text.includes('10.10.12.204'),
+    JSON.stringify(filesSource)
+  )
+  await sshVmPage.screenshot({ path: path.join(outDir, '36-ssh-vm-guest-files.png') })
+  await sshVmPage.close()
+
+  // 回到任务页（上面切去过 SSH），再验任务操作
+  await page.getByRole('button', { name: /^任务/ }).first().click()
+  await page.waitForTimeout(900)
+
   // 任务页：运行中的任务应出现「停止」，全部任务都能删除
   const taskActions = await page.evaluate(() => {
     const buttons = [...document.querySelectorAll('button')]
@@ -1321,6 +1953,30 @@ try {
   // 节点运维弹窗：订阅 / 软件包 / 证书三个面板
   await page.getByRole('button', { name: /^节点/ }).first().click()
   await page.waitForTimeout(900)
+  await shot(page, '37-nodes-view-light.png')
+
+  // 节点页「服务器信息」：硬件详情已并入，且只留一颗 CPU 温度（不列逐核）
+  const nodeServerInfo = await page.evaluate(() => {
+    const heading = [...document.querySelectorAll('div')].find(
+      (el) => el.children.length === 0 && el.textContent?.trim() === '服务器信息'
+    )
+    const card = heading?.closest('div.border')
+    const text = card?.innerText ?? ''
+    return {
+      found: Boolean(heading),
+      text: text.slice(0, 400),
+      hasModel: text.includes('CPU 型号'),
+      hasBoard: text.includes('主板'),
+      hasServerModel: text.includes('服务器型号'),
+      hasCpuTemp: text.includes('CPU 温度'),
+      // 逐核温度形如「核心 0」「Core 0」/ 多个温度值，这一栏不该出现
+      perCoreRows: /核心\s*\d/.test(text),
+      tempCount: (text.match(/\d+\s*°C/g) ?? []).length
+    }
+  })
+  check('节点页「服务器信息」已合并硬件字段', Boolean(nodeServerInfo.found) && nodeServerInfo.hasModel && nodeServerInfo.hasBoard && nodeServerInfo.hasServerModel, JSON.stringify({ text: nodeServerInfo.text }))
+  check('「服务器信息」只留一颗 CPU 温度，不列逐核', nodeServerInfo.hasCpuTemp && !nodeServerInfo.perCoreRows && nodeServerInfo.tempCount <= 1, JSON.stringify({ perCore: nodeServerInfo.perCoreRows, temps: nodeServerInfo.tempCount }))
+
   await page.getByRole('button', { name: '运维' }).first().click()
   await page.waitForTimeout(800)
   const opsSub = await page.evaluate(() => {
@@ -1338,7 +1994,104 @@ try {
   })
   check('节点运维弹窗含订阅面板', Boolean(opsSub) && opsSub.hasStatus && opsSub.hasKey, JSON.stringify(opsSub))
   check('节点运维弹窗含三个页签', Boolean(opsSub) && opsSub.hasTabs)
+
+  /**
+   * 弹窗排版：内容不能贴边（左右都要留白），页签用下划线而不是黑底方块，
+   * 且输入框与保存按钮等高——这三处是「看起来不美观」的主要来源。
+   */
+  const opsLayout = await page.evaluate(() => {
+    const d = [...document.querySelectorAll('[role="dialog"]')].find((x) => (x.textContent ?? '').includes('节点运维'))
+    if (!d) return null
+    const dialogRect = d.getBoundingClientRect()
+    const body = [...d.querySelectorAll('div')].find((el) => {
+      const c = typeof el.className === 'string' ? el.className : ''
+      return c.includes('overflow-y-auto') && c.includes('px-5') && el.querySelector('input[aria-label="订阅密钥"]')
+    })
+    const bodyRect = body?.getBoundingClientRect()
+    const bodyCs = body ? getComputedStyle(body) : null
+    // 量的是「内容实际起点」，不是容器外沿——容器本身就是满宽的，padding 在它内部
+    const padLeft = bodyRect ? Math.round(bodyRect.left + parseFloat(bodyCs.paddingLeft) - dialogRect.left) : null
+    const padRight = bodyRect ? Math.round(dialogRect.right - (bodyRect.right - parseFloat(bodyCs.paddingRight))) : null
+
+    const tabs = [...d.querySelectorAll('[data-ops-tab]')]
+    const activeTab = tabs.find((t) => t.getAttribute('data-ops-tab-active') === 'true')
+    const activeCs = activeTab ? getComputedStyle(activeTab) : null
+
+    const input = d.querySelector('input[aria-label="订阅密钥"]')
+    const saveBtn = [...d.querySelectorAll('button')].find((b) => b.textContent?.trim() === '保存')
+    const inputH = input ? Math.round(input.getBoundingClientRect().height) : null
+    const saveH = saveBtn ? Math.round(saveBtn.getBoundingClientRect().height) : null
+
+    return {
+      padLeft,
+      padRight,
+      tabCount: tabs.length,
+      activeTabBg: activeCs?.backgroundColor ?? null,
+      activeTabBorderBottom: activeCs ? `${activeCs.borderBottomWidth} ${activeCs.borderBottomStyle}` : null,
+      inputH,
+      saveH,
+      dialogWidth: Math.round(dialogRect.width)
+    }
+  })
+  check(
+    '运维弹窗内容左右留出内边距',
+    opsLayout !== null && (opsLayout.padLeft ?? 0) >= 16 && (opsLayout.padRight ?? 0) >= 16,
+    JSON.stringify({ layout: opsLayout })
+  )
+  check(
+    '运维页签改为下划线选中态（不再是黑底方块）',
+    opsLayout !== null &&
+      opsLayout.tabCount === 3 &&
+      opsLayout.activeTabBorderBottom?.startsWith('2px') &&
+      (opsLayout.activeTabBg === 'rgba(0, 0, 0, 0)' || opsLayout.activeTabBg === 'transparent'),
+    JSON.stringify({ tabs: opsLayout?.tabCount, bg: opsLayout?.activeTabBg, border: opsLayout?.activeTabBorderBottom })
+  )
+  check(
+    '订阅密钥输入框与保存按钮等高',
+    opsLayout !== null && opsLayout.inputH !== null && opsLayout.inputH === opsLayout.saveH,
+    JSON.stringify({ inputH: opsLayout?.inputH, saveH: opsLayout?.saveH })
+  )
   await shot(page, '22-node-ops-subscription.png')
+
+  /**
+   * 像素级复核：页签底部那一行必须是品牌色下划线。
+   * 旧版是黑底白字方块，选中处采样会是深色；这里采样能直接分辨两者。
+   */
+  {
+    const buf = fs.readFileSync(path.join(outDir, '22-node-ops-subscription.png'))
+    const sample = await page.evaluate(async (dataUrl) => {
+      const img = new Image()
+      img.src = dataUrl
+      await img.decode()
+      const c = document.createElement('canvas')
+      c.width = img.width
+      c.height = img.height
+      const ctx = c.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      const px = (x, y) => {
+        const d = ctx.getImageData(x, y, 1, 1).data
+        return [d[0], d[1], d[2]]
+      }
+      const d = [...document.querySelectorAll('[role="dialog"]')].find((x) => (x.textContent ?? '').includes('节点运维'))
+      const tab = d.querySelector('[data-ops-tab="subscription"]')
+      const tr = tab.getBoundingClientRect()
+      // 沿底边横向扫一遍，取非透明背景的像素里最「蓝」的那个
+      const y = Math.round(tr.bottom) - 1
+      let bluest = [255, 255, 255]
+      for (let x = Math.round(tr.x); x < Math.round(tr.right); x += 2) {
+        const p = px(x, y)
+        if (p[2] - p[0] > bluest[2] - bluest[0]) bluest = p
+      }
+      // 页签上方空白处作为「无下划线」的对照
+      const above = px(Math.round(tr.x + 4), Math.round(tr.y) + 2)
+      return { underline: bluest, above, delta: bluest[2] - bluest[0], aboveDelta: above[2] - above[0] }
+    }, `data:image/png;base64,${buf.toString('base64')}`)
+    check(
+      '运维页签底边渲染出品牌色下划线（非黑底方块）',
+      sample.delta >= 60 && sample.aboveDelta < 30,
+      JSON.stringify(sample)
+    )
+  }
 
   await page.getByRole('button', { name: '软件包', exact: true }).click()
   await page.waitForTimeout(700)
@@ -1458,7 +2211,7 @@ try {
     }
   })
   check('集群成员卡渲染成员与本节点标记', clusterCard.hasMembers && clusterCard.hasSelf, JSON.stringify(clusterCard))
-  check('集群成员卡保留节点负载区块', clusterCard.hasLoad, JSON.stringify(clusterCard))
+  check('集群页不再重复「节点负载」（改由节点页承载）', !clusterCard.hasLoad, JSON.stringify(clusterCard))
   check('多节点集群下「加入集群」被禁用', clusterCard.hasJoin && clusterCard.joinDisabled, JSON.stringify(clusterCard))
   await shot(page, '29-cluster-members.png')
 
@@ -1624,6 +2377,56 @@ try {
   await consolePage.waitForSelector('[data-console-root]', { timeout: 20_000 })
   await consolePage.waitForTimeout(1800)
   await consolePage.screenshot({ path: path.join(outDir, '10-console-dark.png') })
+
+  const noVncTools = await consolePage.evaluate(() => {
+    const labels = [...document.querySelectorAll('[data-console-root] button[aria-label]')].map((b) =>
+      b.getAttribute('aria-label')
+    )
+    return {
+      quality: labels.some((label) => label?.startsWith('画质：')),
+      cursor: labels.includes('本地光标') || labels.includes('关闭本地光标'),
+      shortcuts: labels.includes('快捷键'),
+      fullscreen: labels.some((label) => label === '全屏' || label === '退出全屏')
+    }
+  })
+  check('noVNC 工具栏有画质切换', noVncTools.quality, JSON.stringify(noVncTools))
+  check('noVNC 工具栏有本地光标开关', noVncTools.cursor, JSON.stringify(noVncTools))
+  check('noVNC 工具栏有快捷键入口', noVncTools.shortcuts, JSON.stringify(noVncTools))
+  check('noVNC 工具栏有全屏按钮', noVncTools.fullscreen, JSON.stringify(noVncTools))
+
+  await consolePage.locator('[aria-label^="画质："]').click()
+  await consolePage.waitForTimeout(300)
+  const qualityDialog = await consolePage.evaluate(() => {
+    const text = document.body.innerText
+    return {
+      open: text.includes('VNC 连接质量'),
+      presets: ['流畅', '均衡', '高清'].every((label) => text.includes(label))
+    }
+  })
+  check('画质弹窗包含三档预设', qualityDialog.open && qualityDialog.presets, JSON.stringify(qualityDialog))
+  await consolePage.screenshot({ path: path.join(outDir, '10b-console-quality.png') })
+  await consolePage.keyboard.press('Escape')
+  await consolePage.waitForTimeout(250)
+
+  await consolePage.locator('[aria-label="快捷键"]').click()
+  await consolePage.waitForTimeout(300)
+  const shortcutDialog = await consolePage.evaluate(() => {
+    const text = document.body.innerText
+    return {
+      open: text.includes('VNC 快捷键'),
+      cad: text.includes('Ctrl + Alt + Del'),
+      f1: text.includes('Ctrl + Alt + F1'),
+      paste: text.includes('粘贴本机剪贴板')
+    }
+  })
+  check(
+    '快捷键弹窗包含 CAD / F1 / 粘贴',
+    shortcutDialog.open && shortcutDialog.cad && shortcutDialog.f1 && shortcutDialog.paste,
+    JSON.stringify(shortcutDialog)
+  )
+  await consolePage.screenshot({ path: path.join(outDir, '10c-console-shortcuts.png') })
+  await consolePage.keyboard.press('Escape')
+  await consolePage.waitForTimeout(250)
 
   const consoleMetrics = await consolePage.evaluate(() => {
     const rootEl = document.querySelector('[data-console-root]')

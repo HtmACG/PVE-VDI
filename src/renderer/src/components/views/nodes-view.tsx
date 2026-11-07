@@ -1,13 +1,13 @@
-import { ArrowUpRight, Boxes, Cpu, HardDrive, MemoryStick, Plus, RefreshCw, Server, Settings2, SlidersHorizontal, Terminal, Thermometer } from 'lucide-react'
-import { useState } from 'react'
-import type { DashboardData, NodeSummary } from '@shared/types'
+import { ArrowUpRight, Boxes, Cpu, HardDrive, MemoryStick, Plus, Server, Settings2, SlidersHorizontal, Terminal, Thermometer } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import type { DashboardData, NodeHardwareInfo, NodeSummary } from '@shared/types'
 import { PageHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
 import { Progress } from '@renderer/components/ui/primitives'
 import { AreaChart } from '@renderer/components/charts/area-chart'
 import { NodeStatusBadge } from '@renderer/components/status-badges'
-import { EmptyState } from '@renderer/components/common'
+import { EmptyState, StatTile } from '@renderer/components/common'
 import { NodeOpsDialog } from '@renderer/components/views/node-ops-dialog'
 import { formatBytes, formatDateTime, formatPercent, formatUptimeShort, splitLicense } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
@@ -18,7 +18,6 @@ interface NodesViewProps {
   liveAt?: number
   liveError?: string | null
   onCreateVm: () => void
-  onRefresh: () => void
   onNavigate: (view: ViewKey) => void
   onOpenShell: (node: string) => void
   onOpenSettings: (node: string) => void
@@ -50,6 +49,7 @@ function ResourceMetric({
 function NodeCard({
   node,
   dashboard,
+  hardware,
   onNavigate,
   onOpenShell,
   onOpenSettings,
@@ -59,6 +59,7 @@ function NodeCard({
 }: {
   node: NodeSummary
   dashboard: DashboardData
+  hardware?: NodeHardwareInfo
   onNavigate: (view: ViewKey) => void
   onOpenShell: (node: string) => void
   onOpenSettings: (node: string) => void
@@ -73,6 +74,8 @@ function NodeCard({
   const memoryRatio = node.maxmem > 0 ? node.mem / node.maxmem : 0
   const diskRatio = node.maxdisk > 0 ? node.disk / node.maxdisk : 0
   const allocatedVcpu = nodeVms.reduce((sum, vm) => sum + vm.cpus, 0)
+  /** 头部原先显示 CPU 型号，但下方「服务器信息」里已经有一份，重复；换成登录用的 PVE 地址 */
+  const pveAddress = (dashboard.cluster.serverUrl ?? '').replace(/^https?:\/\//, '').replace(/\/+$/, '')
 
   return (
     <Card>
@@ -85,8 +88,8 @@ function NodeCard({
               {liveError ? '实时数据中断' : liveAt ? `实时 · ${formatDateTime(liveAt, { second: '2-digit' })}` : '实时'}
             </span>
           </div>
-          <div className="mt-1 text-[12px] text-muted-foreground">
-            {node.cpuModel ?? 'Proxmox 节点'} · PVE {splitLicense(node.pveVersion ?? '')}
+          <div className="mt-1 font-mono text-[12px] text-muted-foreground">
+            {pveAddress || node.cpuModel || 'Proxmox 节点'}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -117,9 +120,15 @@ function NodeCard({
             <SlidersHorizontal className="h-3.5 w-3.5" />
             运维
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onOpenShell(node.node)} disabled={node.status !== 'online'}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenShell(node.node)}
+            disabled={node.status !== 'online'}
+            title="在独立 SSH 窗口中打开节点终端"
+          >
             <Terminal className="h-3.5 w-3.5" />
-            终端
+            SSH 终端
           </Button>
         </div>
       </div>
@@ -174,20 +183,31 @@ function NodeCard({
               className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
             >
               <Thermometer className="h-3 w-3" />
-              硬件与温度
+              更多硬件
             </button>
           </div>
+          {/*
+            这里合并了原来只在「节点设置 → 硬件」里才能看到的服务器型号 / 主板 / CPU 型号 / 温度。
+            逐核温度是设置页的职责（那里有完整传感器列表），这一栏只留一颗 CPU 温度，信息密度刚好。
+          */}
           <dl className="mt-2 divide-y divide-border/70 text-[12px]">
-            {[
-              ['CPU 型号', node.cpuModel ?? '—'],
-              ['CPU 拓扑', `${node.sockets ?? '—'} 路 / ${node.cores ?? '—'} 核 / ${node.maxcpu} 线程`],
-              ['KSM 共享', node.ksmShared ? formatBytes(node.ksmShared) : '未启用'],
-              ['PVE 版本', splitLicense(node.pveVersion ?? '') || '—'],
-              ['SSL 指纹', node.sslFingerprint ?? '—']
-            ].map(([label, value]) => (
+            {(() => {
+              const serverModel = [hardware?.manufacturer, hardware?.productName].filter(Boolean).join(' ')
+              const rows: Array<[string, string, boolean?]> = [
+                ['CPU 型号', hardware?.cpuModel ?? node.cpuModel ?? '—'],
+                ['CPU 拓扑', `${node.sockets ?? '—'} 路 / ${node.cores ?? '—'} 核 / ${node.maxcpu} 线程`],
+                ['服务器型号', serverModel || '读取中…'],
+                ['主板', hardware?.boardName ?? '—'],
+                ['CPU 温度', hardware?.cpuTemperature === undefined ? '—' : `${hardware.cpuTemperature.toFixed(0)} °C`]
+              ]
+              if (node.ksmShared) rows.push(['KSM 共享', formatBytes(node.ksmShared)])
+              rows.push(['PVE 版本', splitLicense(node.pveVersion ?? '') || '—'])
+              rows.push(['SSL 指纹', node.sslFingerprint ?? '—', true])
+              return rows
+            })().map(([label, value, mono]) => (
               <div key={label} className="flex items-start justify-between gap-4 py-2">
                 <dt className="shrink-0 text-muted-foreground">{label}</dt>
-                <dd className={cn('min-w-0 text-right text-foreground', label === 'SSL 指纹' && 'break-all font-mono text-[10px]')}>
+                <dd className={cn('min-w-0 text-right text-foreground', mono && 'break-all font-mono text-[10px]')}>
                   {value}
                 </dd>
               </div>
@@ -245,12 +265,38 @@ export function NodesView({
   liveAt,
   liveError,
   onCreateVm,
-  onRefresh,
   onNavigate,
   onOpenShell,
   onOpenSettings
 }: NodesViewProps): React.JSX.Element {
   const [opsNode, setOpsNode] = useState<string | null>(null)
+  /**
+   * 硬件信息（服务器型号 / 主板 / CPU 型号 / 温度）。
+   *
+   * 原先只在节点设置的「硬件」卡片里读，用户要点两层才能看到；
+   * 现在合并进节点页的「服务器信息」，进页面就顺手拉一次。
+   * 读取走只读终端会话，比较慢，所以只拉一次、失败静默——页面主体不依赖它。
+   */
+  const [hardware, setHardware] = useState<Record<string, NodeHardwareInfo>>({})
+  const onlineNodes = dashboard.nodes.filter((node) => node.status === 'online')
+  const hardwareKey = onlineNodes.map((node) => node.node).join(',')
+  useEffect(() => {
+    let cancelled = false
+    for (const name of hardwareKey ? hardwareKey.split(',') : []) {
+      void window.pvevdi
+        .nodeHardware(name)
+        .then((result) => {
+          if (cancelled || !result.ok) return
+          setHardware((current) => ({ ...current, [name]: result.data }))
+        })
+        .catch(() => {
+          /* 拿不到就只是少几行信息，不影响页面 */
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [hardwareKey])
   const online = dashboard.nodes.filter((node) => node.status === 'online').length
   const totalThreads = dashboard.nodes.reduce((sum, node) => sum + node.maxcpu, 0)
   const totalMemory = dashboard.nodes.reduce((sum, node) => sum + node.maxmem, 0)
@@ -269,60 +315,40 @@ export function NodesView({
         title="节点"
         description="节点健康、资源占用、存储和硬件信息。资源数据每 2 秒刷新。"
         actions={
-          <>
-            <Button variant="surface" onClick={onRefresh}>
-              <RefreshCw className="h-3.5 w-3.5" />
-              刷新
-            </Button>
-            <Button onClick={onCreateVm}>
-              <Plus className="h-3.5 w-3.5" />
-              新建虚拟机
-            </Button>
-          </>
+          <Button onClick={onCreateVm}>
+            <Plus className="h-3.5 w-3.5" />
+            新建虚拟机
+          </Button>
         }
       />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <div className="border border-border bg-card p-4">
-          <div className="flex items-center justify-between text-[12px] text-muted-foreground">
-            在线节点
-            <Server className="h-4 w-4 text-muted-foreground/70" />
-          </div>
-          <div className="mt-3 flex items-baseline gap-1.5">
-            <span className="font-mono text-[25px] text-foreground">{online}</span>
-            <span className="font-mono text-[12px] text-muted-foreground">/ {dashboard.nodes.length}</span>
-          </div>
-          <div className="mt-2 text-[12px] text-muted-foreground">{dashboard.cluster.quorate ? 'Quorum 正常' : 'Quorum 异常'}</div>
-        </div>
-        <div className="border border-border bg-card p-4">
-          <div className="flex items-center justify-between text-[12px] text-muted-foreground">
-            CPU 使用
-            <Cpu className="h-4 w-4 text-muted-foreground/70" />
-          </div>
-          <div className="mt-3 font-mono text-[25px] text-foreground">{formatPercent(cpuUsage, 1)}</div>
-          <div className="mt-2 text-[12px] text-muted-foreground">{totalThreads} 个线程 · 集群平均</div>
-        </div>
-        <div className="border border-border bg-card p-4">
-          <div className="flex items-center justify-between text-[12px] text-muted-foreground">
-            内存使用
-            <MemoryStick className="h-4 w-4 text-muted-foreground/70" />
-          </div>
-          <div className="mt-3 font-mono text-[25px] text-foreground">{formatPercent(memoryUsage, 1)}</div>
-          <div className="mt-2 text-[12px] text-muted-foreground">
-            {formatBytes(usedMemory)} / {formatBytes(totalMemory)}
-          </div>
-        </div>
-        <div className="border border-border bg-card p-4">
-          <div className="flex items-center justify-between text-[12px] text-muted-foreground">
-            虚拟机
-            <Boxes className="h-4 w-4 text-muted-foreground/70" />
-          </div>
-          <div className="mt-3 flex items-baseline gap-1.5">
-            <span className="font-mono text-[25px] text-foreground">{runningVms}</span>
-            <span className="font-mono text-[12px] text-muted-foreground">/ {totalVms} 运行中</span>
-          </div>
-          <div className="mt-2 text-[12px] text-muted-foreground">{totalVms - runningVms} 台已停止</div>
-        </div>
+        <StatTile
+          label="在线节点"
+          value={String(online)}
+          unit={`/ ${dashboard.nodes.length}`}
+          detail={dashboard.cluster.quorate ? 'Quorum 正常' : 'Quorum 异常'}
+          icon={<Server className="h-4 w-4" />}
+        />
+        <StatTile
+          label="CPU 使用"
+          value={formatPercent(cpuUsage, 1)}
+          detail={`${totalThreads} 个线程 · 集群平均`}
+          icon={<Cpu className="h-4 w-4" />}
+        />
+        <StatTile
+          label="内存使用"
+          value={formatPercent(memoryUsage, 1)}
+          detail={`${formatBytes(usedMemory)} / ${formatBytes(totalMemory)}`}
+          icon={<MemoryStick className="h-4 w-4" />}
+        />
+        <StatTile
+          label="虚拟机"
+          value={String(runningVms)}
+          unit={`/ ${totalVms} 运行中`}
+          detail={`${totalVms - runningVms} 台已停止`}
+          icon={<Boxes className="h-4 w-4" />}
+        />
       </div>
 
       {dashboard.nodes.length === 0 ? (
@@ -336,6 +362,7 @@ export function NodesView({
               key={node.node}
               node={node}
               dashboard={dashboard}
+              hardware={hardware[node.node]}
               onNavigate={onNavigate}
               onOpenShell={onOpenShell}
               onOpenSettings={onOpenSettings}

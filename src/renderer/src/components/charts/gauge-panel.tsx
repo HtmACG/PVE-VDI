@@ -11,13 +11,19 @@ echarts.use([GaugeChart, CanvasRenderer])
 
 export interface GaugeSpec {
   label: string
-  /** 0 ~ 1 的占用比（超出会被夹到 100%） */
+  /**
+   * 0 ~ 1 的占用比（超出会被夹到 100%）。
+   * 传 `plain: true` 时忽略此值——纯计数类指标没有「占多少」的概念，
+   * 硬画一个 0% 的弧反而误导。
+   */
   ratio: number
-  /** 圆心下方的主显示值，例如 38.4% */
+  /** 圆心下方的主显示值，例如 38.4%，也可以是「8 个」这种计数 */
   display: string
   /** 第二行说明，例如 8 / 16 线程 */
   caption?: string
   color: string
+  /** 计数型指标：不画进度弧与指针，只留底环 + 数值 + 标题 */
+  plain?: boolean
 }
 
 /**
@@ -51,7 +57,7 @@ function buildOption(spec: GaugeSpec, theme: ReturnType<typeof readThemeColor>):
         center: ['50%', '54%'],
         splitNumber: 5,
         progress: {
-          show: true,
+          show: !spec.plain,
           width: 8,
           roundCap: true,
           itemStyle: { color: spec.color }
@@ -65,13 +71,13 @@ function buildOption(spec: GaugeSpec, theme: ReturnType<typeof readThemeColor>):
         axisLabel: { show: false },
         // 指针锚在圆心，数值在其下方，标题再往下一行：三者纵向分离，不会互相压
         pointer: {
-          show: true,
+          show: !spec.plain,
           length: '62%',
           width: 2.5,
           itemStyle: { color: spec.color }
         },
         anchor: {
-          show: true,
+          show: !spec.plain,
           size: 5,
           showAbove: true,
           itemStyle: { color: spec.color, borderWidth: 0 }

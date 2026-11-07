@@ -67,6 +67,12 @@ export interface AppSettings {
   accentColor: string
   networkView: NetworkView
   launchAtLogin: boolean
+  /** Windows 桌面通知总开关 */
+  notificationsEnabled: boolean
+  /** 虚拟机关机时提醒 */
+  notifyVmShutdown: boolean
+  /** 任务执行失败时提醒 */
+  notifyTaskFailure: boolean
   hasLoginBackground: boolean
   hasAppBackground: boolean
 }
@@ -146,14 +152,33 @@ export interface VmSummary {
   netout: number
   diskread: number
   diskwrite: number
+  /** 控制台可用性；未探测时为空，前端按「待探测」显示 */
+  console?: VmConsoleInfo
+}
+
+/** 虚拟机控制台能力：决定 VNC / xterm.js 哪个能点、哪个置灰 */
+export interface VmConsoleInfo {
+  /** noVNC 可用（QEMU 有 vncproxy，LXC 没有图形界面） */
+  vnc: boolean
+  /** xterm.js 可用：QEMU 需要串口（qm terminal）或客户机 SSH；LXC 原生 pty 始终可用 */
+  xterm: boolean
+  /** 置灰原因，按模式给出 */
+  vncReason?: string
+  xtermReason?: string
+  /** 探测到的客户机 sshd 地址；有值说明终端与文件面板都能直连虚拟机内部 */
+  guestHost?: string | null
+  /** cloud-init 的 ciuser（PVE API 不回传 cipassword，密码需要用户输入） */
+  guestUser?: string | null
+  /** 终端实际会走的通道，用于界面上给个准信 */
+  xtermBackend?: 'serial' | 'guest-ssh' | 'pty'
+  /** 探测时间，用于前端显示「刚刚检测」 */
+  probedAt: number
 }
 
 export interface NodeMetricPoint {
   time: number
   cpu: number
   mem: number
-  /** 按物理线程拆分的占用比，索引即 coreN；数据源未提供时为空数组 */
-  cores?: number[]
 }
 
 export interface NodeSummary {
@@ -462,6 +487,8 @@ export interface ClusterInfo {
   keyboard?: string
   allowedTags: string[]
   description?: string
+  /** 登录时填的 PVE 地址（保留协议头），供「服务器资源」等处显示 */
+  serverUrl?: string
 }
 
 export interface TaskSummary {
@@ -492,6 +519,8 @@ export interface DashboardData {
   storages: StorageSummary[]
   tasks: TaskSummary[]
   version: PveVersionInfo
+  /** PVE 账号总数（`/access/users` 去重计数）；接口无权限时为 undefined */
+  userCount?: number
 }
 
 export interface LiveNodeMetrics {
@@ -633,6 +662,8 @@ export interface VmDetail {
   ref: VmRef
   name: string
   os: VmOsInfo
+  /** 控制台能力：VNC / xterm.js 是否可用，决定菜单项是否置灰 */
+  console?: VmConsoleInfo
   runtime: VmRuntime
   config: Record<string, string | number>
   disks: VmDiskInfo[]
@@ -755,6 +786,9 @@ export interface PreferencesPatch {
   accentColor?: string
   networkView?: NetworkView
   launchAtLogin?: boolean
+  notificationsEnabled?: boolean
+  notifyVmShutdown?: boolean
+  notifyTaskFailure?: boolean
 }
 
 export interface WindowState {
@@ -769,6 +803,8 @@ export interface ConsoleOpenRequest {
   type?: VmType
   vmid?: number
   name?: string
+  /** 控制台类型；不传时按对象默认（QEMU→VNC，LXC/节点→终端） */
+  mode?: ConsoleMode
 }
 
 export interface ConsoleSessionInfo {
@@ -789,6 +825,134 @@ export interface ConsoleSessionInfo {
 export interface ConsoleWindowBootstrap {
   request: ConsoleOpenRequest
   settings: AppSettings
+}
+
+/* ------------------------------------------------------------------ *
+ * SSH 终端与文件管理
+ * ------------------------------------------------------------------ */
+
+/** SSH 连接参数覆盖；留空则沿用 PVE 的地址与账号 */
+export interface SshTargetOverride {
+  host?: string
+  port?: number
+  username?: string
+  password?: string
+  /** 从虚拟机控制台串进终端时带上 PVE 认证头 */
+  pveCookie?: string
+  token?: string
+  allowSelfSigned?: boolean
+}
+
+/**
+ * 文件面板的操作目标。
+ *
+ * 不传 `guest` 就是节点（沿用 PVE 登录凭据）；
+ * 传了 `guest` 就直连虚拟机自己的 sshd——右侧文件面板看的才是虚拟机里的文件。
+ */
+export interface SshFsInput {
+  override?: SshTargetOverride
+  /** 客户机 SSH 目标；同时提供 host 与 password 才生效 */
+  guest?: SshTargetOverride
+  path?: string
+}
+
+/**
+ * 虚拟机终端会话的目标。
+ *
+ * `guest*` 字段是「连虚拟机自己的 sshd」用的：填了 guestHost 就优先走客户机 SSH，
+ * 这样 Windows / 没配串口的机器也能用 xterm.js，右侧文件面板看的也是虚拟机里的文件。
+ */
+export interface VmTerminalTarget {
+  node: string
+  vmid: number
+  type: VmType
+  name?: string
+  /** 客户机 IP（通常取自 Guest Agent 上报的接口地址） */
+  guestHost?: string
+  guestPort?: number
+  guestUser?: string
+  guestPassword?: string
+  /** 客户机系统类型，用来决定默认账号（windows → Administrator） */
+  ostype?: string
+}
+
+export interface SshOpenShellInput {
+  override?: SshTargetOverride
+  cols: number
+  rows: number
+  title?: string
+  /** 从节点 Shell 入口进来时带上节点名，SSH 不可用时回退到 PVE 节点通道 */
+  node?: string
+  /** 客户机 SSH 凭据覆盖（虚拟机窗口里由用户填写） */
+  guest?: SshTargetOverride
+  /** 指定时开的是虚拟机控制台，而不是节点登录 shell */
+  vm?: VmTerminalTarget
+}
+
+export interface SshShellSession {
+  sessionId: string
+  host: string
+  username: string
+  title: string
+  createdAt: number
+  cols: number
+  rows: number
+  /** 实际使用的通道：SSH 或 PVE termproxy（后者没有 SFTP 文件面板） */
+  transport?: 'ssh' | 'termproxy' | 'serial' | 'guest-ssh'
+}
+
+/** 打开独立 SSH 窗口时的参数；不传则沿用 PVE 的地址与账号 */
+export interface SshWindowOpenRequest {
+  override?: SshTargetOverride
+  /** 预置的标签数量，1~6，默认 1 */
+  tabs?: number
+  /** 从节点 Shell 入口点进来时带上节点名，用于标题与日志 */
+  node?: string
+  /** 打开的是某台虚拟机的 xterm.js 控制台 */
+  vm?: VmTerminalTarget
+}
+
+/** 独立 SSH 窗口的启动上下文（渲染端拉取） */
+export interface SshWindowBootstrap {
+  request: SshWindowOpenRequest
+  settings: AppSettings
+}
+
+export type SshShellEvent =
+  | { type: 'data'; sessionId: string; data: string }
+  | { type: 'exit'; sessionId: string; reason: string }
+
+export interface SshProbeResult {
+  ok: boolean
+  message: string
+  host?: string
+  port?: number
+  username?: string
+}
+
+export interface SshFileEntry {
+  name: string
+  path: string
+  type: 'dir' | 'file' | 'link' | 'other'
+  size: number
+  mtime: number
+}
+
+export interface SshDirectoryListing {
+  path: string
+  home: string
+  entries: SshFileEntry[]
+}
+
+export interface SshFileContent {
+  path: string
+  size: number
+  text: string | null
+  /** 超过预览上限，未读取内容 */
+  truncated: boolean
+  /** 判定为二进制，未读取内容 */
+  binary: boolean
+  mtime: number
 }
 
 /* ------------------------------------------------------------------ *
@@ -1526,6 +1690,7 @@ export interface DesktopApi {
   logout: (clearSaved?: boolean) => Promise<ApiResult<AppSettings>>
   updatePreferences: (patch: PreferencesPatch) => Promise<ApiResult<AppSettings>>
   forgetCredentials: () => Promise<ApiResult<AppSettings>>
+  testNotification: () => Promise<ApiResult<void>>
   pickBackground: (kind: BackgroundKind) => Promise<ApiResult<BackgroundPickResult | null>>
   clearBackground: (kind: BackgroundKind) => Promise<ApiResult<BackgroundPickResult>>
   dashboard: () => Promise<ApiResult<DashboardData>>
@@ -1611,8 +1776,26 @@ export interface DesktopApi {
   diskInit: (input: DiskInitInput) => Promise<ApiResult<void>>
   openConsoleWindow: (input: ConsoleOpenRequest) => Promise<ApiResult<void>>
   consoleWindowBootstrap: () => Promise<ApiResult<ConsoleWindowBootstrap>>
+  openSshWindow: (input?: SshWindowOpenRequest) => Promise<ApiResult<void>>
+  sshWindowBootstrap: () => Promise<ApiResult<SshWindowBootstrap>>
   consoleOpen: (input: ConsoleOpenRequest) => Promise<ApiResult<ConsoleSessionInfo>>
   consoleClose: (sessionId: string) => Promise<ApiResult<void>>
+  sshProbe: (override?: SshTargetOverride) => Promise<ApiResult<SshProbeResult>>
+  sshShellOpen: (input: SshOpenShellInput) => Promise<ApiResult<SshShellSession>>
+  sshShellList: () => Promise<ApiResult<SshShellSession[]>>
+  sshShellWrite: (sessionId: string, data: string) => Promise<ApiResult<void>>
+  sshShellResize: (sessionId: string, cols: number, rows: number) => Promise<ApiResult<void>>
+  sshShellClose: (sessionId: string) => Promise<ApiResult<void>>
+  onSshShellEvent: (callback: (event: SshShellEvent) => void) => () => void
+  sshFsList: (input: SshFsInput) => Promise<ApiResult<SshDirectoryListing>>
+  sshFsRead: (input: SshFsInput) => Promise<ApiResult<SshFileContent>>
+  sshFsWrite: (input: SshFsInput & { content: string }) => Promise<ApiResult<{ path: string; size: number }>>
+  sshFsCreateFile: (input: SshFsInput) => Promise<ApiResult<{ path: string }>>
+  sshFsCreateDir: (input: SshFsInput) => Promise<ApiResult<{ path: string }>>
+  sshFsRemove: (input: SshFsInput & { recursive?: boolean }) => Promise<ApiResult<{ path: string }>>
+  sshFsRename: (input: SshFsInput & { from: string; to: string }) => Promise<ApiResult<{ from: string; to: string }>>
+  sshFsUpload: (input: SshFsInput & { remoteDir: string; localPath?: string }) => Promise<ApiResult<{ path: string; size: number } | null>>
+  sshFsDownload: (input: SshFsInput) => Promise<ApiResult<{ path: string; size: number } | null>>
   windowMinimize: () => void
   windowHide: () => void
   windowToggleMaximize: () => void

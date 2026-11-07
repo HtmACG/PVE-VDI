@@ -74,7 +74,9 @@ export function CoreGrid({ loads, total, className }: CoreGridProps): React.JSX.
             <span className="text-foreground">{busy}</span>/{count} 忙
           </>
         ) : (
-          <>{count} 线程</>
+          <>
+            {count} 线程 <span className="text-warning/90">· SSH 未连接</span>
+          </>
         )}
       </div>
     </div>

@@ -47,7 +47,7 @@
 | 虚拟机删除 | 未开放 |
 | QEMU noVNC 控制台 | 已支持 |
 | LXC / 节点 xterm.js 控制台 | 已支持 |
-| QEMU 串口（serial0）终端 | 未单独暴露 |
+| QEMU xterm.js 控制台 | 统一走客户机 SSH 账号密码（串口方案已取消） |
 
 ## 仓库卫生
 

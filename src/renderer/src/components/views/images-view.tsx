@@ -44,7 +44,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@renderer/components/ui/alert-dialog'
-import { EmptyState } from '@renderer/components/common'
+import { EmptyState, StatTile } from '@renderer/components/common'
 import { errorDetail, unwrap } from '@renderer/lib/api'
 import { formatBytes, formatDateTime } from '@renderer/lib/format'
 import { toast } from 'sonner'
@@ -537,18 +537,10 @@ export function ImagesView({
       />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {[
-          { label: 'ISO 镜像', value: String(images.length), detail: `${data?.images.length ?? 0} 个总计` },
-          { label: '占用空间', value: formatBytes(totalSize), detail: '当前筛选结果' },
-          { label: 'ISO 存储', value: String(isoStorages.length), detail: `${activeIsoStorages.length} 个可用` },
-          { label: '节点', value: node || '—', detail: `${nodes.length} 个在线节点` }
-        ].map((item) => (
-          <div key={item.label} className="border border-border bg-card p-4">
-            <div className="text-[12px] text-muted-foreground">{item.label}</div>
-            <div className="mt-3 truncate font-mono text-[20px] text-foreground">{item.value}</div>
-            <div className="mt-1.5 text-[11px] text-muted-foreground">{item.detail}</div>
-          </div>
-        ))}
+        <StatTile label="ISO 镜像" value={String(images.length)} detail={`共 ${data?.images.length ?? 0} 个`} />
+        <StatTile label="占用空间" value={formatBytes(totalSize)} detail="当前筛选结果" />
+        <StatTile label="ISO 存储" value={String(isoStorages.length)} detail={`${activeIsoStorages.length} 个已启用`} />
+        <StatTile label="节点" value={node || '—'} detail={`${nodes.length} 个在线节点`} />
       </div>
 
       {error && (
@@ -563,8 +555,7 @@ export function ImagesView({
 
       <Card>
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
-          <div className="text-[12px] font-medium text-foreground">ISO 镜像</div>
-          <span className="font-mono text-[10px] text-muted-foreground">{images.length}</span>
+          <div className="text-[12px] font-medium text-foreground">镜像列表</div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />

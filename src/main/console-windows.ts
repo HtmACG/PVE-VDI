@@ -3,6 +3,8 @@ import { IPC } from '@shared/ipc'
 import type { ConsoleOpenRequest, ConsoleWindowBootstrap } from '@shared/types'
 import type { PveManager } from './pve/service'
 import type { SettingsStore } from './settings'
+import type { SshWindowManager } from './ssh/windows'
+import { logRuntimeError } from './diagnostics'
 
 interface ConsoleWindowOptions {
   manager: PveManager
@@ -10,6 +12,8 @@ interface ConsoleWindowOptions {
   preloadPath: string
   rendererFile: string
   iconPath: () => string | undefined
+  /** 可选的 SSH 窗口管理器：能识别成节点的目标走 SSH 终端窗口 */
+  sshWindows?: (() => SshWindowManager | null) | null
 }
 
 export class ConsoleWindowManager {
@@ -20,6 +24,28 @@ export class ConsoleWindowManager {
   constructor(private readonly options: ConsoleWindowOptions) {}
 
   open(request: ConsoleOpenRequest): void {
+    // 节点 Shell 本身就是 xterm 终端，统一走 SSH 窗口：多标签 + 文件面板 + 终端原生体验
+    if (request.kind === 'node') {
+      const sshWindows = this.options.sshWindows?.() ?? null
+      if (sshWindows) {
+        sshWindows.open({ node: request.node, tabs: 1 })
+        return
+      }
+    }
+
+    // 虚拟机选了 xterm.js：也走 SSH 窗口，复用同一套多标签 + 文件面板
+    if (request.kind === 'vm' && request.mode === 'xterm' && request.vmid) {
+      const sshWindows = this.options.sshWindows?.() ?? null
+      if (sshWindows) {
+        sshWindows.open({
+          node: request.node,
+          vm: { node: request.node, vmid: request.vmid, type: request.type ?? 'qemu', name: request.name },
+          tabs: 1
+        })
+        return
+      }
+    }
+
     const win = new BrowserWindow({
       width: 1280,
       height: 820,
@@ -54,6 +80,15 @@ export class ConsoleWindowManager {
     }
     win.on('maximize', () => sendWindowState(true))
     win.on('unmaximize', () => sendWindowState(false))
+    win.on('unresponsive', () => {
+      logRuntimeError('console-window-unresponsive', `window=${contentsId}`)
+    })
+    win.webContents.on('render-process-gone', (_event, details) => {
+      logRuntimeError(
+        'console-renderer-gone',
+        `window=${contentsId} reason=${details.reason} exitCode=${details.exitCode}`
+      )
+    })
     win.once('ready-to-show', () => {
       win.show()
       win.focus()

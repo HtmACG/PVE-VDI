@@ -19,7 +19,6 @@ import {
 } from 'lucide-react'
 import type { DashboardData, SessionProfile, Theme } from '@shared/types'
 import { cn } from '@renderer/lib/utils'
-import { Progress } from '@renderer/components/ui/primitives'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 
 export type ViewKey =
@@ -82,9 +81,6 @@ export function Sidebar({
   const runningTasks = dashboard?.tasks.filter((task) => task.status === 'running').length ?? 0
   const nodes = dashboard?.nodes ?? []
   const storageCount = new Set((dashboard?.storages ?? []).map((storage) => storage.storage)).size
-  const usedMemory = nodes.reduce((sum, node) => sum + node.mem, 0)
-  const totalMemory = nodes.reduce((sum, node) => sum + node.maxmem, 0)
-  const memoryPercent = totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0
 
   const renderItem = (item: { key: ViewKey; label: string; icon: typeof LayoutDashboard }): React.JSX.Element => {
     const Icon = item.icon
@@ -103,10 +99,11 @@ export function Sidebar({
       <button
         key={item.key}
         type="button"
+        aria-current={selected ? 'page' : undefined}
         onClick={() => onNavigate(item.key)}
         className={cn(
-          'relative flex h-10 w-full items-center gap-2.5 px-3 text-left text-[13px] transition-colors',
-          selected ? 'bg-panel text-foreground' : 'text-muted-foreground hover:bg-panel/70 hover:text-foreground'
+          'relative flex h-10 w-full items-center gap-2.5 px-3 text-left text-[13px] outline-none transition-colors focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand',
+          selected ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-panel/70 hover:text-foreground'
         )}
       >
         {selected && <span className="absolute inset-y-0 left-0 w-[2px] bg-brand" />}
@@ -122,38 +119,24 @@ export function Sidebar({
   return (
     <aside className="flex w-[220px] shrink-0 flex-col border-r border-border bg-card">
       <div className="flex-1 overflow-y-auto py-4">
-        <div className="px-4 pb-1.5 text-[11px] font-medium text-muted-foreground">工作负载</div>
+        <div className="px-4 pb-1.5 text-[11px] font-medium tracking-[0.04em] text-muted-foreground/80">工作负载</div>
         <nav className="px-2">{WORKLOAD_NAV.map(renderItem)}</nav>
 
-        <div className="mt-5 px-4 pb-1.5 text-[11px] font-medium text-muted-foreground">基础设施</div>
+        <div className="mt-5 px-4 pb-1.5 text-[11px] font-medium tracking-[0.04em] text-muted-foreground/80">基础设施</div>
         <nav className="px-2">{INFRA_NAV.map(renderItem)}</nav>
 
-        <div className="mt-5 px-4 pb-1.5 text-[11px] font-medium text-muted-foreground">集群运维</div>
+        <div className="mt-5 px-4 pb-1.5 text-[11px] font-medium tracking-[0.04em] text-muted-foreground/80">集群运维</div>
         <nav className="px-2">{CLUSTER_NAV.map(renderItem)}</nav>
 
         <div className="mx-3 mt-5 border-t border-border pt-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-foreground">{dashboard?.cluster.name ?? session.clusterName}</span>
-            <span className="text-[11px] text-success">
+            <span className="min-w-0 truncate text-[12px] font-medium text-foreground">
+              {dashboard?.cluster.name ?? session.clusterName}
+            </span>
+            <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-success">
+              <span className="h-1.5 w-1.5 bg-success" aria-hidden="true" />
               {dashboard?.cluster.quorate ? 'Quorum 正常' : 'Quorum 异常'}
             </span>
-          </div>
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            {nodes.length} 个节点 · {runningVms} 台虚拟机运行中
-          </div>
-          <div className="mt-3">
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>集群内存</span>
-              <span className="font-mono">{memoryPercent.toFixed(1)}%</span>
-            </div>
-            <Progress
-              value={memoryPercent}
-              className="mt-1.5 h-[3px]"
-              indicatorClassName={memoryPercent > 85 ? 'bg-destructive' : 'bg-brand'}
-            />
-          </div>
-          <div className="mt-2.5 font-mono text-[11px] text-muted-foreground">
-            PVE {dashboard?.version.version ?? '—'}
           </div>
         </div>
       </div>
@@ -171,7 +154,7 @@ export function Sidebar({
         >
           {active === 'settings' && <span className="absolute inset-y-0 left-0 w-[2px] bg-brand" />}
           <Settings className="h-[15px] w-[15px]" />
-          设置
+          首选项
         </button>
         <div className="flex items-center gap-2 border-t border-border px-3 py-2.5">
           <UserRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

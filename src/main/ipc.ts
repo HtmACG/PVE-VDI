@@ -56,7 +56,26 @@ import { toApiError } from './pve/client'
 import { PveManager } from './pve/service'
 import { SettingsStore } from './settings'
 import type { ConsoleWindowManager } from './console-windows'
+import type { SshServers } from './ssh'
+import type {
+  SshOpenShellInput,
+  SshShellEvent,
+  SshTargetOverride,
+  SshWindowOpenRequest
+} from '@shared/types'
+import {
+  createDirectory,
+  createFile,
+  downloadFile,
+  listDirectory,
+  readFile,
+  removeEntry,
+  renameEntry,
+  uploadFile,
+  writeFile
+} from './ssh/sftp'
 import { checkForUpdates } from './updates'
+import type { DashboardNotifier } from './notifications'
 
 function wrap<T>(operation: () => Promise<T>): Promise<ApiResult<T>> {
   return operation()
@@ -93,10 +112,16 @@ export function registerIpc(options: {
   manager: PveManager
   store: SettingsStore
   consoleWindows: ConsoleWindowManager
+  servers?: SshServers
+  notifier?: DashboardNotifier
   getWindow: () => BrowserWindow | null
   onSettingsChanged?: (settings: AppSettings) => void
+  /** 交给 SSH 聚合层：关窗时回收虚拟机控制台桥 */
+  onVmConsoleCloser?: (closer: (sessionId: string) => void) => void
 }): void {
   const { manager, store, consoleWindows, getWindow, onSettingsChanged } = options
+  const notifier = options.notifier
+  const ssh = options.servers
 
   ipcMain.handle(IPC.bootstrap, async (): Promise<ApiResult<BootstrapData>> => {
     return wrap(async () => {
@@ -144,6 +169,7 @@ export function registerIpc(options: {
       }
       const session = await manager.login(input)
       store.recordLogin(input, session)
+      notifier?.reset()
       return { session, settings: store.get(), backgrounds: store.getBackgrounds() }
     })
   })
@@ -152,6 +178,7 @@ export function registerIpc(options: {
     return wrap(async () => {
       consoleWindows.closeAll()
       manager.logout()
+      notifier?.reset()
       if (rawClearSaved === true) store.forgetCredentials()
       return store.get()
     })
@@ -168,6 +195,12 @@ export function registerIpc(options: {
 
   ipcMain.handle(IPC.forgetCredentials, async () => {
     return wrap(async () => store.forgetCredentials())
+  })
+
+  ipcMain.handle(IPC.testNotification, async () => {
+    return wrap(async () => {
+      notifier?.sendTest()
+    })
   })
 
   ipcMain.handle(IPC.pickBackground, async (_event, rawKind: unknown) => {
@@ -195,7 +228,11 @@ export function registerIpc(options: {
   })
 
   ipcMain.handle(IPC.dashboard, async () => {
-    return wrap(async () => manager.getDashboard())
+    return wrap(async () => {
+      const dashboard = await manager.getDashboard()
+      notifier?.observe(dashboard)
+      return dashboard
+    })
   })
 
   ipcMain.handle(IPC.liveMetrics, async () => {
@@ -614,7 +651,15 @@ export function registerIpc(options: {
   })
 
   ipcMain.handle(IPC.vmCloudInit, async (_event, rawInput: unknown) => {
-    return wrap(async () => manager.vmCloudInit(asObject<CloudInitInput>(rawInput)))
+    return wrap(async () => {
+      const input = asObject<CloudInitInput>(rawInput)
+      const result = await manager.vmCloudInit(input)
+      // PVE 的 GET config 不会回传 cipassword，自己写过的密码得缓存下来供客户机 SSH 用
+      if (input.password && input.ref?.vmid) {
+        store.saveCloudInitPassword(input.ref.vmid, input.password)
+      }
+      return result
+    })
   })
 
   ipcMain.handle(IPC.vmSendKey, async (_event, rawInput: unknown) => {
@@ -649,6 +694,408 @@ export function registerIpc(options: {
       }
       manager.closeConsole(rawSessionId)
       consoleWindows.unbindSession(event.sender.id, rawSessionId)
+    })
+  })
+
+  /* ---------------------------------------------------------------- *
+   * SSH：终端会话 + 文件管理
+   * ---------------------------------------------------------------- */
+
+  // 虚拟机终端会话随着 SSH 窗口关闭一起收掉
+  options.onVmConsoleCloser?.((sessionId) => {
+    ssh?.vmSessions.close(sessionId)
+  })
+
+  const requireSsh = (): SshServers => {
+    if (!ssh) throw new Error('SSH 模块未初始化。')
+    return ssh
+  }
+
+  // 会话输出推给所有订阅过的渲染进程；渲染端按 sessionId 过滤。
+  // 终端输出按 12ms 合并成批，避免 `cat 大文件` / 串口启动日志把 IPC 打爆，
+  // 这是 xterm 窗口一刷屏就卡死的主要诱因之一。
+  if (ssh) {
+    const send = (sshEvent: SshShellEvent): void => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.sshShellEvent, sshEvent)
+      }
+    }
+    const pending = new Map<string, string>()
+    let flushTimer: NodeJS.Timeout | null = null
+    const flush = (): void => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      if (pending.size === 0) return
+      const batches = [...pending]
+      pending.clear()
+      for (const [sessionId, data] of batches) send({ type: 'data', sessionId, data })
+    }
+    const broadcast = (sshEvent: SshShellEvent): void => {
+      if (sshEvent.type === 'data') {
+        const next = (pending.get(sshEvent.sessionId) ?? '') + sshEvent.data
+        pending.set(sshEvent.sessionId, next)
+        // 单会话积压超过 256 KB 立即发，避免长时间不刷新
+        if (next.length >= 256 * 1024) {
+          flush()
+          return
+        }
+        if (!flushTimer) flushTimer = setTimeout(flush, 12)
+        return
+      }
+      // 退出事件必须排在它前面已经缓冲的数据之后
+      flush()
+      send(sshEvent)
+    }
+    ssh.shell.onEvent(broadcast)
+    ssh.vmSessions.onEvent(broadcast)
+  }
+
+  ipcMain.handle(IPC.sshWindowOpen, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      const servers = requireSsh()
+      if (!servers.windows) throw new Error('SSH 窗口管理器未初始化。')
+      servers.windows.open(rawInput ? asObject<SshWindowOpenRequest>(rawInput) : {})
+    })
+  })
+
+  ipcMain.handle(IPC.sshWindowBootstrap, async (event) => {
+    return wrap(async () => {
+      const servers = requireSsh()
+      if (!servers.windows) throw new Error('SSH 窗口管理器未初始化。')
+      return servers.windows.bootstrap(event.sender.id)
+    })
+  })
+
+  ipcMain.handle(IPC.sshProbe, async (_event, rawInput: unknown) => {
+    return wrap(async () => requireSsh().probe(rawInput ? asObject<SshTargetOverride>(rawInput) : undefined))
+  })
+
+  ipcMain.handle(IPC.sshShellOpen, async (event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<SshOpenShellInput>(rawInput)
+      const servers = requireSsh()
+
+      /**
+       * 虚拟机终端：
+       *   - QEMU 已取消串口方案，统一走客户机 SSH 账号密码；
+       *   - LXC 仍走容器 pty（termproxy），不依赖容器内 sshd。
+       * 这样所有 QEMU 客户机（Windows / Linux / 其他）都用同一套 SSH 凭据。
+       */
+      if (input.vm) {
+        const vm = input.vm
+        const cols = Number(input.cols) || 100
+        const rows = Number(input.rows) || 30
+
+        if (vm.type === 'lxc') {
+          const endpoint = await servers.manager.prepareVmTerminal({
+            kind: 'vm',
+            node: vm.node,
+            type: vm.type,
+            vmid: vm.vmid,
+            name: vm.name,
+            mode: 'xterm'
+          })
+          const info = await servers.vmSessions.open({
+            node: vm.node,
+            vmid: vm.vmid,
+            type: vm.type,
+            name: vm.name,
+            cols,
+            rows,
+            backend: 'termproxy',
+            wsUrl: endpoint.wsUrl,
+            ticket: endpoint.ticket,
+            user: endpoint.user,
+            tls: servers.manager.consoleTlsOptions()
+          })
+          const session = {
+            sessionId: info.sessionId,
+            host: info.host,
+            username: info.username || vm.node,
+            title: input.title || info.title,
+            createdAt: Date.now(),
+            cols: info.cols,
+            rows: info.rows,
+            transport: info.backend
+          }
+          servers.windows?.bindSession(event.sender.id, session.sessionId)
+          return session
+        }
+
+        const guestHost = input.guest?.host?.trim() || vm.guestHost
+        if (!guestHost) {
+          throw new Error(
+            'QEMU 串口控制台已取消。请在弹出的「客户机 SSH 凭据」里填写虚拟机 IP、账号和密码；' +
+              '如果不知道 IP，可先在客户机安装 Guest Agent 或手动用 ip addr / ipconfig 查看。'
+          )
+        }
+        let guestTarget: ReturnType<typeof servers.guestTarget>
+        try {
+          guestTarget = servers.guestTarget({
+            host: guestHost,
+            port: input.guest?.port ?? vm.guestPort,
+            username: input.guest?.username ?? vm.guestUser,
+            password:
+              input.guest?.password ??
+              vm.guestPassword ??
+              store.getCloudInitPassword(vm.vmid) ??
+              undefined,
+            ostype: vm.ostype
+          })
+        } catch (error) {
+          throw new Error(
+            error instanceof Error
+              ? `${error.message}（打开终端窗口后点右上角钥匙图标填写）`
+              : String(error)
+          )
+        }
+
+        const info = await servers.vmSessions.open({
+          node: vm.node,
+          vmid: vm.vmid,
+          type: vm.type,
+          name: vm.name,
+          cols,
+          rows,
+          backend: 'guest-ssh',
+          guestTarget
+        })
+        const session = {
+          sessionId: info.sessionId,
+          host: info.host,
+          username: info.username || vm.node,
+          title: input.title || info.title,
+          createdAt: Date.now(),
+          cols: info.cols,
+          rows: info.rows,
+          transport: info.backend
+        }
+        servers.windows?.bindSession(event.sender.id, session.sessionId)
+        return session
+      }
+
+      try {
+        const target = servers.target(input.override)
+        const session = await servers.shell.open({
+          target,
+          cols: Number(input.cols) || 100,
+          rows: Number(input.rows) || 30,
+          title: typeof input.title === 'string' ? input.title : undefined
+        })
+
+        // 记到发起窗口名下，窗口关掉时统一回收 PTY
+        servers.windows?.bindSession(event.sender.id, session.sessionId)
+        return { ...session, transport: 'ssh' as const }
+      } catch (error) {
+        /**
+         * 节点 SSH 密码/密钥不可用时，退回 PVE 自己的 termproxy。
+         * 这条通道只用 API ticket，不受节点 sshd 的 PermitRootLogin 限制；
+         * 代价是没有 SFTP 文件面板（渲染端按 transport 隐藏）。
+         */
+        const node = input.node?.trim()
+        if (!node) throw error
+        try {
+          const term = await servers.manager.prepareNodeTerminal(node)
+          const info = await servers.vmSessions.open({
+            node,
+            vmid: 0,
+            type: 'qemu',
+            cols: Number(input.cols) || 100,
+            rows: Number(input.rows) || 30,
+            backend: 'termproxy',
+            wsUrl: term.wsUrl,
+            ticket: term.ticket,
+            user: term.user,
+            tls: servers.manager.consoleTlsOptions(),
+            title:
+              typeof input.title === 'string' && input.title.trim()
+                ? input.title
+                : `节点 ${node}`
+          })
+          const session = {
+            sessionId: info.sessionId,
+            host: info.host,
+            username: info.username || 'root',
+            title: info.title,
+            createdAt: Date.now(),
+            cols: info.cols,
+            rows: info.rows,
+            transport: 'termproxy' as const
+          }
+          servers.windows?.bindSession(event.sender.id, session.sessionId)
+          return session
+        } catch (fallbackError) {
+          // 回退也失败时保留原始 SSH 报错，并附上 PVE 通道的原因
+          const base = error instanceof Error ? error.message : String(error)
+          const extra =
+            fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+          throw new Error(`${base}；PVE 节点通道回退也失败：${extra}`)
+        }
+      }
+    })
+  })
+
+  ipcMain.handle(IPC.sshShellList, async () => {
+    return wrap(async () => requireSsh().shell.list())
+  })
+
+  ipcMain.handle(IPC.sshShellWrite, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<{ sessionId: string; data: string }>(rawInput)
+      const sessionId = asString(input.sessionId, '会话')
+      const servers = requireSsh()
+      if (servers.vmSessions.write(sessionId, String(input.data ?? ''))) return
+      servers.shell.write(sessionId, String(input.data ?? ''))
+    })
+  })
+
+  ipcMain.handle(IPC.sshShellResize, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<{ sessionId: string; cols: number; rows: number }>(rawInput)
+      const sessionId = asString(input.sessionId, '会话')
+      const servers = requireSsh()
+      const cols = Number(input.cols) || 100
+      const rows = Number(input.rows) || 30
+      if (servers.vmSessions.resize(sessionId, cols, rows)) return
+      servers.shell.resize(sessionId, cols, rows)
+    })
+  })
+
+  ipcMain.handle(IPC.sshShellClose, async (_event, rawSessionId: unknown) => {
+    return wrap(async () => {
+      const sessionId = asString(rawSessionId, '会话')
+      const servers = requireSsh()
+      if (servers.vmSessions.has(sessionId)) {
+        servers.vmSessions.close(sessionId)
+        return
+      }
+      servers.shell.close(sessionId)
+    })
+  })
+
+  /**
+   * 文件面板的目标：带 guest 就连虚拟机自己的 sshd，否则退回节点。
+   * 客户机凭据不完整时给出明确报错，而不是静默连到节点上让人以为看错了目录。
+   */
+  function fsTarget(
+    servers: SshServers,
+    input: { override?: SshTargetOverride; guest?: SshTargetOverride }
+  ) {
+    if (input.guest?.host) {
+      return servers.guestTarget({
+        host: input.guest.host,
+        port: input.guest.port,
+        username: input.guest.username,
+        password: input.guest.password
+      })
+    }
+    return servers.target(input.override)
+  }
+
+  ipcMain.handle(IPC.sshFsList, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<{ override?: SshTargetOverride; path?: string }>(rawInput ?? {})
+      const servers = requireSsh()
+      return listDirectory(servers.pool, fsTarget(servers, input), input.path)
+    })
+  })
+
+  ipcMain.handle(IPC.sshFsRead, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<{ override?: SshTargetOverride; path: string }>(rawInput)
+      const servers = requireSsh()
+      return readFile(servers.pool, fsTarget(servers, input), asString(input.path, '路径'))
+    })
+  })
+
+  ipcMain.handle(IPC.sshFsWrite, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<{ override?: SshTargetOverride; path: string; content: string }>(rawInput)
+      const servers = requireSsh()
+      return writeFile(
+        servers.pool,
+        fsTarget(servers, input),
+        asString(input.path, '路径'),
+        String(input.content ?? '')
+      )
+    })
+  })
+
+  ipcMain.handle(IPC.sshFsCreateFile, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<{ override?: SshTargetOverride; path: string }>(rawInput)
+      const servers = requireSsh()
+      return createFile(servers.pool, fsTarget(servers, input), asString(input.path, '路径'))
+    })
+  })
+
+  ipcMain.handle(IPC.sshFsCreateDir, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<{ override?: SshTargetOverride; path: string }>(rawInput)
+      const servers = requireSsh()
+      return createDirectory(servers.pool, fsTarget(servers, input), asString(input.path, '路径'))
+    })
+  })
+
+  ipcMain.handle(IPC.sshFsRemove, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<{ override?: SshTargetOverride; path: string; recursive?: boolean }>(rawInput)
+      const servers = requireSsh()
+      return removeEntry(
+        servers.pool,
+        fsTarget(servers, input),
+        asString(input.path, '路径'),
+        Boolean(input.recursive)
+      )
+    })
+  })
+
+  ipcMain.handle(IPC.sshFsRename, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<{ override?: SshTargetOverride; from: string; to: string }>(rawInput)
+      const servers = requireSsh()
+      return renameEntry(
+        servers.pool,
+        fsTarget(servers, input),
+        asString(input.from, '原路径'),
+        asString(input.to, '新路径')
+      )
+    })
+  })
+
+  ipcMain.handle(IPC.sshFsUpload, async (event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<{ override?: SshTargetOverride; remoteDir: string; localPath?: string }>(rawInput)
+      const servers = requireSsh()
+      const target = fsTarget(servers, input)
+      let localPath = input.localPath
+      if (!localPath) {
+        const win = BrowserWindow.fromWebContents(event.sender) ?? getWindow()
+        const picked = win
+          ? await dialog.showOpenDialog(win, { properties: ['openFile'] })
+          : await dialog.showOpenDialog({ properties: ['openFile'] })
+        if (picked.canceled || picked.filePaths.length === 0) return null
+        localPath = picked.filePaths[0]
+      }
+      return uploadFile(servers.pool, target, asString(input.remoteDir, '目录'), localPath)
+    })
+  })
+
+  ipcMain.handle(IPC.sshFsDownload, async (event, rawInput: unknown) => {
+    return wrap(async () => {
+      const input = asObject<{ override?: SshTargetOverride; path: string }>(rawInput)
+      const servers = requireSsh()
+      const target = fsTarget(servers, input)
+      const remotePath = asString(input.path, '路径')
+      const win = BrowserWindow.fromWebContents(event.sender) ?? getWindow()
+      const suggested = path.posix.basename(remotePath)
+      const picked = win
+        ? await dialog.showSaveDialog(win, { defaultPath: suggested })
+        : await dialog.showSaveDialog({ defaultPath: suggested })
+      if (picked.canceled || !picked.filePath) return null
+      return downloadFile(servers.pool, target, remotePath, picked.filePath)
     })
   })
 
