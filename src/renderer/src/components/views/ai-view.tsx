@@ -347,13 +347,12 @@ export function AiView({
           )}
 
           {empty ? (
-            <div className="flex flex-col items-center py-12 text-center">
-              <div className="font-mono text-[34px] font-semibold leading-none tracking-[-0.1em] text-brand">AI</div>
-              <div className="mt-3 text-[15px] font-medium text-foreground">用一句话操作 PVE</div>
-              <div className="mt-1 max-w-[500px] text-[11.5px] leading-5 text-muted-foreground">
-                只读取你让它查询的集群数据；变更操作遵循当前权限边界。
+            <div className="py-6">
+              <div className="text-[13px] font-medium text-foreground">直接描述你想查询或执行的操作</div>
+              <div className="mt-1 max-w-[560px] text-[11.5px] leading-5 text-muted-foreground">
+                AI 会使用受限工具读取 PVE 数据；变更操作遵循当前权限边界。可以从下面的示例开始。
               </div>
-              <div className="mt-5 grid w-full max-w-[600px] gap-2 sm:grid-cols-2">
+              <div className="mt-4 grid w-full max-w-[620px] gap-2 sm:grid-cols-2">
                 {EXAMPLE_PROMPTS.map((prompt) => (
                   <button
                     key={prompt}
