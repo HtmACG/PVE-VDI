@@ -40,14 +40,14 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'animate-dialog-in fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100%-48px)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden border border-border-strong bg-popover shadow-[0_24px_80px_rgba(0,0,0,0.5)] focus:outline-none',
+        'animate-dialog-in fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100%-48px)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-none border border-border-strong bg-card shadow-[0_16px_48px_rgba(0,0,0,0.32)] focus:outline-none',
         className
       )}
       {...props}
     >
       {children}
       {hideClose ? null : (
-        <DialogPrimitive.Close className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-brand">
+        <DialogPrimitive.Close className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center border-l border-border bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand">
           <X className="h-3.5 w-3.5" />
           <span className="sr-only">关闭</span>
         </DialogPrimitive.Close>
@@ -60,7 +60,7 @@ DialogContent.displayName = DialogPrimitive.Content.displayName
 /** 标题带：浅底 + 下边线，和内容区形成层次，而不是靠一条通栏横线硬切。 */
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>): React.JSX.Element => (
   <div
-    className={cn('flex shrink-0 flex-col gap-1 border-b border-border bg-panel/40 px-5 py-3.5 pr-12', className)}
+    className={cn('flex min-h-10 shrink-0 flex-col gap-1 border-b border-border bg-card px-5 py-3 pr-12', className)}
     {...props}
   />
 )
@@ -68,7 +68,7 @@ const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>): React.JSX.Element => (
   <div
     className={cn(
-      'flex shrink-0 flex-col-reverse gap-2 border-t border-border bg-panel/40 px-5 py-3 sm:flex-row sm:items-center sm:justify-end',
+      'flex shrink-0 flex-col-reverse gap-2 border-t border-border bg-card px-5 py-3 sm:flex-row sm:items-center sm:justify-end',
       className
     )}
     {...props}
@@ -138,7 +138,7 @@ const SheetContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'animate-sheet-in fixed inset-y-0 right-0 z-50 flex w-full max-w-[660px] flex-col border-l border-border-strong bg-popover shadow-[-24px_0_80px_rgba(0,0,0,0.4)] focus:outline-none',
+        'animate-sheet-in fixed inset-y-0 right-0 z-50 flex w-full max-w-[660px] flex-col rounded-none border-l border-border-strong bg-card shadow-[-12px_0_40px_rgba(0,0,0,0.3)] focus:outline-none',
         className
       )}
       {...props}

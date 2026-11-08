@@ -445,7 +445,7 @@ export function SftpPanel({ className, guest, onPathChange }: SftpPanelProps): R
       {prompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPrompt(null)}>
           <div
-            className="w-full max-w-sm rounded-lg border border-border-strong bg-popover p-4 shadow-xl"
+            className="w-full max-w-sm rounded-none border border-border-strong bg-popover p-4 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="text-[13px] font-medium text-foreground">

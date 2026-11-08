@@ -465,9 +465,9 @@ export function SshView({ initialTabs = 1, override, node, vm }: SshViewProps = 
 
       <Dialog open={authOpen} onOpenChange={setAuthOpen}>
         <DialogContent className="max-w-[560px] p-0">
-          <div className="border-b border-border bg-panel/40 px-5 py-4">
+          <div className="border-b border-border bg-card px-5 py-4">
             <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-brand/40 bg-brand/10">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center">
                 <ShieldCheck className="h-4 w-4 text-brand" />
               </div>
               <div className="min-w-0 flex-1">

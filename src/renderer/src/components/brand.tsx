@@ -3,10 +3,10 @@ import { cn } from '@renderer/lib/utils'
 export function BrandMark({ className }: { className?: string }): React.JSX.Element {
   return (
     <span className={cn('grid h-5 w-5 shrink-0 grid-cols-2 grid-rows-2 gap-[2px]', className)} aria-hidden="true">
-      <span className="bg-brand" />
+      <span className="border border-brand" />
       <span className="border border-border-strong" />
       <span className="border border-border-strong" />
-      <span className="border border-brand/60 bg-brand/10" />
+      <span className="border border-brand/60" />
     </span>
   )
 }

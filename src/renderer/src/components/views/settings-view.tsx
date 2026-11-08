@@ -483,7 +483,7 @@ export function SettingsView({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="mt-3 grid grid-cols-[1fr_1fr_1fr] gap-2 border border-border bg-panel/25 p-3">
+                <div className="mt-3 grid grid-cols-[1fr_1fr_1fr] gap-2 border-t border-border pt-3">
                   {[
                     { label: 'WAN', tone: 'text-brand', highlighted: true, active: true },
                     { label: 'LAN', tone: 'text-info', highlighted: true, active: false },
@@ -805,7 +805,7 @@ export function SettingsView({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border border-border bg-panel/30 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
                 <div className="flex items-start gap-2">
                   <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                   <div>

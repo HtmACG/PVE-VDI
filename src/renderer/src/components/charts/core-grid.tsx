@@ -61,7 +61,7 @@ export function CoreGrid({ loads, total, className }: CoreGridProps): React.JSX.
               data-core={index}
               data-load={known ? value.toFixed(3) : ''}
               className={cn(
-                'rounded-[2.5px] ring-1 ring-inset ring-black/[0.07] transition-colors duration-300',
+                'ring-1 ring-inset ring-black/[0.07] transition-colors duration-300',
                 known ? coreTone(value) : 'bg-muted/50'
               )}
             />

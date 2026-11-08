@@ -60,6 +60,7 @@ export class SshWindowManager {
       minHeight: 460,
       show: false,
       frame: false,
+      roundedCorners: false,
       backgroundColor: '#050608',
       title: windowTitle(input),
       icon: this.options.iconPath(),

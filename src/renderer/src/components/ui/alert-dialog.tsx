@@ -15,7 +15,7 @@ const AlertDialogContent = React.forwardRef<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        'animate-dialog-in fixed left-1/2 top-1/2 z-[70] w-[calc(100%-48px)] max-w-md -translate-x-1/2 -translate-y-1/2 border border-border-strong bg-popover shadow-[0_24px_80px_rgba(0,0,0,0.5)] focus:outline-none',
+        'animate-dialog-in fixed left-1/2 top-1/2 z-[70] w-[calc(100%-48px)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-none border border-border-strong bg-card shadow-[0_16px_48px_rgba(0,0,0,0.32)] focus:outline-none',
         className
       )}
       {...props}
@@ -25,7 +25,7 @@ const AlertDialogContent = React.forwardRef<
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName
 
 function AlertDialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>): React.JSX.Element {
-  return <div className={cn('space-y-1.5 border-b border-border px-5 py-4', className)} {...props} />
+  return <div className={cn('space-y-1.5 border-b border-border bg-card px-5 py-4', className)} {...props} />
 }
 
 function AlertDialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>): React.JSX.Element {

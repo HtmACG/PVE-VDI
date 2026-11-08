@@ -252,7 +252,7 @@ export function VmRowActions({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant={primary.destructive ? 'destructive' : 'outline'}
+              variant={primary.destructive ? 'destructive' : 'ghost'}
               size={busy || !compact ? 'sm' : 'icon-sm'}
               disabled={busy}
               onClick={() => onAction(target, primary.action)}
@@ -365,7 +365,7 @@ export function VmDetailActionBar({
       {others.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" disabled={busy} aria-label="更多电源操作">
+            <Button variant="ghost" size="icon" disabled={busy} aria-label="更多电源操作">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>

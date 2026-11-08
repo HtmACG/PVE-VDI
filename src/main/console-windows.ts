@@ -53,6 +53,7 @@ export class ConsoleWindowManager {
       minHeight: 500,
       show: false,
       frame: false,
+      roundedCorners: false,
       backgroundColor: '#050608',
       title: `PVE VDI 控制台${request.name ? ` · ${request.name}` : ''}`,
       icon: this.options.iconPath(),

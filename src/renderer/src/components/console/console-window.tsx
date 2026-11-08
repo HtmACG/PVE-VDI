@@ -52,7 +52,7 @@ export function ConsoleWindowApp(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground ring-1 ring-inset ring-border-strong">
       <div className="drag-region flex h-10 shrink-0 items-stretch justify-end border-b border-border bg-card">
         <WindowButtons />
       </div>

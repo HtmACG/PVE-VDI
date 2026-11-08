@@ -61,7 +61,7 @@ export function OsIcon({
       title={label}
       aria-label={label}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center border border-border bg-panel/70',
+        'inline-flex shrink-0 items-center justify-center',
         dimensions,
         className
       )}

@@ -44,7 +44,7 @@ export function SshWindowApp(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground ring-1 ring-inset ring-border-strong">
       <div className="drag-region flex h-10 shrink-0 items-stretch border-b border-border bg-card">
         <div className="flex min-w-0 flex-1 items-center gap-2 px-3">
           <TerminalSquare className="h-3.5 w-3.5 shrink-0 text-brand" />

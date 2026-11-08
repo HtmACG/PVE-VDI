@@ -632,7 +632,7 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
     <div
       ref={contentRef}
       data-console-root="true"
-      className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground outline-none"
+      className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground outline-none ring-1 ring-inset ring-border-strong"
     >
       <header className="drag-region flex h-10 shrink-0 items-stretch border-b border-border bg-card">
         <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3">

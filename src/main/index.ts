@@ -109,6 +109,7 @@ if (!gotLock) {
       minHeight: 720,
       show: false,
       frame: false,
+      roundedCorners: false,
       backgroundColor: windowBackgroundColor(),
       title: 'PVE VDI',
       icon: iconPath(),

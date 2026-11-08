@@ -52,7 +52,7 @@ const SUBSCRIPTION_LABELS: Record<SubscriptionInfo['status'], { label: string; t
 function ErrorBox({ message }: { message: string | null }): React.JSX.Element | null {
   if (!message) return null
   return (
-    <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/[0.06] px-3 py-2 text-[11px] leading-4 text-destructive">
+    <div className="flex items-start gap-2 rounded-none border border-destructive/30 bg-destructive/[0.06] px-3 py-2 text-[11px] leading-4 text-destructive">
       <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
       <span className="break-all">{message}</span>
     </div>
@@ -85,7 +85,7 @@ function Field({
  */
 function KeyValueList({ items }: { items: Array<[string, string]> }): React.JSX.Element {
   return (
-    <dl className="divide-y divide-border/60 overflow-hidden rounded-md border border-border bg-panel/20">
+    <dl className="divide-y divide-border/60 overflow-hidden rounded-none border border-border bg-panel/20">
       {items.map(([label, value]) => (
         <div key={label} className="flex items-start justify-between gap-4 px-3.5 py-2">
           <dt className="shrink-0 text-[11.5px] leading-5 text-muted-foreground">{label}</dt>
@@ -185,7 +185,7 @@ function SubscriptionPanel({ node }: { node: string }): React.JSX.Element {
   return (
     <div className="space-y-5">
       {/* 状态卡：图标 + 状态词 + 等级，一句话说明 PVE 返回的信息 */}
-      <div className="flex items-start gap-3 rounded-md border border-border bg-panel/30 px-3.5 py-3">
+      <div className="flex items-start gap-3 rounded-none border border-border bg-panel/30 px-3.5 py-3">
         <span
           className={cn(
             'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
@@ -247,7 +247,7 @@ function SubscriptionPanel({ node }: { node: string }): React.JSX.Element {
 
       <ErrorBox message={actionError} />
 
-      <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/[0.07] px-3 py-2.5 text-[11px] leading-[17px] text-warning">
+      <div className="flex items-start gap-2 rounded-none border border-warning/30 bg-warning/[0.07] px-3 py-2.5 text-[11px] leading-[17px] text-warning">
         <CircleAlert className="mt-0.5 h-3 w-3 shrink-0" />
         <span>未订阅的节点仍可正常使用，但无法访问企业软件源与官方技术支持。</span>
       </div>
@@ -358,7 +358,7 @@ function AptPanel({ node }: { node: string }): React.JSX.Element {
       </div>
 
       {data && data.warnings.length > 0 && (
-        <div className="rounded-md border border-warning/30 bg-warning/[0.07] px-3 py-2 text-[11px] leading-[17px] text-warning">
+        <div className="rounded-none border border-warning/30 bg-warning/[0.07] px-3 py-2 text-[11px] leading-[17px] text-warning">
           {data.warnings.join('；')}
         </div>
       )}
@@ -371,7 +371,7 @@ function AptPanel({ node }: { node: string }): React.JSX.Element {
           {!data || data.updates.length === 0 ? (
             <EmptyState icon={<Package className="h-5 w-5" />} title="没有可升级的软件包" description="索引可能尚未刷新。" />
           ) : (
-            <div className="max-h-[220px] divide-y divide-border/60 overflow-y-auto rounded-md border border-border">
+            <div className="max-h-[220px] divide-y divide-border/60 overflow-y-auto rounded-none border border-border">
               {data.updates.map((pkg) => (
                 <div key={pkg.package} className="flex items-start gap-3 px-3 py-[7px]">
                   <div className="min-w-0 flex-1">
@@ -399,7 +399,7 @@ function AptPanel({ node }: { node: string }): React.JSX.Element {
           {repos.length === 0 ? (
             <EmptyState icon={<Package className="h-5 w-5" />} title="没有读取到软件源" description="该节点可能不是 Debian 系发行版。" />
           ) : (
-            <div className="divide-y divide-border/60 rounded-md border border-border">
+            <div className="divide-y divide-border/60 rounded-none border border-border">
               {repos.map((repo, index) => (
                 <div key={`${repo.path}-${repo.index}-${index}`} className="flex items-start gap-3 px-3 py-[7px]">
                   <div className="min-w-0 flex-1">
@@ -496,7 +496,7 @@ function CertificatePanel({ node }: { node: string }): React.JSX.Element {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-3 rounded-md border border-border bg-panel/30 px-3.5 py-3">
+      <div className="flex items-start gap-3 rounded-none border border-border bg-panel/30 px-3.5 py-3">
         <span
           className={cn(
             'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
@@ -547,7 +547,7 @@ function CertificatePanel({ node }: { node: string }): React.JSX.Element {
           >
             证书 PEM
           </SectionTitle>
-          <pre className="mt-2 max-h-[96px] overflow-auto rounded-md border border-border bg-panel/30 p-2.5 font-mono text-[10px] leading-4 text-muted-foreground">
+          <pre className="mt-2 max-h-[96px] overflow-auto rounded-none border border-border bg-panel/30 p-2.5 font-mono text-[10px] leading-4 text-muted-foreground">
             {data.pem}
           </pre>
         </div>
@@ -560,7 +560,7 @@ function CertificatePanel({ node }: { node: string }): React.JSX.Element {
             onChange={(event) => setCert(event.target.value)}
             rows={3}
             placeholder="包含服务器证书及其上级证书，按顺序粘贴 -----BEGIN CERTIFICATE-----"
-            className="w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-2 font-mono text-[10px] leading-4 text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:border-border-strong focus-visible:border-brand"
+            className="w-full resize-y rounded-none border border-input bg-transparent px-2.5 py-2 font-mono text-[10px] leading-4 text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:border-border-strong focus-visible:border-brand"
             aria-label="证书链"
           />
         </Field>
@@ -570,16 +570,16 @@ function CertificatePanel({ node }: { node: string }): React.JSX.Element {
             onChange={(event) => setKey(event.target.value)}
             rows={2}
             placeholder="-----BEGIN PRIVATE KEY-----"
-            className="w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-2 font-mono text-[10px] leading-4 text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:border-border-strong focus-visible:border-brand"
+            className="w-full resize-y rounded-none border border-input bg-transparent px-2.5 py-2 font-mono text-[10px] leading-4 text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:border-border-strong focus-visible:border-brand"
             aria-label="私钥"
           />
         </Field>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-panel/30 px-3 py-2">
+          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-panel/30 px-3 py-2">
             <span className="text-[11px] text-muted-foreground">强制替换</span>
             <Switch checked={force} onCheckedChange={setForce} aria-label="强制替换" />
           </div>
-          <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-panel/30 px-3 py-2">
+          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-panel/30 px-3 py-2">
             <span className="text-[11px] text-muted-foreground">上传后重启 pveproxy</span>
             <Switch checked={restart} onCheckedChange={setRestart} aria-label="重启 pveproxy" />
           </div>

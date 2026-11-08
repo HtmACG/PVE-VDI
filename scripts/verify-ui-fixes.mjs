@@ -1495,8 +1495,8 @@ try {
     JSON.stringify({ border: dialogSkin?.footerBorderTop, h: dialogSkin?.footerH })
   )
   check(
-    '关闭按钮不再切出竖线边框',
-    Boolean(dialogSkin) && dialogSkin.closeIsIcon && (dialogSkin.closeBorderLeft === '0px' || dialogSkin.closeBorderLeft === null),
+    '弹窗关闭按钮复用窗口控制分界线',
+    Boolean(dialogSkin) && dialogSkin.closeIsIcon && dialogSkin.closeBorderLeft === '1px',
     JSON.stringify({ borderLeft: dialogSkin?.closeBorderLeft })
   )
   check(
@@ -2480,6 +2480,29 @@ try {
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
 
+  // 全局图标 / logo 细节：不再用底色方框包图标
+  await page.locator('aside').getByRole('button', { name: '虚拟机' }).click()
+  await page.waitForTimeout(700)
+  const iconSkin = await page.evaluate(() => {
+    const osIcon = [...document.querySelectorAll('main span[title]')].find((el) => el.querySelector('svg'))
+    const power = document.querySelector('main button[aria-label="关机"]')
+    const brand = document.querySelector('header span.grid[aria-hidden="true"]')
+    return {
+      osBorder: osIcon ? getComputedStyle(osIcon).borderTopWidth : null,
+      osBg: osIcon ? getComputedStyle(osIcon).backgroundColor : null,
+      powerBorder: power ? getComputedStyle(power).borderTopWidth : null,
+      powerColor: power ? getComputedStyle(power).borderTopColor : null,
+      brandBg: brand?.firstElementChild ? getComputedStyle(brand.firstElementChild).backgroundColor : null
+    }
+  })
+  check('系统图标不再套底色方框', iconSkin.osBorder === '0px' && iconSkin.osBg === 'rgba(0, 0, 0, 0)', JSON.stringify(iconSkin))
+  check(
+    '电源操作图标按钮无方框',
+    iconSkin.powerBorder === '0px' || iconSkin.powerColor === 'rgba(0, 0, 0, 0)',
+    JSON.stringify(iconSkin)
+  )
+  check('品牌 logo 不再填充底色方块', iconSkin.brandBg === 'rgba(0, 0, 0, 0)', JSON.stringify(iconSkin))
+
   // 运行概览：任务日志、可关闭告警
   await page.locator('aside').getByRole('button', { name: '总览' }).click()
   await page.waitForTimeout(700)
@@ -2532,7 +2555,7 @@ try {
   const aiStreaming = await page.evaluate(() => ({
     text: document.body.innerText.includes('集群状态'),
     markdown: Boolean(document.querySelector('.markdown-body')),
-    streamingLabel: document.body.innerText.includes('STREAMING')
+    streamingLabel: document.body.innerText.includes('正在生成')
   }))
   check('AI 流式输出可见', aiStreaming.text && aiStreaming.markdown && aiStreaming.streamingLabel, JSON.stringify(aiStreaming))
   await page.waitForTimeout(750)

@@ -110,10 +110,11 @@ export function Markdown({ text, streaming = false }: { text: string; streaming?
       if (index < lines.length) index += 1
       blocks.push(
         <div key={`code-${index}`} className="my-2.5 border border-border bg-muted/40">
-          <div className="flex items-center justify-between border-b border-border/70 px-2.5 py-1 font-mono text-[9.5px] uppercase tracking-[0.08em] text-muted-foreground">
-            <span>{language || 'code'}</span>
-            <span>READ ONLY</span>
-          </div>
+          {language && (
+            <div className="border-b border-border/70 px-2.5 py-1 font-mono text-[9.5px] text-muted-foreground">
+              {language}
+            </div>
+          )}
           <pre className="overflow-x-auto p-3 font-mono text-[11px] leading-5 text-foreground">
             <code>{code.join('\n')}</code>
           </pre>
@@ -134,10 +135,9 @@ export function Markdown({ text, streaming = false }: { text: string; streaming?
       blocks.push(
         <div
           key={`heading-${index}`}
-          className={`mb-1.5 mt-3 flex items-baseline gap-2 font-semibold text-foreground ${sizes[level - 1]} first:mt-0`}
+          className={`mb-1.5 mt-3 font-semibold text-foreground ${sizes[level - 1]} first:mt-0`}
         >
-          <span className="font-mono text-[9px] text-brand/80">{level === 1 ? '01' : level === 2 ? '02' : level === 3 ? '03' : '04'}</span>
-          <span>{inline(heading[2], `h-${index}`)}</span>
+          {inline(heading[2], `h-${index}`)}
         </div>
       )
       index += 1
@@ -159,7 +159,7 @@ export function Markdown({ text, streaming = false }: { text: string; streaming?
       blocks.push(
         <blockquote
           key={`quote-${index}`}
-          className="my-2 border-l-2 border-brand/50 bg-brand/[0.04] px-3 py-1.5 text-[12px] leading-5 text-muted-foreground"
+          className="my-2 border-l-2 border-border-strong px-3 py-1 text-[12px] leading-5 text-muted-foreground"
         >
           {quote.map((item, itemIndex) => (
             <Fragment key={`quote-line-${itemIndex}`}>

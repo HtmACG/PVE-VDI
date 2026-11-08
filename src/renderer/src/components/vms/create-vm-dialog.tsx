@@ -110,7 +110,7 @@ function FormSection({
   return (
     <section className="border-b border-border px-5 py-4 last:border-b-0">
       <div className="mb-3 flex items-start gap-3">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center border border-border bg-panel text-muted-foreground">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground">
           {icon}
         </div>
         <div className="min-w-0">
