@@ -10,6 +10,7 @@ import type {
   AiApproveInput,
   AiChatInput,
   AiChatResult,
+  AiStreamEvent,
   AiTestResult,
   BackgroundKind,
   BackupJobInput,
@@ -72,6 +73,11 @@ const api: DesktopApi = {
   aiApprove: (input: AiApproveInput) => ipcRenderer.invoke(IPC.aiApprove, input),
   aiReset: (conversationId: string) => ipcRenderer.invoke(IPC.aiReset, conversationId),
   aiTest: () => ipcRenderer.invoke(IPC.aiTest),
+  onAiStream: (callback: (event: AiStreamEvent) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: AiStreamEvent): void => callback(payload)
+    ipcRenderer.on(IPC.aiStream, handler)
+    return () => ipcRenderer.removeListener(IPC.aiStream, handler)
+  },
   pickBackground: (kind: BackgroundKind) => ipcRenderer.invoke(IPC.pickBackground, kind),
   clearBackground: (kind: BackgroundKind) => ipcRenderer.invoke(IPC.clearBackground, kind),
   dashboard: () => ipcRenderer.invoke(IPC.dashboard),

@@ -180,21 +180,21 @@ export function Sidebar({
 
       <div className={cn('flex-1 overflow-y-auto py-3', collapsed ? 'px-1.5' : '')}>
         {sectionLabel('工作负载')}
-        <nav className={cn(collapsed ? '' : 'px-2')}>{WORKLOAD_NAV.map(renderItem)}</nav>
+        <nav>{WORKLOAD_NAV.map(renderItem)}</nav>
 
         <div className={collapsed ? 'mt-3' : 'mt-5'}>
           {sectionLabel('智能助手')}
-          <nav className={cn(collapsed ? '' : 'px-2')}>{AI_NAV.map(renderItem)}</nav>
+          <nav>{AI_NAV.map(renderItem)}</nav>
         </div>
 
         <div className={collapsed ? 'mt-3' : 'mt-5'}>
           {sectionLabel('基础设施')}
-          <nav className={cn(collapsed ? '' : 'px-2')}>{INFRA_NAV.map(renderItem)}</nav>
+          <nav>{INFRA_NAV.map(renderItem)}</nav>
         </div>
 
         <div className={collapsed ? 'mt-3' : 'mt-5'}>
           {sectionLabel('集群运维')}
-          <nav className={cn(collapsed ? '' : 'px-2')}>{CLUSTER_NAV.map(renderItem)}</nav>
+          <nav>{CLUSTER_NAV.map(renderItem)}</nav>
         </div>
 
         {!collapsed && (

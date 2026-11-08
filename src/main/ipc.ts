@@ -207,17 +207,27 @@ export function registerIpc(options: {
     })
   })
 
-  ipcMain.handle(IPC.aiChat, async (_event, rawInput: unknown) => {
+  ipcMain.handle(IPC.aiChat, async (event, rawInput: unknown) => {
     return wrap(async () => {
       if (!manager.session) throw new Error('请先连接 PVE 再使用 AI 助手。')
-      return ai.chat(asObject<AiChatInput>(rawInput))
+      const input = asObject<AiChatInput>(rawInput)
+      return ai.chat(input, (delta) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(IPC.aiStream, { conversationId: input.conversationId, delta })
+        }
+      })
     })
   })
 
-  ipcMain.handle(IPC.aiApprove, async (_event, rawInput: unknown) => {
+  ipcMain.handle(IPC.aiApprove, async (event, rawInput: unknown) => {
     return wrap(async () => {
       if (!manager.session) throw new Error('请先连接 PVE 再使用 AI 助手。')
-      return ai.approve(asObject<AiApproveInput>(rawInput))
+      const input = asObject<AiApproveInput>(rawInput)
+      return ai.approve(input, (delta) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(IPC.aiStream, { conversationId: input.conversationId, delta })
+        }
+      })
     })
   })
 

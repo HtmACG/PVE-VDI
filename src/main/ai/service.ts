@@ -14,6 +14,7 @@ import type { PveManager } from '../pve/service'
 import type { SettingsStore } from '../settings'
 import {
   chatCompletion,
+  chatCompletionStream,
   type AiRuntimeConfig,
   type ProviderMessage,
   type ProviderToolCall
@@ -154,7 +155,7 @@ export class AiService {
     return undefined
   }
 
-  async chat(input: AiChatInput): Promise<AiChatResult> {
+  async chat(input: AiChatInput, onDelta?: (delta: string) => void): Promise<AiChatResult> {
     const conversationId = String(input.conversationId ?? '').trim()
     const text = String(input.text ?? '').trim()
     if (!conversationId) throw new Error('缺少会话 ID。')
@@ -169,10 +170,10 @@ export class AiService {
     conversation.updatedAt = Date.now()
     conversation.messages.push({ role: 'user', content: text })
     this.trim(conversation)
-    return this.run(conversation, config, [])
+    return this.run(conversation, config, [], onDelta)
   }
 
-  async approve(input: AiApproveInput): Promise<AiChatResult> {
+  async approve(input: AiApproveInput, onDelta?: (delta: string) => void): Promise<AiChatResult> {
     const conversationId = String(input.conversationId ?? '').trim()
     const approval = this.approvals.get(String(input.approvalId ?? ''))
     if (!approval || approval.conversationId !== conversationId) {
@@ -206,14 +207,14 @@ export class AiService {
       })
       const next = await this.processCalls(conversation, approval.calls, approval.index + 1, events)
       if (next) return next
-      return this.run(conversation, this.runtimeConfig(), events)
+      return this.run(conversation, this.runtimeConfig(), events, onDelta)
     }
 
     const result = await this.executeCall(conversation, approval.calls[approval.index], approval.args, events)
     void result
     const next = await this.processCalls(conversation, approval.calls, approval.index + 1, events)
     if (next) return next
-    return this.run(conversation, this.runtimeConfig(), events)
+    return this.run(conversation, this.runtimeConfig(), events, onDelta)
   }
 
   reset(conversationId: string): void {
@@ -254,10 +255,13 @@ export class AiService {
   private async run(
     conversation: Conversation,
     config: AiRuntimeConfig,
-    events: AiToolEvent[]
+    events: AiToolEvent[],
+    onDelta?: (delta: string) => void
   ): Promise<AiChatResult> {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-      const reply = await chatCompletion(config, conversation.messages, toolDefinitions())
+      const reply = onDelta
+        ? await chatCompletionStream(config, conversation.messages, toolDefinitions(), onDelta)
+        : await chatCompletion(config, conversation.messages, toolDefinitions())
       const assistant: ProviderMessage = {
         role: 'assistant',
         content: reply.content,

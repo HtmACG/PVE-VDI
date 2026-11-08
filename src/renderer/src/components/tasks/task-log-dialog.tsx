@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronRight, FileBox, Loader2, RefreshCw } from 'lucide-react'
-import type { TaskLogLine, TaskSummary } from '@shared/types'
+import type { TaskLogLine, TaskStatusResult, TaskSummary } from '@shared/types'
 import { TASK_TYPE_LABELS } from '@shared/ipc'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@renderer/components/ui/dialog'
 import { Button } from '@renderer/components/ui/button'
@@ -22,6 +22,7 @@ export function TaskLogDialog({
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
   const [lines, setLines] = useState<TaskLogLine[]>([])
+  const [statusInfo, setStatusInfo] = useState<TaskStatusResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -34,9 +35,13 @@ export function TaskLogDialog({
     if (silent) setRefreshing(true)
     else setLoading(true)
     try {
-      const result = await unwrap(window.pvevdi.taskLog(task.node, task.upid))
+      const [result, status] = await Promise.all([
+        unwrap(window.pvevdi.taskLog(task.node, task.upid)),
+        unwrap(window.pvevdi.taskStatus(task.node, task.upid)).catch(() => null)
+      ])
       if (sequence.current !== current) return
       setLines(result)
+      setStatusInfo(status)
       setError(null)
       if (scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -54,6 +59,7 @@ export function TaskLogDialog({
   useEffect(() => {
     if (!open || !task) return
     setLines([])
+    setStatusInfo(null)
     setError(null)
     void load()
   }, [open, task?.upid])
@@ -78,12 +84,13 @@ export function TaskLogDialog({
           <DialogDescription className="font-mono break-all">{task?.upid ?? '—'}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-x-6 border-b border-border px-5 py-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-6 border-b border-border px-5 py-3 sm:grid-cols-5">
           {[
             ['类型', task ? TASK_TYPE_LABELS[task.type] ?? task.type : '—'],
             ['节点', task?.node ?? '—'],
             ['时长', task ? formatDuration(task.duration) : '—'],
-            ['开始', task ? formatFullDateTime(task.startTime * 1000) : '—']
+            ['开始', task ? formatFullDateTime(task.startTime * 1000) : '—'],
+            ['退出状态', statusInfo?.exitStatus || '—']
           ].map(([label, value]) => (
             <div key={label} className="min-w-0">
               <div className="text-[11px] text-muted-foreground">{label}</div>
@@ -115,7 +122,18 @@ export function TaskLogDialog({
               {error}
             </div>
           ) : lines.length === 0 ? (
-            <div className="font-mono text-[11px] text-muted-foreground">任务尚未产生输出。</div>
+            <div className="space-y-2">
+              <div className="font-mono text-[11px] text-muted-foreground">任务没有返回日志输出。</div>
+              <div className="grid max-w-lg grid-cols-2 gap-2 border border-border/70 bg-background/60 p-3 text-[11px]">
+                <span className="text-muted-foreground">任务状态</span>
+                <span className="font-mono text-foreground">{statusInfo?.status ?? task?.status ?? '未知'}</span>
+                <span className="text-muted-foreground">退出状态</span>
+                <span className="break-all font-mono text-foreground">{statusInfo?.exitStatus || '—'}</span>
+              </div>
+              <div className="max-w-xl text-[11px] leading-5 text-muted-foreground">
+                成功任务可能没有输出；较早的任务输出也可能已被 PVE 轮转清理。任务状态与退出码仍然保留，可用于确认执行结果。
+              </div>
+            </div>
           ) : (
             <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-[1.75] text-foreground">
               {body}

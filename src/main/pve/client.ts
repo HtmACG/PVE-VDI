@@ -437,7 +437,7 @@ export class PveClient {
     validateNodeName(node)
     validateUpid(upid)
     const data = await this.request<Array<{ n: number; t: string }>>(
-      `/nodes/${encodeURIComponent(node)}/tasks/${upid}/log?limit=500`,
+      `/nodes/${encodeURIComponent(node)}/tasks/${encodeURIComponent(upid)}/log?start=0&limit=500`,
       { timeoutMs: 20_000 }
     )
     return data ?? []

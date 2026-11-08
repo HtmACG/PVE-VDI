@@ -8,7 +8,8 @@ import {
   HardDrive,
   Plus,
   Server,
-  Users
+  Users,
+  X
 } from 'lucide-react'
 import type {
   ConsoleMode,
@@ -71,7 +72,14 @@ function HealthStrip({
   const offline = dashboard.nodes.filter((node) => node.status !== 'online')
   const failed = dashboard.tasks.filter((task) => task.status === 'error')
   const hot = dashboard.storages.filter((storage) => storage.usedFraction >= 0.85)
-  if (offline.length === 0 && failed.length === 0 && hot.length === 0) return null
+  const signature = `${offline.length}:${failed.length}:${hot.length}:${failed[0]?.upid ?? ''}`
+  const [dismissed, setDismissed] = useState(false)
+
+  useEffect(() => {
+    setDismissed(false)
+  }, [signature])
+
+  if (dismissed || (offline.length === 0 && failed.length === 0 && hot.length === 0)) return null
 
   const Item = ({
     count,
@@ -102,6 +110,14 @@ function HealthStrip({
       {offline.length > 0 && <Item count={offline.length} label="个节点离线" view="nodes" />}
       {failed.length > 0 && <Item count={failed.length} label="个任务失败" view="tasks" />}
       {hot.length > 0 && <Item count={hot.length} label="个存储使用率超过 85%" view="storage" />}
+      <button
+        type="button"
+        onClick={() => setDismissed(true)}
+        aria-label="关闭告警"
+        className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-warning/10 hover:text-foreground"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   )
 }
@@ -460,6 +476,7 @@ function TaskRow({ task, onOpen }: { task: TaskSummary; onOpen: () => void }): R
     <button
       type="button"
       onClick={onOpen}
+      aria-label={`查看任务日志：${TASK_TYPE_LABELS[task.type] ?? task.type}`}
       className="flex w-full items-center gap-3 border-b border-border/60 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-panel/60"
     >
       <div className="min-w-0 flex-1">

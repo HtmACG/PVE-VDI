@@ -64,7 +64,7 @@ export function TasksView({
   const [filter, setFilter] = useState<TaskFilter>('all')
   const [query, setQuery] = useState('')
   const [node, setNode] = useState('all')
-  const [range, setRange] = useState('24h')
+  const [range, setRange] = useState('7d')
   const [tasks, setTasks] = useState<TaskSummary[]>([])
   const [warnings, setWarnings] = useState<string[]>([])
   const [loading, setLoading] = useState(true)

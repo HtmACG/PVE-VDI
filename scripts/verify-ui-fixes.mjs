@@ -176,7 +176,31 @@ const dashboard = {
     }
   ],
   storages: [],
-  tasks: []
+  tasks: [
+    {
+      upid: 'UPID:pve:0000A1B2:0012C3D4:65432100:qmstart:204:root@pam:',
+      node: 'pve',
+      type: 'qmstart',
+      id: '204',
+      user: 'root@pam',
+      status: 'ok',
+      startTime: 1761700000,
+      endTime: 1761700012,
+      duration: 12
+    },
+    {
+      upid: 'UPID:pve:0000C3D4:0014E5F6:65432300:qmmigrate:204:root@pam:',
+      node: 'pve',
+      type: 'qmmigrate',
+      id: '204',
+      user: 'root@pam',
+      status: 'error',
+      rawStatus: 'migration aborted',
+      startTime: 1761701000,
+      endTime: 1761701060,
+      duration: 60
+    }
+  ]
 }
 
 const detail = {
@@ -711,6 +735,7 @@ function mainMock(payload) {
   // addInitScript 会序列化函数体，数据通过第二个参数（payload）注入
   const { theme, dashboard, detail, imagesData, newModuleData, sshBootstrap } = payload
   const ok = (data) => Promise.resolve({ ok: true, data })
+  let aiStreamListener = null
   const listeners = new Set()
   const sshListeners = new Set()
   const mockSshSessions = []
@@ -774,10 +799,18 @@ function mainMock(payload) {
         return ok(current)
       },
       testNotification: () => ok(undefined),
-      aiChat: () =>
-        ok({
+      aiChat: async (input) => {
+        for (const delta of [
+          '## 集群状态\n\n',
+          '- **节点**：3 个在线\n',
+          '- **虚拟机**：3 台运行\n'
+        ]) {
+          aiStreamListener?.({ conversationId: input.conversationId, delta })
+          await new Promise((resolve) => setTimeout(resolve, 180))
+        }
+        return ok({
           status: 'message',
-          reply: '这是 mock AI 的回复：集群当前运行正常。',
+          reply: '## 集群状态\n\n- **节点**：3 个在线\n- **虚拟机**：3 台运行\n- 最近任务：没有失败\n\n> 这是 mock AI 的回复。',
           events: [
             {
               id: 'ai-evt-1',
@@ -788,9 +821,29 @@ function mainMock(payload) {
               summary: '读取节点、虚拟机与任务概览'
             }
           ]
-        }),
+        })
+      },
       aiApprove: () => ok({ status: 'message', reply: '已按确认执行（mock）。', events: [] }),
       aiReset: () => ok(null),
+      onAiStream: (fn) => {
+        aiStreamListener = fn
+        return () => {
+          if (aiStreamListener === fn) aiStreamListener = null
+        }
+      },
+      taskLog: (_node, upid) =>
+        String(upid).includes('qmmigrate')
+          ? ok([])
+          : ok([
+              { n: 1, t: 'TASK OK' },
+              { n: 2, t: 'finished' }
+            ]),
+      taskStatus: (_node, upid) =>
+        ok({
+          upid: String(upid),
+          status: 'stopped',
+          exitStatus: String(upid).includes('qmmigrate') ? 'migration aborted' : 'OK'
+        }),
       aiTest: () =>
         ok({ ok: true, provider: 'openai', model: 'gpt-4o-mini', message: 'OK', latencyMs: 12 }),
       onSettingsChanged: (fn) => {
@@ -954,7 +1007,7 @@ function consoleMock(payload) {
       aiChat: () =>
         ok({
           status: 'message',
-          reply: '这是 mock AI 的回复：集群当前运行正常。',
+          reply: '## 集群状态\n\n- **节点**：3 个在线\n- **虚拟机**：3 台运行\n- 最近任务：没有失败\n\n> 这是 mock AI 的回复。',
           events: [
             {
               id: 'ai-evt-1',
@@ -968,6 +1021,20 @@ function consoleMock(payload) {
         }),
       aiApprove: () => ok({ status: 'message', reply: '已按确认执行（mock）。', events: [] }),
       aiReset: () => ok(null),
+      onAiStream: () => () => {},
+      taskLog: (_node, upid) =>
+        String(upid).includes('qmmigrate')
+          ? ok([])
+          : ok([
+              { n: 1, t: 'TASK OK' },
+              { n: 2, t: 'finished' }
+            ]),
+      taskStatus: (_node, upid) =>
+        ok({
+          upid: String(upid),
+          status: 'stopped',
+          exitStatus: String(upid).includes('qmmigrate') ? 'migration aborted' : 'OK'
+        }),
       aiTest: () =>
         ok({ ok: true, provider: 'openai', model: 'gpt-4o-mini', message: 'OK', latencyMs: 12 }),
       onSettingsChanged: (fn) => {
@@ -1514,7 +1581,7 @@ try {
     { nav: '高可用', shot: '14-ha', key: 'vm:204' },
     { nav: '防火墙', shot: '15-firewall', key: '管理端口' },
     { nav: '访问控制', shot: '16-access', key: 'automation@pve' },
-    { nav: '任务', shot: '21-tasks', key: 'qmmigrate' }
+    { nav: '任务', shot: '21-tasks', key: '迁移虚拟机' }
   ]
 
   for (const view of newViews) {
@@ -2413,6 +2480,41 @@ try {
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
 
+  // 运行概览：任务日志、可关闭告警
+  await page.locator('aside').getByRole('button', { name: '总览' }).click()
+  await page.waitForTimeout(700)
+  const alertClose = page.getByRole('button', { name: '关闭告警' })
+  check('运行概览告警条有闭合入口', (await alertClose.count()) > 0)
+  if ((await alertClose.count()) > 0) {
+    await alertClose.first().click()
+    await page.waitForTimeout(250)
+    check('运行概览告警条可关闭', (await alertClose.count()) === 0)
+  }
+
+  const overviewTask = page.getByRole('button', { name: /查看任务日志/ }).first()
+  check('概览任务行可打开日志', (await overviewTask.count()) > 0)
+  if ((await overviewTask.count()) > 0) {
+    await overviewTask.click()
+    await page.waitForTimeout(500)
+    const taskLog = await page.evaluate(() => document.body.innerText)
+    check('概览任务日志有内容', taskLog.includes('任务日志') && taskLog.includes('TASK OK'), taskLog.slice(0, 180))
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+  }
+  const failedTask = page.getByRole('button', { name: /查看任务日志：(迁移虚拟机|qmmigrate)/ }).first()
+  if ((await failedTask.count()) > 0) {
+    await failedTask.click()
+    await page.waitForTimeout(500)
+    const failedLog = await page.evaluate(() => document.body.innerText)
+    check(
+      '无日志任务显示状态与退出码而不是空白',
+      failedLog.includes('任务没有返回日志输出') && failedLog.includes('migration aborted'),
+      failedLog.slice(0, 180)
+    )
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+  }
+
   // AI 助手 + 侧边栏收起
   await page.locator('aside').getByRole('button', { name: 'AI 助手' }).click()
   await page.waitForTimeout(600)
@@ -2426,9 +2528,43 @@ try {
   const aiInput = page.locator('textarea[placeholder*="告诉 AI"]').first()
   await aiInput.fill('列出所有虚拟机')
   await page.getByRole('button', { name: '发送' }).last().click()
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(220)
+  const aiStreaming = await page.evaluate(() => ({
+    text: document.body.innerText.includes('集群状态'),
+    markdown: Boolean(document.querySelector('.markdown-body')),
+    streamingLabel: document.body.innerText.includes('STREAMING')
+  }))
+  check('AI 流式输出可见', aiStreaming.text && aiStreaming.markdown && aiStreaming.streamingLabel, JSON.stringify(aiStreaming))
+  await page.waitForTimeout(750)
   const aiReply = await page.evaluate(() => document.body.innerText)
   check('AI 对话返回结果', aiReply.includes('这是 mock AI 的回复'), aiReply.slice(0, 200))
+  const aiMarkdown = await page.evaluate(() => {
+    const body = document.querySelector('.markdown-body')
+    return {
+      heading: body?.textContent?.includes('集群状态') ?? false,
+      bold: body?.querySelector('strong')?.textContent ?? '',
+      list: Boolean(body?.querySelector('li')),
+      quote: Boolean(body?.querySelector('blockquote'))
+    }
+  })
+  check(
+    'AI 回复按 Markdown 渲染（标题/粗体/列表/引用）',
+    aiMarkdown.heading && aiMarkdown.bold === '节点' && aiMarkdown.list && aiMarkdown.quote,
+    JSON.stringify(aiMarkdown)
+  )
+  const activeHighlight = await page.evaluate(() => {
+    const aside = document.querySelector('aside')
+    const active = aside?.querySelector('nav button[aria-current="page"]')
+    return {
+      aside: Math.round(aside?.getBoundingClientRect().width ?? 0),
+      item: Math.round(active?.getBoundingClientRect().width ?? 0)
+    }
+  })
+  check(
+    '侧栏高亮宽度与侧栏一致',
+    activeHighlight.aside > 0 && Math.abs(activeHighlight.aside - activeHighlight.item) <= 2,
+    JSON.stringify(activeHighlight)
+  )
 
   await page.getByRole('button', { name: '收起侧边栏' }).click()
   await page.waitForTimeout(350)

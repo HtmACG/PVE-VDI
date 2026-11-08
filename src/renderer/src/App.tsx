@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { AlertTriangle, RefreshCw, X } from 'lucide-react'
 import type {
   ApiError,
   AppSettings,
@@ -156,6 +156,7 @@ function ConnectedApp({
   const [nodeSettingsNode, setNodeSettingsNode] = useState<string | null>(null)
   const [disconnectOpen, setDisconnectOpen] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [dismissedError, setDismissedError] = useState<string | null>(null)
   const mainRef = useRef<HTMLDivElement>(null)
   const initialScrollDone = useRef(false)
 
@@ -177,6 +178,10 @@ function ConnectedApp({
     onAuthError: handleAuthError
   })
   const viewData = useMemo(() => mergeLiveMetrics(data, live.data), [data, live.data])
+
+  useEffect(() => {
+    if (!error) setDismissedError(null)
+  }, [error])
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 })
@@ -590,7 +595,7 @@ function ConnectedApp({
                 view === 'ai' ? 'h-full' : 'p-5 lg:p-6'
               )}
             >
-              {error && data && (
+              {error && data && error !== dismissedError && (
                 <div className="mb-4 flex items-center gap-3 border border-warning/30 bg-warning/[0.05] px-3 py-2">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
                   <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
@@ -600,6 +605,14 @@ function ConnectedApp({
                     <RefreshCw className="h-3 w-3" />
                     重试
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => setDismissedError(error)}
+                    aria-label="关闭同步告警"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center text-muted-foreground hover:bg-warning/10 hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               )}
 

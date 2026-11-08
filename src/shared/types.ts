@@ -866,6 +866,11 @@ export interface AiChatResult {
   approval?: AiApproval
 }
 
+export interface AiStreamEvent {
+  conversationId: string
+  delta: string
+}
+
 export interface AiTestResult {
   ok: boolean
   provider: AiProvider
@@ -1774,6 +1779,7 @@ export interface DesktopApi {
   aiApprove: (input: AiApproveInput) => Promise<ApiResult<AiChatResult>>
   aiReset: (conversationId: string) => Promise<ApiResult<void>>
   aiTest: () => Promise<ApiResult<AiTestResult>>
+  onAiStream: (callback: (event: AiStreamEvent) => void) => () => void
   pickBackground: (kind: BackgroundKind) => Promise<ApiResult<BackgroundPickResult | null>>
   clearBackground: (kind: BackgroundKind) => Promise<ApiResult<BackgroundPickResult>>
   dashboard: () => Promise<ApiResult<DashboardData>>
