@@ -63,6 +63,12 @@ const makeSettings = (theme) => ({
   notificationsEnabled: true,
   notifyVmShutdown: true,
   notifyTaskFailure: true,
+  aiProvider: 'openai',
+  aiBaseUrl: 'https://api.openai.com/v1',
+  aiModel: 'gpt-4o-mini',
+  aiPermission: 'confirm',
+  hasAiApiKey: true,
+  sidebarCollapsed: false,
   appearanceVersion: 2,
   appBackground: ''
 })
@@ -708,7 +714,7 @@ function mainMock(payload) {
   const listeners = new Set()
   const sshListeners = new Set()
   const mockSshSessions = []
-  let current = { serverUrl: 'https://pve.example.com:8006', username: 'root@pam', allowSelfSigned: true, rememberPassword: false, hasSavedPassword: false, credentialStorageAvailable: true, theme: theme, refreshInterval: 8, uiFont: 'inter', customFont: '', accentColor: '#0078d4', networkView: 'cards', launchAtLogin: false, notificationsEnabled: true, notifyVmShutdown: true, notifyTaskFailure: true, appearanceVersion: 2, appBackground: '' }
+  let current = { serverUrl: 'https://pve.example.com:8006', username: 'root@pam', allowSelfSigned: true, rememberPassword: false, hasSavedPassword: false, credentialStorageAvailable: true, theme: theme, refreshInterval: 8, uiFont: 'inter', customFont: '', accentColor: '#0078d4', networkView: 'cards', launchAtLogin: false, notificationsEnabled: true, notifyVmShutdown: true, notifyTaskFailure: true, aiProvider: 'openai', aiBaseUrl: 'https://api.openai.com/v1', aiModel: 'gpt-4o-mini', aiPermission: 'confirm', hasAiApiKey: true, sidebarCollapsed: false, appearanceVersion: 2, appBackground: '' }
   Object.defineProperty(window, 'pvevdi', {
     configurable: true,
     writable: true,
@@ -768,6 +774,25 @@ function mainMock(payload) {
         return ok(current)
       },
       testNotification: () => ok(undefined),
+      aiChat: () =>
+        ok({
+          status: 'message',
+          reply: '这是 mock AI 的回复：集群当前运行正常。',
+          events: [
+            {
+              id: 'ai-evt-1',
+              tool: 'get_cluster_overview',
+              title: '查询集群概览',
+              risk: 'read',
+              status: 'ok',
+              summary: '读取节点、虚拟机与任务概览'
+            }
+          ]
+        }),
+      aiApprove: () => ok({ status: 'message', reply: '已按确认执行（mock）。', events: [] }),
+      aiReset: () => ok(null),
+      aiTest: () =>
+        ok({ ok: true, provider: 'openai', model: 'gpt-4o-mini', message: 'OK', latencyMs: 12 }),
       onSettingsChanged: (fn) => {
         listeners.add(fn)
         return () => listeners.delete(fn)
@@ -926,6 +951,25 @@ function consoleMock(payload) {
         return ok(current)
       },
       testNotification: () => ok(undefined),
+      aiChat: () =>
+        ok({
+          status: 'message',
+          reply: '这是 mock AI 的回复：集群当前运行正常。',
+          events: [
+            {
+              id: 'ai-evt-1',
+              tool: 'get_cluster_overview',
+              title: '查询集群概览',
+              risk: 'read',
+              status: 'ok',
+              summary: '读取节点、虚拟机与任务概览'
+            }
+          ]
+        }),
+      aiApprove: () => ok({ status: 'message', reply: '已按确认执行（mock）。', events: [] }),
+      aiReset: () => ok(null),
+      aiTest: () =>
+        ok({ ok: true, provider: 'openai', model: 'gpt-4o-mini', message: 'OK', latencyMs: 12 }),
       onSettingsChanged: (fn) => {
         listeners.add(fn)
         return () => listeners.delete(fn)
@@ -1056,7 +1100,8 @@ try {
     const aside = document.querySelector('aside')
     if (!aside) return null
     const labels = [...aside.querySelectorAll('button')].map((b) => b.textContent?.trim() ?? '')
-    return { hasCreate: labels.some((t) => t.includes('新建虚拟机')), firstItem: labels[0] }
+    const navLabels = [...aside.querySelectorAll('nav button')].map((b) => b.textContent?.trim() ?? '')
+    return { hasCreate: labels.some((t) => t.includes('新建虚拟机')), firstItem: navLabels[0] }
   })
   check('侧栏已移除「新建虚拟机」按钮', Boolean(sidebarProbe) && !sidebarProbe.hasCreate, JSON.stringify(sidebarProbe))
   check('侧栏首项为导航（总览）', Boolean(sidebarProbe) && sidebarProbe.firstItem === '总览', JSON.stringify(sidebarProbe))
@@ -2367,6 +2412,50 @@ try {
   await page.waitForTimeout(300)
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
+
+  // AI 助手 + 侧边栏收起
+  await page.locator('aside').getByRole('button', { name: 'AI 助手' }).click()
+  await page.waitForTimeout(600)
+  const aiShell = await page.evaluate(() => ({
+    heading: document.body.innerText.includes('AI 运维助手'),
+    configured: document.body.innerText.includes('OpenAI / GPT'),
+    textarea: Boolean(document.querySelector('textarea[placeholder*="告诉 AI"]'))
+  }))
+  check('AI 助手入口与界面可用', aiShell.heading && aiShell.configured && aiShell.textarea, JSON.stringify(aiShell))
+
+  const aiInput = page.locator('textarea[placeholder*="告诉 AI"]').first()
+  await aiInput.fill('列出所有虚拟机')
+  await page.getByRole('button', { name: '发送' }).last().click()
+  await page.waitForTimeout(600)
+  const aiReply = await page.evaluate(() => document.body.innerText)
+  check('AI 对话返回结果', aiReply.includes('这是 mock AI 的回复'), aiReply.slice(0, 200))
+
+  await page.getByRole('button', { name: '收起侧边栏' }).click()
+  await page.waitForTimeout(350)
+  const collapsed = await page.evaluate(() => {
+    const aside = document.querySelector('aside')
+    return {
+      attr: aside?.getAttribute('data-sidebar-collapsed'),
+      width: Math.round(aside?.getBoundingClientRect().width ?? 0)
+    }
+  })
+  check('侧边栏可收起为图标栏', collapsed.attr === 'true' && collapsed.width <= 64, JSON.stringify(collapsed))
+  await page.getByRole('button', { name: '展开侧边栏' }).click()
+  await page.waitForTimeout(300)
+
+  await page.locator('aside').getByRole('button', { name: '首选项' }).click()
+  await page.waitForTimeout(600)
+  const aiSettings = await page.evaluate(() => ({
+    provider: Boolean(document.querySelector('[aria-label="AI 服务商"]')),
+    permission: Boolean(document.querySelector('[aria-label="AI 权限边界"]')),
+    key: Boolean(document.querySelector('[aria-label="AI API Key"]')),
+    test: document.body.innerText.includes('测试连接')
+  }))
+  check(
+    '设置页包含 AI 服务商 / 权限边界 / Key / 测试连接',
+    aiSettings.provider && aiSettings.permission && aiSettings.key && aiSettings.test,
+    JSON.stringify(aiSettings)
+  )
 
   // 控制台窗口
   const consolePage = await context.newPage()

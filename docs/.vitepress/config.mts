@@ -30,6 +30,7 @@ export default defineConfig({
           { text: '虚拟机管理', link: '/guide/virtual-machines' },
           { text: '内置控制台', link: '/guide/console' },
           { text: 'SSH 终端', link: '/guide/ssh' },
+          { text: 'AI 运维助手', link: '/guide/ai' },
           { text: '存储管理', link: '/guide/storage' },
           { text: '备份与还原', link: '/guide/backup' },
           { text: '访问控制', link: '/guide/access' }

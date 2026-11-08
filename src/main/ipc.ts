@@ -76,6 +76,8 @@ import {
 } from './ssh/sftp'
 import { checkForUpdates } from './updates'
 import type { DashboardNotifier } from './notifications'
+import type { AiApproveInput, AiChatInput } from '@shared/types'
+import { AiService } from './ai/service'
 
 function wrap<T>(operation: () => Promise<T>): Promise<ApiResult<T>> {
   return operation()
@@ -122,6 +124,7 @@ export function registerIpc(options: {
   const { manager, store, consoleWindows, getWindow, onSettingsChanged } = options
   const notifier = options.notifier
   const ssh = options.servers
+  const ai = new AiService(manager, store)
 
   ipcMain.handle(IPC.bootstrap, async (): Promise<ApiResult<BootstrapData>> => {
     return wrap(async () => {
@@ -179,6 +182,7 @@ export function registerIpc(options: {
       consoleWindows.closeAll()
       manager.logout()
       notifier?.reset()
+      ai.resetAll()
       if (rawClearSaved === true) store.forgetCredentials()
       return store.get()
     })
@@ -201,6 +205,30 @@ export function registerIpc(options: {
     return wrap(async () => {
       notifier?.sendTest()
     })
+  })
+
+  ipcMain.handle(IPC.aiChat, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      if (!manager.session) throw new Error('请先连接 PVE 再使用 AI 助手。')
+      return ai.chat(asObject<AiChatInput>(rawInput))
+    })
+  })
+
+  ipcMain.handle(IPC.aiApprove, async (_event, rawInput: unknown) => {
+    return wrap(async () => {
+      if (!manager.session) throw new Error('请先连接 PVE 再使用 AI 助手。')
+      return ai.approve(asObject<AiApproveInput>(rawInput))
+    })
+  })
+
+  ipcMain.handle(IPC.aiReset, async (_event, rawId: unknown) => {
+    return wrap(async () => {
+      ai.reset(asString(rawId, '会话'))
+    })
+  })
+
+  ipcMain.handle(IPC.aiTest, async () => {
+    return wrap(async () => ai.test())
   })
 
   ipcMain.handle(IPC.pickBackground, async (_event, rawKind: unknown) => {

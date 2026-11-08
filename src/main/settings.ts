@@ -8,6 +8,8 @@ import {
   MIN_REFRESH_INTERVAL
 } from '@shared/ipc'
 import type {
+  AiPermission,
+  AiProvider,
   AppSettings,
   BackgroundImages,
   BackgroundKind,
@@ -17,6 +19,7 @@ import type {
   Theme,
   UiFont
 } from '@shared/types'
+import { AI_DEFAULT_PERMISSION, AI_PROVIDER_PRESETS } from '@shared/ai'
 import {
   DEFAULT_ACCENT_COLOR,
   DEFAULT_CUSTOM_FONT,
@@ -42,6 +45,12 @@ interface StoredSettings {
   notificationsEnabled: boolean
   notifyVmShutdown: boolean
   notifyTaskFailure: boolean
+  aiProvider: AiProvider
+  aiBaseUrl: string
+  aiModel: string
+  aiPermission: AiPermission
+  encryptedAiApiKey?: string
+  sidebarCollapsed: boolean
   appearanceVersion: 2
   loginBackground?: string
   appBackground?: string
@@ -65,6 +74,11 @@ const DEFAULTS: StoredSettings = {
   notificationsEnabled: true,
   notifyVmShutdown: true,
   notifyTaskFailure: true,
+  aiProvider: 'openai',
+  aiBaseUrl: AI_PROVIDER_PRESETS.openai.baseUrl,
+  aiModel: AI_PROVIDER_PRESETS.openai.model,
+  aiPermission: AI_DEFAULT_PERMISSION,
+  sidebarCollapsed: false,
   appearanceVersion: 2
 }
 
@@ -76,6 +90,14 @@ function clampRefresh(value: unknown): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return DEFAULTS.refreshInterval
   return Math.round(Math.min(MAX_REFRESH_INTERVAL, Math.max(MIN_REFRESH_INTERVAL, parsed)))
+}
+
+function validAiProvider(value: unknown): value is AiProvider {
+  return value === 'openai' || value === 'deepseek' || value === 'ollama' || value === 'custom'
+}
+
+function validAiPermission(value: unknown): value is AiPermission {
+  return value === 'read-only' || value === 'confirm' || value === 'full'
 }
 
 export class SettingsStore {
@@ -121,6 +143,21 @@ export class SettingsStore {
         notificationsEnabled: raw.notificationsEnabled !== false,
         notifyVmShutdown: raw.notifyVmShutdown !== false,
         notifyTaskFailure: raw.notifyTaskFailure !== false,
+        aiProvider: validAiProvider(raw.aiProvider) ? raw.aiProvider : DEFAULTS.aiProvider,
+        aiBaseUrl:
+          typeof raw.aiBaseUrl === 'string' && raw.aiBaseUrl.trim()
+            ? raw.aiBaseUrl.trim()
+            : AI_PROVIDER_PRESETS[validAiProvider(raw.aiProvider) ? raw.aiProvider : 'openai'].baseUrl,
+        aiModel:
+          typeof raw.aiModel === 'string' && raw.aiModel.trim()
+            ? raw.aiModel.trim()
+            : AI_PROVIDER_PRESETS[validAiProvider(raw.aiProvider) ? raw.aiProvider : 'openai'].model,
+        aiPermission: validAiPermission(raw.aiPermission) ? raw.aiPermission : DEFAULTS.aiPermission,
+        encryptedAiApiKey:
+          typeof raw.encryptedAiApiKey === 'string' && raw.encryptedAiApiKey
+            ? raw.encryptedAiApiKey
+            : undefined,
+        sidebarCollapsed: raw.sidebarCollapsed === true,
         appearanceVersion: 2,
         loginBackground: typeof raw.loginBackground === 'string' ? raw.loginBackground : undefined,
         appBackground: typeof raw.appBackground === 'string' ? raw.appBackground : undefined,
@@ -173,6 +210,12 @@ export class SettingsStore {
       notificationsEnabled: this.data.notificationsEnabled,
       notifyVmShutdown: this.data.notifyVmShutdown,
       notifyTaskFailure: this.data.notifyTaskFailure,
+      aiProvider: this.data.aiProvider,
+      aiBaseUrl: this.data.aiBaseUrl,
+      aiModel: this.data.aiModel,
+      aiPermission: this.data.aiPermission,
+      hasAiApiKey: Boolean(this.data.encryptedAiApiKey),
+      sidebarCollapsed: this.data.sidebarCollapsed,
       hasLoginBackground: Boolean(this.backgroundFilePath('login')),
       hasAppBackground: Boolean(this.backgroundFilePath('app'))
     }
@@ -313,6 +356,15 @@ export class SettingsStore {
     }
   }
 
+  getAiApiKey(): string | null {
+    if (!this.data.encryptedAiApiKey || !this.encryptionAvailable) return null
+    try {
+      return safeStorage.decryptString(Buffer.from(this.data.encryptedAiApiKey, 'base64'))
+    } catch {
+      return null
+    }
+  }
+
   /** 应用内写入 cloud-init 密码时顺手缓存；PVE 的 GET config 不会回传 cipassword */
   saveCloudInitPassword(vmid: number, password: string): void {
     if (!password || !this.encryptionAvailable || !Number.isFinite(vmid)) return
@@ -379,6 +431,36 @@ export class SettingsStore {
     if (patch.notifyTaskFailure !== undefined) {
       if (typeof patch.notifyTaskFailure !== 'boolean') throw new Error('任务失败通知设置无效。')
       this.data.notifyTaskFailure = patch.notifyTaskFailure
+    }
+    if (patch.aiProvider !== undefined) {
+      if (!validAiProvider(patch.aiProvider)) throw new Error('AI 服务商无效。')
+      this.data.aiProvider = patch.aiProvider
+    }
+    if (patch.aiBaseUrl !== undefined) {
+      if (typeof patch.aiBaseUrl !== 'string') throw new Error('AI 接口地址无效。')
+      this.data.aiBaseUrl = patch.aiBaseUrl.trim()
+    }
+    if (patch.aiModel !== undefined) {
+      if (typeof patch.aiModel !== 'string') throw new Error('AI 模型无效。')
+      this.data.aiModel = patch.aiModel.trim()
+    }
+    if (patch.aiPermission !== undefined) {
+      if (!validAiPermission(patch.aiPermission)) throw new Error('AI 权限设置无效。')
+      this.data.aiPermission = patch.aiPermission
+    }
+    if (patch.aiApiKey !== undefined) {
+      const key = typeof patch.aiApiKey === 'string' ? patch.aiApiKey.trim() : ''
+      if (key) {
+        if (!this.encryptionAvailable) throw new Error('当前系统不支持安全存储，无法保存 API Key。')
+        this.data.encryptedAiApiKey = safeStorage.encryptString(key).toString('base64')
+      }
+    }
+    if (patch.clearAiApiKey === true) {
+      this.data.encryptedAiApiKey = undefined
+    }
+    if (patch.sidebarCollapsed !== undefined) {
+      if (typeof patch.sidebarCollapsed !== 'boolean') throw new Error('侧边栏状态无效。')
+      this.data.sidebarCollapsed = patch.sidebarCollapsed
     }
     this.persist()
     this.syncLaunchAtLogin()

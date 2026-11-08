@@ -73,6 +73,16 @@ export interface AppSettings {
   notifyVmShutdown: boolean
   /** 任务执行失败时提醒 */
   notifyTaskFailure: boolean
+  /** AI 助手服务商 */
+  aiProvider: AiProvider
+  aiBaseUrl: string
+  aiModel: string
+  /** AI 工具权限边界 */
+  aiPermission: AiPermission
+  /** 是否已保存 API Key（密钥本身不回传渲染进程） */
+  hasAiApiKey: boolean
+  /** 左侧导航收起为图标栏 */
+  sidebarCollapsed: boolean
   hasLoginBackground: boolean
   hasAppBackground: boolean
 }
@@ -789,10 +799,79 @@ export interface PreferencesPatch {
   notificationsEnabled?: boolean
   notifyVmShutdown?: boolean
   notifyTaskFailure?: boolean
+  aiProvider?: AiProvider
+  aiBaseUrl?: string
+  aiModel?: string
+  aiPermission?: AiPermission
+  /** 写入新 API Key；不传表示保持不变 */
+  aiApiKey?: string
+  /** 清除已保存的 API Key */
+  clearAiApiKey?: boolean
+  sidebarCollapsed?: boolean
 }
 
 export interface WindowState {
   maximized: boolean
+}
+
+/* ------------------------------------------------------------------ *
+ * AI 运维助手
+ * ------------------------------------------------------------------ */
+
+export type AiProvider = 'openai' | 'deepseek' | 'ollama' | 'custom'
+
+/**
+ * 工具权限边界：
+ * - read-only：只允许查询，任何变更工具都拒绝；
+ * - confirm：变更工具必须在对话里逐次确认；
+ * - full：变更工具直接执行（仅建议在受控环境使用）。
+ */
+export type AiPermission = 'read-only' | 'confirm' | 'full'
+
+export type AiToolRisk = 'read' | 'write' | 'danger'
+
+export interface AiChatInput {
+  conversationId: string
+  text: string
+}
+
+export interface AiApproveInput {
+  conversationId: string
+  approvalId: string
+  approved: boolean
+}
+
+export interface AiToolEvent {
+  id: string
+  tool: string
+  title: string
+  risk: AiToolRisk
+  status: 'ok' | 'error' | 'denied' | 'pending'
+  summary: string
+}
+
+export interface AiApproval {
+  id: string
+  tool: string
+  title: string
+  risk: AiToolRisk
+  summary: string
+  args: Record<string, unknown>
+}
+
+export interface AiChatResult {
+  status: 'message' | 'approval'
+  reply: string
+  events: AiToolEvent[]
+  approval?: AiApproval
+}
+
+export interface AiTestResult {
+  ok: boolean
+  provider: AiProvider
+  model: string
+  message: string
+  latencyMs?: number
 }
 
 export type ConsoleMode = 'novnc' | 'xterm'
@@ -1691,6 +1770,10 @@ export interface DesktopApi {
   updatePreferences: (patch: PreferencesPatch) => Promise<ApiResult<AppSettings>>
   forgetCredentials: () => Promise<ApiResult<AppSettings>>
   testNotification: () => Promise<ApiResult<void>>
+  aiChat: (input: AiChatInput) => Promise<ApiResult<AiChatResult>>
+  aiApprove: (input: AiApproveInput) => Promise<ApiResult<AiChatResult>>
+  aiReset: (conversationId: string) => Promise<ApiResult<void>>
+  aiTest: () => Promise<ApiResult<AiTestResult>>
   pickBackground: (kind: BackgroundKind) => Promise<ApiResult<BackgroundPickResult | null>>
   clearBackground: (kind: BackgroundKind) => Promise<ApiResult<BackgroundPickResult>>
   dashboard: () => Promise<ApiResult<DashboardData>>

@@ -378,14 +378,14 @@ export function SftpPanel({ className, guest, onPathChange }: SftpPanelProps): R
                   <div
                     key={entry.path}
                     className={cn(
-                      'group grid grid-cols-[1fr_72px_86px_44px] items-center gap-1 border-b border-border/40 px-2.5 py-[7px] transition-colors hover:bg-panel/60',
+                      'group grid grid-cols-[minmax(0,1fr)_64px_82px_68px] items-center gap-1 overflow-hidden border-b border-border/40 px-2.5 py-[7px] transition-colors hover:bg-panel/60',
                       busy === entry.path && 'opacity-60'
                     )}
                   >
                     <button
                       type="button"
                       onClick={() => void openEntry(entry.name, entry.type)}
-                      className="flex min-w-0 items-center gap-2 text-left"
+                      className="flex min-w-0 items-center gap-2 overflow-hidden text-left"
                       title={entry.name}
                     >
                       {isDir ? (
@@ -393,7 +393,7 @@ export function SftpPanel({ className, guest, onPathChange }: SftpPanelProps): R
                       ) : (
                         <FileIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
-                      <span className="truncate text-[12px] text-foreground">{entry.name}</span>
+                      <span className="block min-w-0 flex-1 truncate text-[12px] text-foreground">{entry.name}</span>
                     </button>
                     <span className="text-right font-mono text-[11px] text-muted-foreground">
                       {isDir ? '—' : formatBytes(entry.size)}
@@ -401,11 +401,11 @@ export function SftpPanel({ className, guest, onPathChange }: SftpPanelProps): R
                     <span className="text-right font-mono text-[10.5px] text-muted-foreground">
                       {entry.mtime ? formatDateTime(entry.mtime, { second: undefined }) : '—'}
                     </span>
-                    <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex w-[68px] shrink-0 items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                       <button
                         type="button"
                         onClick={() => setPrompt({ mode: 'rename', value: entry.name, target: entry.path })}
-                        className="rounded p-1 text-muted-foreground hover:bg-panel hover:text-foreground"
+                        className="flex h-6 w-5 shrink-0 items-center justify-center text-muted-foreground hover:bg-panel hover:text-foreground"
                         title="重命名"
                       >
                         <Pencil className="h-3 w-3" />
@@ -414,7 +414,7 @@ export function SftpPanel({ className, guest, onPathChange }: SftpPanelProps): R
                         <button
                           type="button"
                           onClick={() => void doDownload(entry.name)}
-                          className="rounded p-1 text-muted-foreground hover:bg-panel hover:text-foreground"
+                          className="flex h-6 w-5 shrink-0 items-center justify-center text-muted-foreground hover:bg-panel hover:text-foreground"
                           title="下载"
                         >
                           <Download className="h-3 w-3" />
@@ -423,7 +423,7 @@ export function SftpPanel({ className, guest, onPathChange }: SftpPanelProps): R
                       <button
                         type="button"
                         onClick={() => void remove(entry.name, entry.type)}
-                        className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        className="flex h-6 w-5 shrink-0 items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                         title="删除"
                       >
                         <Trash2 className="h-3 w-3" />

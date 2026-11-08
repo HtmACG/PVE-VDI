@@ -2,9 +2,13 @@ import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
   Bell,
+  Bot,
   CheckCircle2,
+  Cpu,
   Download,
   EthernetPort,
+  Eye,
+  EyeOff,
   Globe2,
   History,
   Image as ImageIcon,
@@ -26,6 +30,8 @@ import {
 import { FaGithub } from 'react-icons/fa6'
 import type {
   AppSettings,
+  AiProvider,
+  AiTestResult,
   BackgroundImages,
   BackgroundKind,
   BackgroundPickResult,
@@ -44,6 +50,11 @@ import {
   normalizeCustomFont,
   resolveFontStack
 } from '@shared/appearance'
+import {
+  AI_PERMISSION_HINTS,
+  AI_PERMISSION_LABELS,
+  AI_PROVIDER_PRESETS
+} from '@shared/ai'
 import { PageHeader, PanelHeader } from '@renderer/components/layout/page-header'
 import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
@@ -109,6 +120,12 @@ export function SettingsView({
   const [changelogOpen, setChangelogOpen] = useState(false)
   const [backgroundBusy, setBackgroundBusy] = useState<BackgroundKind | null>(null)
   const [testingNotification, setTestingNotification] = useState(false)
+  const [aiBaseUrlDraft, setAiBaseUrlDraft] = useState(settings.aiBaseUrl)
+  const [aiModelDraft, setAiModelDraft] = useState(settings.aiModel)
+  const [aiKeyDraft, setAiKeyDraft] = useState('')
+  const [showAiKey, setShowAiKey] = useState(false)
+  const [testingAi, setTestingAi] = useState(false)
+  const [aiTestResult, setAiTestResult] = useState<AiTestResult | null>(null)
 
   useEffect(() => {
     setCustomFontDraft(settings.customFont)
@@ -117,6 +134,14 @@ export function SettingsView({
   useEffect(() => {
     setAccentDraft(settings.accentColor)
   }, [settings.accentColor])
+
+  useEffect(() => {
+    setAiBaseUrlDraft(settings.aiBaseUrl)
+  }, [settings.aiBaseUrl])
+
+  useEffect(() => {
+    setAiModelDraft(settings.aiModel)
+  }, [settings.aiModel])
 
   const update = async (patch: PreferencesPatch): Promise<void> => {
     setSaving(true)
@@ -183,6 +208,54 @@ export function SettingsView({
       toast.error('无法发送通知', { description: errorDetail(err) })
     } finally {
       setTestingNotification(false)
+    }
+  }
+
+  const changeAiProvider = async (provider: AiProvider): Promise<void> => {
+    const preset = AI_PROVIDER_PRESETS[provider]
+    setAiTestResult(null)
+    await update({ aiProvider: provider, aiBaseUrl: preset.baseUrl, aiModel: preset.model })
+  }
+
+  const saveAiKey = async (): Promise<void> => {
+    const key = aiKeyDraft.trim()
+    if (!key) return
+    await update({ aiApiKey: key })
+    setAiKeyDraft('')
+    setShowAiKey(false)
+    setAiTestResult(null)
+  }
+
+  const clearAiKey = async (): Promise<void> => {
+    await update({ clearAiApiKey: true })
+    setAiTestResult(null)
+  }
+
+  const testAi = async (): Promise<void> => {
+    setTestingAi(true)
+    setAiTestResult(null)
+    try {
+      await update({ aiBaseUrl: aiBaseUrlDraft.trim(), aiModel: aiModelDraft.trim() })
+      if (aiKeyDraft.trim()) {
+        await update({ aiApiKey: aiKeyDraft.trim() })
+        setAiKeyDraft('')
+        setShowAiKey(false)
+      }
+      const result = await unwrap(window.pvevdi.aiTest())
+      setAiTestResult(result)
+      if (result.ok) {
+        toast.success('AI 接口可用', {
+          description: `${result.model} · ${result.latencyMs ?? 0}ms · ${result.message}`
+        })
+      } else {
+        toast.error('AI 接口不可用', { description: result.message })
+      }
+    } catch (err) {
+      const message = errorDetail(err)
+      setAiTestResult({ ok: false, provider: settings.aiProvider, model: settings.aiModel, message })
+      toast.error('AI 接口不可用', { description: message })
+    } finally {
+      setTestingAi(false)
     }
   }
 
@@ -607,6 +680,163 @@ export function SettingsView({
                   <Bell className="h-3 w-3" />
                   发送测试通知
                 </Button>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <PanelHeader
+              title="AI 助手"
+              description="通过对话查询和操作 PVE。支持本地 Ollama、DeepSeek、OpenAI GPT 以及任意 OpenAI 兼容接口。"
+            />
+            <div className="space-y-4 p-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <div className="mb-1.5 text-[11px] font-medium text-foreground">服务商</div>
+                  <Select
+                    value={settings.aiProvider}
+                    onValueChange={(value) => void changeAiProvider(value as AiProvider)}
+                  >
+                    <SelectTrigger aria-label="AI 服务商">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(AI_PROVIDER_PRESETS) as AiProvider[]).map((provider) => (
+                        <SelectItem key={provider} value={provider}>
+                          {AI_PROVIDER_PRESETS[provider].label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="mt-1 text-[10.5px] text-muted-foreground">
+                    {AI_PROVIDER_PRESETS[settings.aiProvider].hint}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1.5 text-[11px] font-medium text-foreground">权限边界</div>
+                  <Select
+                    value={settings.aiPermission}
+                    onValueChange={(value) => void update({ aiPermission: value as AppSettings['aiPermission'] })}
+                  >
+                    <SelectTrigger aria-label="AI 权限边界">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(AI_PERMISSION_LABELS) as Array<keyof typeof AI_PERMISSION_LABELS>).map((permission) => (
+                        <SelectItem key={permission} value={permission}>
+                          {AI_PERMISSION_LABELS[permission]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="mt-1 text-[10.5px] text-muted-foreground">
+                    {AI_PERMISSION_HINTS[settings.aiPermission]}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_200px]">
+                <div>
+                  <div className="mb-1.5 text-[11px] font-medium text-foreground">接口地址</div>
+                  <Input
+                    value={aiBaseUrlDraft}
+                    onChange={(event) => setAiBaseUrlDraft(event.target.value)}
+                    onBlur={() => void update({ aiBaseUrl: aiBaseUrlDraft.trim() })}
+                    placeholder="https://api.openai.com/v1"
+                    className="font-mono text-[11px]"
+                    aria-label="AI 接口地址"
+                  />
+                </div>
+                <div>
+                  <div className="mb-1.5 text-[11px] font-medium text-foreground">模型</div>
+                  <Input
+                    value={aiModelDraft}
+                    onChange={(event) => setAiModelDraft(event.target.value)}
+                    onBlur={() => void update({ aiModel: aiModelDraft.trim() })}
+                    placeholder="gpt-4o-mini / deepseek-chat / qwen2.5:7b"
+                    className="font-mono text-[11px]"
+                    aria-label="AI 模型"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium text-foreground">API Key</span>
+                  <span className="text-[10.5px] text-muted-foreground">
+                    {settings.hasAiApiKey ? '已通过系统加密存储保存' : settings.aiProvider === 'ollama' ? 'Ollama 通常不需要' : '尚未保存'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative min-w-[220px] flex-1">
+                    <Input
+                      type={showAiKey ? 'text' : 'password'}
+                      value={aiKeyDraft}
+                      onChange={(event) => setAiKeyDraft(event.target.value)}
+                      placeholder={settings.hasAiApiKey ? '输入新 Key 覆盖已保存的值' : 'sk-…'}
+                      className="pr-9 font-mono text-[11px]"
+                      aria-label="AI API Key"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAiKey((value) => !value)}
+                      className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground hover:text-foreground"
+                      aria-label={showAiKey ? '隐藏 API Key' : '显示 API Key'}
+                    >
+                      {showAiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={saving || !aiKeyDraft.trim()}
+                    onClick={() => void saveAiKey()}
+                  >
+                    保存 Key
+                  </Button>
+                  {settings.hasAiApiKey && (
+                    <Button variant="ghost" size="sm" disabled={saving} onClick={() => void clearAiKey()}>
+                      清除
+                    </Button>
+                  )}
+                </div>
+                <div className="mt-1 text-[10.5px] text-muted-foreground">
+                  Key 只保存在主进程，不会回传给界面，也不会发送给 AI 服务之外的任何地方。
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border border-border bg-panel/30 p-3">
+                <div className="flex items-start gap-2">
+                  <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div>
+                    <div className="text-[11.5px] font-medium text-foreground">
+                      {aiTestResult
+                        ? aiTestResult.ok
+                          ? '接口连接正常'
+                          : '接口连接失败'
+                        : '测试连接'}
+                    </div>
+                    <div className={cn('mt-0.5 max-w-[620px] break-words text-[10.5px]', aiTestResult?.ok ? 'text-success' : 'text-muted-foreground')}>
+                      {aiTestResult
+                        ? `${aiTestResult.model || '模型未填'} · ${aiTestResult.message}`
+                        : '用当前配置发送一条最小请求，确认地址、模型与 Key 可用。'}
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={saving || testingAi || !aiBaseUrlDraft.trim() || !aiModelDraft.trim()}
+                  onClick={() => void testAi()}
+                >
+                  {testingAi ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Bot className="h-3 w-3" />}
+                  测试连接
+                </Button>
+              </div>
+
+              <div className="text-[10.5px] leading-5 text-muted-foreground">
+                工具白名单：集群概览、虚拟机详情、任务列表/日志、电源操作、创建快照。不提供删除虚拟机、网络/防火墙/用户修改或 Shell 命令。
+                变更操作是否执行由上面的「权限边界」控制。
               </div>
             </div>
           </Card>

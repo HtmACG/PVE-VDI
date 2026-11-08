@@ -20,6 +20,7 @@ import type {
 import { VM_ACTION_LABELS } from '@shared/ipc'
 import { BootScreen } from '@renderer/components/boot-screen'
 import { LoginView } from '@renderer/components/views/login-view'
+import { AiView } from '@renderer/components/views/ai-view'
 import { WindowButtons } from '@renderer/components/layout/window-buttons'
 import { BrandLockup } from '@renderer/components/brand'
 import { Titlebar } from '@renderer/components/layout/titlebar'
@@ -398,6 +399,17 @@ function ConnectedApp({
     void updatePreferences({ theme: settings.theme === 'dark' ? 'light' : 'dark' })
   }
 
+  const toggleSidebar = async (): Promise<void> => {
+    try {
+      const next = await unwrap(
+        window.pvevdi.updatePreferences({ sidebarCollapsed: !settings.sidebarCollapsed })
+      )
+      onSettingsChange(next)
+    } catch (err) {
+      toast.error('无法保存侧边栏状态', { description: errorDetail(err) })
+    }
+  }
+
   const forgetCredentials = async (): Promise<void> => {
     try {
       const next = await unwrap(window.pvevdi.forgetCredentials())
@@ -494,6 +506,14 @@ function ConnectedApp({
             onOpenTask={setTaskLog}
           />
         )
+      case 'ai':
+        return (
+          <AiView
+            settings={settings}
+            ownerKey={`${session.serverUrl}|${session.username}`}
+            onOpenSettings={() => setView('settings')}
+          />
+        )
       case 'settings':
         return (
           <SettingsView
@@ -557,12 +577,19 @@ function ConnectedApp({
             dashboard={viewData}
             session={session}
             theme={settings.theme}
+            collapsed={settings.sidebarCollapsed}
+            onToggleCollapsed={() => void toggleSidebar()}
             onNavigate={setView}
             onToggleTheme={toggleTheme}
             onDisconnect={() => setDisconnectOpen(true)}
           />
           <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto [overflow-anchor:none]">
-            <div className="mx-auto w-full max-w-[1600px] p-5 lg:p-6">
+            <div
+              className={cn(
+                'mx-auto w-full max-w-[1600px]',
+                view === 'ai' ? 'h-full' : 'p-5 lg:p-6'
+              )}
+            >
               {error && data && (
                 <div className="mb-4 flex items-center gap-3 border border-warning/30 bg-warning/[0.05] px-3 py-2">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
