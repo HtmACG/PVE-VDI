@@ -239,8 +239,11 @@ export function VmRowActions({
   if (target.template) {
     return (
       <div className="flex items-center justify-end gap-2">
-        {showStatus && <VmStatusBadge status={target.status || 'stopped'} template />}
-        <span className="font-mono text-[10px] text-muted-foreground">READ ONLY</span>
+        {showStatus ? (
+          <VmStatusBadge status={target.status || 'stopped'} template />
+        ) : (
+          <span className="text-[10px] text-muted-foreground">模板</span>
+        )}
       </div>
     )
   }

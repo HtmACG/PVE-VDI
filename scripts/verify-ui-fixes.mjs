@@ -2615,6 +2615,25 @@ try {
     aiSettings.provider && aiSettings.permission && aiSettings.key && aiSettings.test,
     JSON.stringify(aiSettings)
   )
+  const settingsNoise = await page.evaluate(() => {
+    const text = document.body.innerText
+    return {
+      framework: text.includes('界面框架'),
+      electron: text.includes('Electron'),
+      consoleVersion: text.includes('noVNC 1.7'),
+      api2: text.includes('PVE API2'),
+      fakePreview: /\bWAN\b/.test(text) && /\bLAN\b/.test(text) && /\bETH\b/.test(text)
+    }
+  })
+  check(
+    '设置页不再展示实现细节或假接口标签',
+    !settingsNoise.framework &&
+      !settingsNoise.electron &&
+      !settingsNoise.consoleVersion &&
+      !settingsNoise.api2 &&
+      !settingsNoise.fakePreview,
+    JSON.stringify(settingsNoise)
+  )
 
   // 控制台窗口
   const consolePage = await context.newPage()

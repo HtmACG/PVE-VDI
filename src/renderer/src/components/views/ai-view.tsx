@@ -11,7 +11,7 @@ import {
   XCircle
 } from 'lucide-react'
 import type { AiApproval, AiChatResult, AiToolEvent, AppSettings } from '@shared/types'
-import { AI_PERMISSION_HINTS, AI_PERMISSION_LABELS, AI_PROVIDER_PRESETS } from '@shared/ai'
+import { AI_PERMISSION_LABELS, AI_PROVIDER_PRESETS } from '@shared/ai'
 import { Button } from '@renderer/components/ui/button'
 import { Textarea } from '@renderer/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
@@ -190,16 +190,18 @@ export function AiView({
   }
 
   const applyResult = (result: AiChatResult): void => {
-    updateEntries([
-      ...cache.entries,
-      {
-        id: entryId(),
-        role: 'assistant' as const,
-        text: result.reply,
-        events: result.events,
-        at: Date.now()
-      }
-    ])
+    if (result.status !== 'approval') {
+      updateEntries([
+        ...cache.entries,
+        {
+          id: entryId(),
+          role: 'assistant' as const,
+          text: result.reply,
+          events: result.events,
+          at: Date.now()
+        }
+      ])
+    }
     cache.approval = result.approval ?? null
     setApproval(result.approval ?? null)
     setStreamText('')
@@ -275,9 +277,6 @@ export function AiView({
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 py-2.5 lg:px-5">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center font-mono text-[13px] font-semibold tracking-[-0.06em] text-brand">
-          AI
-        </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[13.5px] font-semibold text-foreground">AI 运维助手</span>
@@ -292,8 +291,8 @@ export function AiView({
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <span className="mr-1 hidden items-center gap-1.5 text-[10px] text-muted-foreground sm:flex">
-            <span className={cn('h-1.5 w-1.5', configured ? 'bg-success' : 'bg-warning')} />
-            {configured ? '已就绪' : '待配置'}
+            <span className={cn('h-1.5 w-1.5', configured ? 'bg-brand' : 'bg-warning')} />
+            {configured ? '已配置' : '待配置'}
           </span>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -350,7 +349,7 @@ export function AiView({
             <div className="py-6">
               <div className="text-[13px] font-medium text-foreground">直接描述你想查询或执行的操作</div>
               <div className="mt-1 max-w-[560px] text-[11.5px] leading-5 text-muted-foreground">
-                AI 会使用受限工具读取 PVE 数据；变更操作遵循当前权限边界。可以从下面的示例开始。
+                AI 会读取 PVE 数据；变更操作按当前权限确认。
               </div>
               <div className="mt-4 grid w-full max-w-[620px] gap-2 sm:grid-cols-2">
                 {EXAMPLE_PROMPTS.map((prompt) => (
@@ -379,11 +378,6 @@ export function AiView({
                 const isUser = entry.role === 'user'
                 return (
                   <div key={entry.id} className={cn('flex gap-2.5', isUser ? 'justify-end' : 'justify-start')}>
-                    {!isUser && (
-                      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center font-mono text-[9px] font-semibold text-brand">
-                        AI
-                      </div>
-                    )}
                     <div className={cn('min-w-0', isUser ? 'max-w-[80%]' : 'max-w-[88%]')}>
                       <div
                         className={cn(
@@ -416,9 +410,6 @@ export function AiView({
 
               {busy && (
                 <div className="flex gap-2.5">
-                  <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center font-mono text-[9px] font-semibold text-brand">
-                    AI
-                  </div>
                   <div className="min-w-0 max-w-[88%]">
                     <div className="mb-1 flex items-center gap-2 text-[10px] text-muted-foreground">
                       <span>AI 助手</span>
@@ -437,9 +428,6 @@ export function AiView({
 
               {approval && (
                 <div className="flex gap-2.5">
-                  <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center font-mono text-[9px] font-semibold text-warning">
-                    !
-                  </div>
                   <div className="min-w-0 flex-1">
                     <ApprovalCard approval={approval} busy={approving} onApprove={(value) => void approve(value)} />
                   </div>
@@ -469,7 +457,7 @@ export function AiView({
             />
             <div className="flex items-center justify-between gap-3 border-t border-border/60 px-2 py-1.5">
               <span className="truncate text-[10px] text-muted-foreground">
-                Ctrl+Enter 发送 · {AI_PERMISSION_HINTS[settings.aiPermission]}
+                Ctrl+Enter 发送
               </span>
               <Button
                 size="sm"

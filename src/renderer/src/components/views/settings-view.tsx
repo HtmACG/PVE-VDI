@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Cpu,
   Download,
-  EthernetPort,
   Eye,
   EyeOff,
   Globe2,
@@ -16,12 +15,10 @@ import {
   Moon,
   Power,
   RefreshCw,
-  Server,
   Sun,
   Trash2,
   Unplug,
   KeyRound,
-  LayoutGrid,
   LockKeyhole,
   Network,
   Palette,
@@ -76,7 +73,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { APP_AUTHOR } from '@shared/app-info'
 import { APP_CHANGELOG } from '@shared/changelog'
 import { errorDetail, unwrap } from '@renderer/lib/api'
-import { formatDateTime, splitLicense } from '@renderer/lib/format'
+import { formatDateTime } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
 import { toast } from 'sonner'
 
@@ -86,7 +83,6 @@ interface SettingsViewProps {
   dashboard: DashboardData
   theme: Theme
   appVersion: string
-  electronVersion: string
   backgrounds: BackgroundImages
   onUpdatePreferences: (patch: PreferencesPatch) => Promise<void>
   onBackgroundChange: (result: BackgroundPickResult) => void
@@ -100,7 +96,6 @@ export function SettingsView({
   dashboard,
   theme,
   appVersion,
-  electronVersion,
   backgrounds,
   onUpdatePreferences,
   onBackgroundChange,
@@ -385,8 +380,8 @@ export function SettingsView({
 
                 <div className="mt-3 border border-border bg-panel/30 p-3" style={{ fontFamily: fontPreview }}>
                   <div className="text-[11px] text-muted-foreground">字体预览</div>
-                  <div className="mt-1 text-[14px] font-medium text-foreground">节点资源 72.4% · 虚拟机 28 台</div>
-                  <div className="mt-0.5 text-[12px] text-muted-foreground">存储 1.8 TB / 10.0 TB · 最近同步 2 秒前</div>
+                  <div className="mt-1 text-[14px] font-medium text-foreground">运行概览 · 虚拟机 · 节点 · 存储</div>
+                  <div className="mt-0.5 text-[12px] text-muted-foreground">Aa Bb Cc · 0123456789 · 中文预览</div>
                 </div>
               </div>
 
@@ -482,22 +477,6 @@ export function SettingsView({
                       <SelectItem value="list">列表</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="mt-3 grid grid-cols-[1fr_1fr_1fr] gap-2 border-t border-border pt-3">
-                  {[
-                    { label: 'WAN', tone: 'text-brand', highlighted: true, active: true },
-                    { label: 'LAN', tone: 'text-info', highlighted: true, active: false },
-                    { label: 'ETH', tone: 'text-muted-foreground', highlighted: false, active: false }
-                  ].map((item) => (
-                    <div key={item.label} className="flex flex-col items-center gap-1.5">
-                      <EthernetPort className={cn('h-7 w-10', item.tone)} strokeWidth={1.35} />
-                      <span className="font-mono text-[10px] text-muted-foreground">{item.label}</span>
-                    </div>
-                  ))}
-                  <div className="col-span-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                    <LayoutGrid className="h-3 w-3" />
-                    卡片视图用于快速识别接口；表格仍保留完整参数。
-                  </div>
                 </div>
               </div>
 
@@ -687,7 +666,7 @@ export function SettingsView({
           <Card>
             <PanelHeader
               title="AI 助手"
-              description="通过对话查询和操作 PVE。支持本地 Ollama、DeepSeek、OpenAI GPT 以及任意 OpenAI 兼容接口。"
+              description="选择模型服务，并设置 AI 可执行的操作边界。"
             />
             <div className="space-y-4 p-4">
               <div className="grid gap-3 md:grid-cols-2">
@@ -814,7 +793,7 @@ export function SettingsView({
                         ? aiTestResult.ok
                           ? '接口连接正常'
                           : '接口连接失败'
-                        : '测试连接'}
+                        : '连接状态'}
                     </div>
                     <div className={cn('mt-0.5 max-w-[620px] break-words text-[10.5px]', aiTestResult?.ok ? 'text-success' : 'text-muted-foreground')}>
                       {aiTestResult
@@ -835,8 +814,7 @@ export function SettingsView({
               </div>
 
               <div className="text-[10.5px] leading-5 text-muted-foreground">
-                工具白名单：集群概览、虚拟机详情、任务列表/日志、电源操作、创建快照。不提供删除虚拟机、网络/防火墙/用户修改或 Shell 命令。
-                变更操作是否执行由上面的「权限边界」控制。
+                仅支持查询、电源操作和创建快照；删除、网络/防火墙/用户修改与 Shell 命令不在工具范围内。
               </div>
             </div>
           </Card>
@@ -922,27 +900,6 @@ export function SettingsView({
           </Card>
 
           <Card>
-            <PanelHeader title="应用信息" />
-            <div className="px-4">
-              <DataRow label="产品">PVE VDI</DataRow>
-              <DataRow label="版本" mono>v{appVersion}</DataRow>
-              <DataRow label="Electron" mono>{electronVersion}</DataRow>
-              <DataRow label="界面框架">React · Tailwind · shadcn/ui</DataRow>
-              <DataRow label="控制台">noVNC 1.7 · xterm.js 6</DataRow>
-              <DataRow label="API" mono>PVE API2 / JSON</DataRow>
-              <DataRow label="集群节点" mono>{dashboard.nodes.map((node) => `${node.node} (${splitLicense(node.pveVersion ?? '—')})`).join(', ')}</DataRow>
-            </div>
-            <div className="border-t border-border p-4">
-              <div className="flex items-start gap-2">
-                <Server className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <p className="text-[11px] leading-5 text-muted-foreground">
-                  桌面端直接通过 Electron 主进程访问 PVE API。渲染进程禁用 Node.js，仅通过受限 IPC 通道请求数据。
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
             <PanelHeader
               title="开发者与更新"
               actions={
@@ -1005,19 +962,13 @@ export function SettingsView({
                 )}
                 {updateInfo && !updateInfo.hasUpdate && (
                   <div className="mt-1 text-[10px] leading-4 text-muted-foreground">
-                    GitHub 最新版本 v{updateInfo.latestVersion}
-                    {updateInfo.source === 'tag' ? '（tag）' : ''}
+                    最新版本 v{updateInfo.latestVersion}
                   </div>
                 )}
                 {updateInfo?.notes && (
                   <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap border border-border bg-background p-2 text-[10px] leading-4 text-muted-foreground">
                     {updateInfo.notes}
                   </pre>
-                )}
-                {!updateInfo && !updateError && (
-                  <div className="mt-1 text-[10px] leading-4 text-muted-foreground">
-                    通过 GitHub 仓库读取 Release / Tag 并比较版本。
-                  </div>
                 )}
               </div>
 

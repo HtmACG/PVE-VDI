@@ -14,7 +14,7 @@ export const AI_PROVIDER_PRESETS: Record<AiProvider, AiProviderPreset> = {
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o-mini',
     needsKey: true,
-    hint: '支持任意 OpenAI 兼容的 /chat/completions 接口'
+    hint: '支持 OpenAI 兼容接口'
   },
   deepseek: {
     label: 'DeepSeek',

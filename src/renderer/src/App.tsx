@@ -527,7 +527,6 @@ function ConnectedApp({
             dashboard={dashboard}
             theme={settings.theme}
             appVersion={bootstrap.appVersion}
-            electronVersion={bootstrap.electronVersion}
             backgrounds={backgrounds}
             onUpdatePreferences={updatePreferences}
             onBackgroundChange={onBackgroundChange}

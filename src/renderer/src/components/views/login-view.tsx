@@ -102,7 +102,6 @@ export function LoginView({ settings, appVersion, initialError, loginBackground,
           )}
           <div className="relative z-10 flex w-full flex-col p-10 pl-14 xl:p-14 xl:pl-16">
             <div className="mt-auto max-w-[360px]">
-              <div className={loginBackground ? 'text-[11px] text-white/70' : 'text-[11px] text-muted-foreground'}>Proxmox VE</div>
               <p
                 className={
                   loginBackground
@@ -131,7 +130,7 @@ export function LoginView({ settings, appVersion, initialError, loginBackground,
                   : 'mt-8 flex items-center justify-between border-t border-border pt-4 text-[11px] text-muted-foreground'
               }
             >
-              <span>PVE VDI {appVersion ?? ''}</span>
+              <span>PVE VDI{appVersion ? ` ${appVersion}` : ''}</span>
             </div>
           </div>
         </section>
@@ -139,10 +138,9 @@ export function LoginView({ settings, appVersion, initialError, loginBackground,
         <section className="flex min-h-0 w-full flex-col justify-center overflow-y-auto bg-background px-8 py-10 xl:px-12">
           <div className="mx-auto w-full max-w-[360px]">
             <div className="mb-8">
-              <div className="text-[11px] font-medium text-muted-foreground">Proxmox VE</div>
-              <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.025em] text-foreground">连接集群</h2>
+              <h2 className="text-[24px] font-semibold tracking-[-0.025em] text-foreground">连接集群</h2>
               <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-                输入 PVE 账户信息以建立 API 会话。密码默认不会写入磁盘。
+                输入 PVE 账户信息登录；密码默认不会写入磁盘。
               </p>
             </div>
 
@@ -253,7 +251,7 @@ export function LoginView({ settings, appVersion, initialError, loginBackground,
 
             <div className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-[11px] leading-5 text-muted-foreground">
               <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>认证由 PVE API 直接处理。票据仅保存在主进程内存中，不会暴露给页面。</span>
+              <span>登录票据只保存在本机内存，不会暴露给页面。</span>
             </div>
           </div>
         </section>

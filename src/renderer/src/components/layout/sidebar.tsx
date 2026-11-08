@@ -240,7 +240,7 @@ export function Sidebar({
           {!collapsed && (
             <div className="min-w-0 flex-1">
               <div className="truncate text-[12px] text-foreground">{session.username}</div>
-              <div className="text-[11px] text-muted-foreground">已连接</div>
+              <div className="text-[11px] text-muted-foreground">PVE 账户</div>
             </div>
           )}
           <div className={cn('flex items-center', collapsed ? 'flex-col gap-1' : 'gap-0')}>

@@ -648,9 +648,6 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
           <span className="hidden shrink-0 truncate font-mono text-[10px] text-muted-foreground/80 md:block">
             {session?.subtitle ?? `${request.node} · ${request.type?.toUpperCase() ?? 'NODE'} ${request.vmid ?? ''}`}
           </span>
-          <span className="hidden shrink-0 font-mono text-[10px] text-muted-foreground/60 lg:block">
-            {consoleModeHint === 'novnc' ? 'RFB' : 'termproxy'}
-          </span>
           {session?.username && (
             <span className="hidden shrink-0 font-mono text-[10px] text-muted-foreground/60 xl:block">
               {session.username}
@@ -767,9 +764,6 @@ export function ConsoleView({ request, onClose }: ConsoleViewProps): React.JSX.E
               <div className="text-center">
                 <div className="text-[12px] text-foreground">
                   {phase === 'opening' ? '正在分配控制台会话' : '正在建立 PVE 控制通道'}
-                </div>
-                <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-                  {consoleModeHint === 'novnc' ? 'noVNC / RFB 003.008' : 'xterm.js / termproxy'}
                 </div>
               </div>
             </div>
